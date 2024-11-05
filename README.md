@@ -16,7 +16,7 @@ I would also like to add a small-step evaluator and incorporate the (unlimited)
 evaluation process of the non-normalizing term for Girard's Paradox, but there are some structural and
 conceptual obstacles before this can be done.
 
-Soundproof has some command-line options, but I mostly modify it by directly editing and recompiling the code.
+Soundproof has some command-line options, but I mostly use it by directly editing and recompiling the code.
 It should always be compiled with `--release`, as the synth portions especially depend highly
 on optimizations that are not enabled in debug mode.
 

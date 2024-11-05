@@ -53,22 +53,26 @@ impl NamedTerm {
 #[derive(Parser, Debug)]
 #[command(version, about, long_about=None)]
 struct Args {
+    #[arg(short, long)]
     scaling: Option<Scaling>,
+    #[arg(short, long)]
     time: Option<f64>,
-    term: Option<NamedTerm>,
+    #[arg(short, long)]
+    value: Option<NamedTerm>,
 }
 
 fn main() {
     let args = Args::parse();
     let scaling = args.scaling.unwrap_or(Scaling::SizeAligned);
-    let time = args.time.unwrap_or(600.0);
-    let term = args.term.unwrap_or(NamedTerm::GirardReduced).term();
+    let term = args.value.unwrap_or(NamedTerm::GirardReduced).term();
     //validation just makes sure it typechecks; we can't evaluate the paradox
-    validate(&format!("{:?}", args.term), &term, false);
+    validate(&format!("{:?}", args.value), &term, false);
+    let tree = itranslate(term, 0);
+    let tree = SoundTreeScaling(tree, scaling);
+    let time = args.time.unwrap_or(std::cmp::min(tree.0.size(), 1200) as f64);
     let mut seq = Sequencer::new(false, 1);
     println!("Sequencing...");
-    let tree = itranslate(term, 0);
-    SoundTreeScaling(tree, scaling).sequence(&mut seq, 0.0, time);
+    tree.sequence(&mut seq, 0.0, time);
     let mut output = unit::<U0, U1>(Box::new(seq)) >> shape(Adaptive::new(0.1, Tanh(0.5)));
     save(&mut output, time);
     println!("Done");

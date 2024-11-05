@@ -1,3 +1,4 @@
+#![allow(unused)]
 pub mod ast;
 pub mod check;
 pub mod eval;

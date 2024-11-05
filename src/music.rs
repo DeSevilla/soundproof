@@ -9,7 +9,7 @@ pub mod notes;
 const SAMPLE_RATE: f32 = 44100.0;
 
 pub fn save(au: &mut dyn AudioUnit, dur: f64) {
-    println!("Saving .wav file...");
+    println!("Saving .wav file ({dur} seconds)");
     let mut wave1 = Wave::render(SAMPLE_RATE as f64, dur, au);
     wave1.normalize();
     let filename = Path::new("output/output.wav");

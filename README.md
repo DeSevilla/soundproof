@@ -20,7 +20,7 @@ Soundproof has some command-line options, but I mostly use it by directly editin
 It should always be compiled with `--release`, as the synth portions especially depend highly
 on optimizations that are not enabled in debug mode.
 
-Usage: soundproof.exe [OPTIONS]
+```Usage: soundproof.exe [OPTIONS]
 
 Options:
   -s, --scaling <SCALING>  [possible values: linear, size, size-aligned, size-raw]
@@ -28,4 +28,4 @@ Options:
   -v, --value <VALUE>      [possible values: star, u, tau, girard, girard-reduced]
   -h, --help               Print help
   -V, --version            Print version
-
+```

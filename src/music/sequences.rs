@@ -2,6 +2,8 @@
 use fundsp::hacker32::*;
 use crate::music::notes::note_hz;
 
+/* various envelope things, only some of which are actually used */
+
 pub fn major_chord_notes(notes: Vec<i8>, octave: i8, increment: f32, instrument: An<impl AudioNode<Inputs=U1, Outputs=U1>>) ->
         An<impl AudioNode<Inputs=U0, Outputs=U1>> {
     let notes2 = notes.iter().map(|x| x + 4).collect();

@@ -31,12 +31,6 @@ pub enum Name {
     Quote(usize),
 }
 
-// #[derive(PartialEq, Debug, Clone)]
-// pub enum Type {
-//     Free(Name),
-//     Fun(Box<Type>, Box<Type>),
-// }
-
 #[derive(Clone)]
 pub enum Value {
     Lam(Rc<dyn Fn(Value) -> Value>),

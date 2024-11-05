@@ -38,7 +38,7 @@ fn i_print(p: usize, i: usize, term: ITerm) -> String {
         ITerm::Nat => "Nat".to_owned(),
         ITerm::Zero => "0".to_owned(),
         ITerm::Succ(cterm) => "Succ".to_owned() + &parens_if(true, c_print(p, i, cterm)),
-        ITerm::NatElim(base, motive, ind, n) => "finElim ".to_owned() + 
+        ITerm::NatElim(base, motive, ind, n) => "natElim ".to_owned() + 
             &[base, motive, ind, n].into_iter().map(|x| c_print(p, i, x)).reduce(|acc, elem| acc + " " + &elem).unwrap_or("".to_owned()),
         ITerm::Fin(cterm) => "Fin".to_owned() + &parens_if(true, c_print(p, i, cterm)),
         ITerm::FinElim(base, motive, ind, n, f) => "finElim ".to_owned() + 
@@ -52,7 +52,7 @@ fn i_print(p: usize, i: usize, term: ITerm) -> String {
 fn c_print(p: usize, i: usize, term: CTerm) -> String {
     match term {
         CTerm::Inf(iterm) => i_print(p, i, *iterm),
-        CTerm::Lam(cterm) => "\\".to_owned() + &varname(i) + " -> " + &c_print(p, i+1, *cterm),
+        CTerm::Lam(cterm) => parens_if(p > 0, "\\".to_owned() + &varname(i) + " -> " + &c_print(p, i+1, *cterm)),
     }
 }
 

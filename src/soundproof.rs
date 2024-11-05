@@ -1,6 +1,5 @@
-// use std::sync::atomic::AtomicUsize;
-
-use crate::{base_instrument, standard, Scaling};
+#![allow(unused)]
+use crate::Scaling;
 use crate::music::{instruments::*, notes::*};
 use crate::lambdapi::ast::*;
 use fundsp::hacker32::*;
@@ -12,45 +11,19 @@ pub trait Sequenceable {
     fn sequence_full(&self, seq: &mut Sequencer, start_time: f64, loop_duration: f64, total_duration: f64);
 }
 
-// TODO move the impls on this to something else; maybe move the enum to LambdaPi
-#[derive(Clone, Debug)]
-pub enum Term {
-    CT(CTerm),
-    IT(ITerm),
-}
 
-impl From<ITerm> for Term {
-    fn from(value: ITerm) -> Self {
-        Self::IT(value)
-    }
-}
+// TODO I want to support audio clips
+// #[derive(Clone)]
+// pub struct Clip {
+//     audio: Wave,
+//     duration: f64,
+// }
 
-impl From<CTerm> for Term {
-    fn from(value: CTerm) -> Self {
-        Self::CT(value)
-    }
-}
-
-impl From<Term> for CTerm {
-    fn from(value: Term) -> Self {
-        match value {
-            Term::IT(val) => val.into(),
-            Term::CT(cval) => cval
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct Clip {
-    audio: Wave,
-    duration: f64,
-}
-
-impl Sequenceable for Clip {
-    fn sequence_full(&self, seq: &mut Sequencer, start_time: f64, loop_duration: f64, total_duration: f64) {
-        todo!()
-    }
-}
+// impl Sequenceable for Clip {
+//     fn sequence_full(&self, seq: &mut Sequencer, start_time: f64, loop_duration: f64, total_duration: f64) {
+//         todo!()
+//     }
+// }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Note {
@@ -112,18 +85,7 @@ impl Melody {
 
 }
 impl Sequenceable for Melody {
-    // fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64) {
-    //     self.sequence_full(seq, start_time, duration, dura);
-    // }
-
     fn sequence_full(&self, seq: &mut Sequencer, start_time: f64, loop_duration: f64, total_duration: f64) {
-        // let factor = (600.0 / duration).log2();
-        // if factor % 1.0 > duration * 0.000001 {
-        //     println!("hmmm {factor} {duration} {cutoff:?}")
-        // }
-        // else {
-        //     COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        // }
         let instr = self.instrument.clone();
         let mut elapsed = 0.0;
         let ratio = loop_duration / self.duration();
@@ -131,8 +93,6 @@ impl Sequenceable for Melody {
             for (note, dur) in self.notes.iter() {
                 let dur = if elapsed + dur * ratio <= total_duration { dur * ratio } else { total_duration - elapsed };
                 let note = note.mul_duration(ratio);
-                // print!("{} ", note.note + self.note_adjust);
-                // println!("{dur}");
                 let len = note.time;
                 let hz = get_hz(note.note + self.note_adjust);
                 let instr = constant(hz) >> instr.clone() * 
@@ -143,7 +103,6 @@ impl Sequenceable for Melody {
                 if elapsed >= total_duration {
                     return;
                 }
-                
             }
             if elapsed <= 0.0 {
                 panic!("Melody {:?} cannot be played", self.notes);
@@ -153,10 +112,7 @@ impl Sequenceable for Melody {
 
 }
 
-// #[derive(Clone)]
 pub struct SoundTree {
-    // instrument: An<Unit<U1, U1>>,
-    // notes: Vec<i8>,
     melody: Box<dyn Sequenceable>,
     children: Vec<SoundTree>
 }
@@ -165,17 +121,12 @@ fn round_by(x: f64, by: f64) -> f64 {
     (x / by).round() * by
 }
 
-// static COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 impl SoundTree {
     pub fn new(melody: impl Sequenceable + 'static, children: Vec<SoundTree>) -> SoundTree {
-        // let mut melody = Melody::new_even(instrument, notes);
-        // melody.set_octave((depth as f64 / 3.0).sqrt().ceil() as i8 + 1);
         SoundTree {
             melody: Box::new(melody),
-            // instrument: unit(Box::new(instrument)),
-            // notes: notes.into_iter().map(|x| *x).collect(),
-            children: children // children.into_iter().map(|x| *x).collect()
+            children
         }
     }
 
@@ -196,29 +147,7 @@ impl SoundTree {
         self.size_adjusted().powf(0.85)
     }
 
-    // pub fn generate(&self,  duration: f64, scaling: Scaling) -> (An<impl AudioNode<Inputs=U0, Outputs=U1>>, f64) {
-    //     let mut seq = Sequencer::new(false, 1);
-    //     // let duration = self.duration_adjust(duration);
-    //     // let cap = 2.pow(10);
-    //     // // let mut elapsed = 0.0;
-    //     // for i in 0..cap {
-    //     //     seq.push_duration(i as f64 * duration / cap as f64, 0.1, Fade::Smooth, 0.0, 0.0, Box::new(white()));
-    //     // }
-    //     self.generate_with(0.0, duration, duration, &mut seq, scaling);
-    //     // println!("{}", COUNTER.load(std::sync::atomic::Ordering::Relaxed));
-    //     (unit(Box::new(seq)), duration)
-    // }
-
     fn generate_with(&self, start_time: f64, duration: f64, align_to: f64, seq: &mut Sequencer, scaling: Scaling) {
-        // println!("duration: {duration}");
-        // println!("{indent}{}", self.size());
-        // let incr = duration as f32 / self.melody.notes.len() as f32;
-        // seq.push_duration(start_time, duration, Fade::Smooth, duration / 20.0, duration / 20.0, Box::new(
-        //     notes_envelope(self.notes.clone(), octave, incr)
-        //     >> self.instrument.clone() * (depth_amp(incr, depth))
-        //     >> shape(Clip(1.0))
-        // ));
-
         if align_to > 0.0 {
             self.melody.sequence_full(seq, start_time, align_to, duration);
         }
@@ -237,17 +166,8 @@ impl SoundTree {
             };
             let new_time = duration * ratio;
             let mut align_to = align_to;
-            while align_to > new_time * 1.00001 { align_to *= 0.5 };
-            // let (new_time, new_time2) = (duration * first_segment, duration * (ratio - first_segment));
-            // println!("{indent}{}, {}", child.size(), new_time / old_new_time);
-            // let count = additions.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            // if count < 100 {
+            while align_to > new_time * 1.0000001 { align_to *= 0.5 };
             child.generate_with(start_time + time_elapsed, new_time, align_to, seq, scaling);
-            // }
-            // else if count < 10000 {
-            //     println!("Hit limit!");
-            //     additions.store(10000, std::sync::atomic::Ordering::Relaxed);
-            // }
             time_elapsed += new_time;
         }
     }
@@ -257,20 +177,14 @@ pub struct SoundTreeScaling(pub SoundTree, pub Scaling);
 
 impl Sequenceable for SoundTreeScaling {
     fn sequence_full(&self, seq: &mut Sequencer, start_time: f64, loop_duration: f64, total_duration: f64) {
-        // let duration = self.duration_adjust(duration);
-        // let cap = 2.pow(10);
-        // // let mut elapsed = 0.0;
-        // for i in 0..cap {
-        //     seq.push_duration(i as f64 * duration / cap as f64, 0.1, Fade::Smooth, 0.0, 0.0, Box::new(white()));
-        // }
         self.0.generate_with(start_time, total_duration, loop_duration, seq, self.1);
-        // println!("{}", COUNTER.load(std::sync::atomic::Ordering::Relaxed));
     }
 }
 
 //this is a separate function outside of translate despite doing the same match
 //so we can make multiple versions and switch them out easily
-//can't just parameterize without boxing the instruments so we'll leave it at this
+//without having to build infrastructure for config files
+//can't parameterize without boxing all the instruments so we'll leave it at this
 pub fn imelody1(term: &ITerm, depth: usize) -> Melody {
     let mut result = match term {
         ITerm::Ann(_, _) => Melody::new_even(violinish(), &[C, A, B, A]),
@@ -281,10 +195,8 @@ pub fn imelody1(term: &ITerm, depth: usize) -> Melody {
         ITerm::App(_, _) => Melody::new_even(pink_sine(), &[B, C, D, E]),
         ITerm::Nat => Melody::new_even(sawfir(), &[C, B, B, A]),
         ITerm::Zero => Melody::new_even(fm_basic(), &[B, C, E, A]),
-        ITerm::Succ(_) => Melody::new_even(base_instrument(), &[C, D, D, A]),
-        // ITerm::NatElim(_, _, _2, _3) => Melody::new_even((), &[])),
+        ITerm::Succ(_) => Melody::new_even(violinish(), &[C, D, D, A]),
         ITerm::Fin(_) => Melody::new_even(violinish(), &[D, D, D, G]),
-        // ITerm::FinElim(_, _, _2, _3, _4) => Melody::new_even(() &[]),
         ITerm::FZero(_) => Melody::new_even(pink_sine(), &[C, F, C, G]),
         ITerm::FSucc(_, _) => Melody::new_even(sinesaw(), &[F, B, B, B]),
         _ => panic!("{term} not implemented")
@@ -358,7 +270,7 @@ pub fn imelody_oneinstr(instrument: impl AudioUnit + 'static, term: &ITerm, dept
 
 pub fn cmelody_oneinstr(instrument: impl AudioUnit + 'static, term: &CTerm, depth: usize) -> Melody {
     let mut result = match term {
-        CTerm::Inf(_) => Melody::new_even(sine(), &[]), //value will never be used
+        CTerm::Inf(_) => Melody::new_even(sine(), &[A, A, A, A]), //value will never be used
         CTerm::Lam(_) => Melody::new_even(instrument, &[G, B, E, C]),
     };
     adjust_depth(&mut result, depth);
@@ -366,8 +278,6 @@ pub fn cmelody_oneinstr(instrument: impl AudioUnit + 'static, term: &CTerm, dept
 }
 
 fn adjust_depth(mel: &mut Melody, depth: usize) {
-    // mel.note_adjust = (depth as f64 * 6.0).sqrt().ceil() as i8 + 20;
-    // mel.set_octave((depth as f64 / 3.0).sqrt().ceil() as i8 + 1);
     mel.set_octave((depth as f64 / 2.5).sqrt().ceil() as i8 + 1);
     mel.map_notes(|n| Note {
         time: n.time * lerp(0.25, 0.95, 1.0 / depth as f32) as f64,
@@ -377,21 +287,9 @@ fn adjust_depth(mel: &mut Melody, depth: usize) {
     });
 }
 
-pub struct TermMelodized {
-    term: Term,
-    melodizer: Box<dyn Fn(Term, usize) -> Melody>
-}
-
-impl TermMelodized {
-    fn new(term: impl Into<Term>, melodizer: impl Fn(Term, usize) -> Melody + 'static) -> Self {
-        TermMelodized {
-            term: term.into(),
-            melodizer: Box::new(melodizer)
-        }
-    }
-}
-
 pub fn itranslate(term: ITerm, depth: usize) -> SoundTree {
+    //to customize the sound we edit this to change the function that produces the melody
+    //if we wanted more customization I think we'd need to pass in files
     let mel = imelody_oneinstr((sinesaw() ^ pass() | constant(1.0)) >> lowpass(), &term, depth);
     match term {
         ITerm::Ann(cterm, cterm1) => SoundTree::new(mel, vec![ctranslate(cterm, depth + 1), ctranslate(cterm1, depth + 1)]),
@@ -403,90 +301,31 @@ pub fn itranslate(term: ITerm, depth: usize) -> SoundTree {
         ITerm::Nat => SoundTree::new(mel, vec![]),
         ITerm::Zero => SoundTree::new(mel, vec![]),
         ITerm::Succ(cterm) => SoundTree::new(mel, vec![ctranslate(cterm, depth + 1)]),
-        // ITerm::NatElim(cterm, cterm1, cterm2, cterm3) => SoundTree::new(mel, vec![]),
+        ITerm::NatElim(motive, base, ind, k) => SoundTree::new(mel, vec![
+            ctranslate(motive, depth + 1),
+            ctranslate(base, depth + 1),
+            ctranslate(ind, depth + 1),
+            ctranslate(k, depth + 1),
+        ]),
         ITerm::Fin(cterm) => SoundTree::new(mel, vec![ctranslate(cterm, depth + 1)]),
-        // ITerm::FinElim(cterm, cterm1, cterm2, cterm3, cterm4) => SoundTree::new(mel, vec![]),
+        ITerm::FinElim(motive, base, ind, n, f) => SoundTree::new(mel, vec![
+            ctranslate(motive, depth + 1),
+            ctranslate(base, depth + 1),
+            ctranslate(ind, depth + 1),
+            ctranslate(n, depth + 1),
+            ctranslate(f, depth + 1),
+        ]),
         ITerm::FZero(cterm) => SoundTree::new(mel, vec![ctranslate(cterm, depth + 1)]),
         ITerm::FSucc(cterm, cterm1) => SoundTree::new(mel, vec![ctranslate(cterm, depth + 1), ctranslate(cterm1, depth + 1)]),
-        _ => panic!("{term} not implemented")
     }
 }
 
 pub fn ctranslate(term: CTerm, depth: usize) -> SoundTree {
-    // let mut mel = Melody::new_even(fm_epi(), &[A, D, B, E]);
-    // adjust_depth(&mut mel, depth);
+    //to customize the sound we edit this to change function that produces the melody
     let mel = cmelody_oneinstr(sinesaw(), &term, depth);
     match term {
         CTerm::Inf(iterm) => itranslate(*iterm, depth),
         CTerm::Lam(cterm) => SoundTree::new(mel, vec![ctranslate(*cterm, depth + 1)]),
-    }
-}
-
-
-
-impl Term {
-    // TODO we want this to handle some levels of interpreter type stuff - will need more parameters
-    fn sequence_consume(self, seq: &mut Sequencer, start_time: f64, loop_duration: f64, total_duration: f64) {
-        println!("hi {self:?}");
-        match self {
-            Term::CT(cterm) => match cterm {
-                CTerm::Inf(iterm) => Term::IT(*iterm).sequence_consume(seq, start_time, loop_duration, total_duration),
-                CTerm::Lam(cterm1) => {
-                    println!("getting cmelody");
-                    cmelody2(&cterm1, 0).sequence_full(seq, start_time + 0.1 * loop_duration, loop_duration * 0.8, total_duration * 0.9);
-                    println!("got cmelody");
-                    Term::CT(*cterm1).sequence_consume(seq, start_time, loop_duration, total_duration);
-                },
-            },
-            Term::IT(iterm) => match iterm {
-                ITerm::Ann(cterm, cterm1) => {
-                    println!("ann");
-                    Term::CT(cterm).sequence_consume(seq, start_time, loop_duration / 2.0, total_duration / 2.0);
-                    Term::CT(cterm1).sequence_consume(seq, start_time + loop_duration / 2.0, loop_duration / 2.0, total_duration / 2.0);
-                },
-                ITerm::Star => {
-                    seq.push_duration(start_time, loop_duration, Fade::Smooth, 0.05, 0.05, Box::new(standard(None).0));
-                },
-                ITerm::Pi(cterm, cterm1) => {
-                    println!("pi");
-                    Term::CT(cterm).sequence_consume(seq, start_time, loop_duration / 2.0, total_duration / 2.0);
-                    Term::CT(cterm1).sequence_consume(seq, start_time + loop_duration / 2.0, loop_duration / 2.0, total_duration / 2.0);
-                },
-                ITerm::Bound(_) => {},
-                ITerm::Free(name) => {},
-                ITerm::App(iterm1, cterm) => {
-                    println!("app");
-                    Term::IT(*iterm1).sequence_consume(seq, start_time, loop_duration / 2.0, total_duration / 2.0);
-                    Term::CT(cterm).sequence_consume(seq, start_time + loop_duration / 2.0, loop_duration / 2.0, total_duration / 2.0);
-                },
-                ITerm::Nat => {},
-                ITerm::Zero => {},
-                ITerm::Succ(cterm) => {},
-                ITerm::NatElim(cterm, cterm1, cterm2, cterm3) => {},
-                ITerm::Fin(cterm) => {
-                    println!("fin");
-                    Term::CT(cterm).sequence_consume(seq, start_time + loop_duration / 2.0, loop_duration / 2.0, total_duration / 2.0);
-                },
-                ITerm::FinElim(cterm, cterm1, cterm2, cterm3, cterm4) => {},
-                ITerm::FZero(cterm) => {
-                    println!("fz");
-                    Term::CT(cterm).sequence_consume(seq, start_time + loop_duration / 2.0, loop_duration / 2.0, total_duration / 2.0);
-                },
-                ITerm::FSucc(cterm, cterm1) => {
-                    println!("fs");
-                    Term::CT(cterm).sequence_consume(seq, start_time, loop_duration / 2.0, total_duration / 2.0);
-                    Term::CT(cterm1).sequence_consume(seq, start_time + loop_duration / 2.0, loop_duration / 2.0, total_duration / 2.0);
-                },
-            },
-        }
-    }
-}
-
-impl Sequenceable for Term {
-    fn sequence_full(&self, seq: &mut Sequencer, start_time: f64, loop_duration: f64, total_duration: f64) {
-        let new = self.clone();
-        println!("sequencing...");
-        new.sequence_consume(seq, start_time, loop_duration, total_duration);
     }
 }
 

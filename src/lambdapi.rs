@@ -8,7 +8,9 @@ use ast::*;
 use term::*;
 use check::*;
 use eval::*;
-use print::*;
+
+/* this mostly contains specific terms of LambdaPi */
+/* at some point we should add a parser and switch to constructing from that */
 
 pub fn void() -> ITerm {
     ITerm::Fin(ITerm::Zero.into())
@@ -166,34 +168,42 @@ pub fn exfalso() -> ITerm {
     iann(
         clam(
             clam(
-                ITerm::FinElim(clam(
-                    ITerm::NatElim(clam(
-                        ipi(
-                            ITerm::Fin(bnd(0).into()),
-                            ITerm::Star
-                        )
-                    ), clam(bnd(3)), clam(clam(clam(ITerm::Fin(inat(1).into())))), bnd(0).into())
-                ), clam(ITerm::FZero(ITerm::Zero.into())), clam(clam(clam(ITerm::FZero(ITerm::Zero.into())))), ITerm::Zero.into(), bnd(1).into())
+                ITerm::FinElim(
+                    clam(
+                        ITerm::NatElim(clam(
+                            ipi(
+                                ITerm::Fin(bnd(0).into()),
+                                ITerm::Star
+                            )
+                        ), clam(bnd(3)), clam(clam(clam(ITerm::Fin(inat(1).into())))), bnd(0).into())
+                    ),
+                    clam(ITerm::FZero(ITerm::Zero.into())),
+                    clam(clam(clam(ITerm::FZero(ITerm::Zero.into())))), 
+                    ITerm::Zero.into(),
+                    bnd(0).into()
+                )
             )
         ),
         ipi(ITerm::Star, ipi(void(), bnd(1)))
     )
 }
 
-pub fn validate(name: &str, term: &ITerm) {
+pub fn validate(name: &str, term: &ITerm, eval: bool) {
     println!("{name}");
+    println!("{term}");
     let typ = i_type(0, vec![], term.clone()).expect("Term should be well-typed");
-    let val = i_eval(term.clone(), vec![]);
-    let qval = quote0(val);
-    c_type(0, vec![], qval.clone(), typ.clone()).expect("Evaluation should preserve type");
-    let typ1 = quote0(typ);
-    println!("\t{term} :::: {typ1}");
-    // println!("\t{qval}")
-    println!("Passed type checks!");
-    if qval == term.into() {
-        println!("Is preserved by quote-eval")
-    }
-    else {
-        println!("Not preserved by quote-eval (might just be application)")
+    if eval {
+        let val = i_eval(term.clone(), vec![]);
+        let qval = quote0(val);
+        c_type(0, vec![], qval.clone(), typ.clone()).expect("Evaluation should preserve type");
+        let typ1 = quote0(typ);
+        println!("\t{term} :::: {typ1}");
+        println!("Passed type checks!");
+        if qval == term.into() {
+            println!("Is preserved by quote-eval")
+        }
+        else {
+            println!("Not preserved by quote-eval (might just be application)")
+        }
     }
 }

@@ -4,6 +4,8 @@ use std::{f32::consts::{E, PI}, fs};
 
 use crate::music::{notes::BASE_HZ, sequences::onepress};
 
+/* various little synth things, only some of which are actually used */
+
 pub fn flanger_default() -> An<impl AudioNode<Inputs=U1, Outputs=U1>> {
     flanger(0.9, 0.005, 0.010, |t| lerp11(0.005, 0.010, sin_hz(0.7, t)))
 }

@@ -290,7 +290,8 @@ fn adjust_depth(mel: &mut Melody, depth: usize) {
 pub fn itranslate(term: ITerm, depth: usize) -> SoundTree {
     //to customize the sound we edit this to change the function that produces the melody
     //if we wanted more customization I think we'd need to pass in files
-    let mel = imelody_oneinstr((sinesaw() ^ pass() | constant(1.0)) >> lowpass(), &term, depth);
+    let mel = imelody2(&term, depth);
+    // let mel = imelody_oneinstr((sinesaw() ^ pass() | constant(1.0)) >> lowpass(), &term, depth);
     match term {
         ITerm::Ann(cterm, cterm1) => SoundTree::new(mel, vec![ctranslate(cterm, depth + 1), ctranslate(cterm1, depth + 1)]),
         ITerm::Star => SoundTree::new(mel, vec![]),

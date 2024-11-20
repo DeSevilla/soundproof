@@ -181,6 +181,34 @@ impl Sequenceable for SoundTreeScaling {
     }
 }
 
+pub struct SoundTreeExpanding {
+    melody: Box<dyn Sequenceable>,
+    children: Vec<SoundTreeExpanding>,
+}
+
+impl From<SoundTree> for SoundTreeExpanding {
+    fn from(value: SoundTree) -> Self {
+        SoundTreeExpanding {
+            melody: value.melody,
+            children: value.children.into_iter().map(|x| x.into()).collect(),
+        }
+    }
+}
+
+impl Sequenceable for SoundTreeExpanding {
+    fn sequence_full(&self, seq: &mut Sequencer, start_time: f64, loop_duration: f64, total_duration: f64) {
+        let switch_time = total_duration * 0.2;
+        let rem_time = total_duration - switch_time;
+        let loop_time = switch_time * loop_duration / total_duration;
+        let rem_loop = loop_duration - loop_time;
+        self.melody.sequence_full(seq, start_time, loop_time, switch_time);
+        for (ii, child) in self.children.iter().enumerate() {
+            let extra_time = ii as f64 * 0.0001 * total_duration;
+            child.sequence_full(seq, start_time + switch_time + extra_time, rem_loop, rem_time - extra_time);
+        }
+    }
+}
+
 //this is a separate function outside of translate despite doing the same match
 //so we can make multiple versions and switch them out easily
 //without having to build infrastructure for config files
@@ -285,6 +313,33 @@ fn adjust_depth(mel: &mut Melody, depth: usize) {
         sustain: lerp(0.25, 0.5, 1.0 / depth as f32),
         ..*n
     });
+}
+
+pub fn make_melody(term: &CTerm, depth: usize) -> Melody {
+    todo!()
+}
+
+pub fn itreeevaluate(term: ITerm, depth: usize, ctx: Vec<Melody>) -> SoundTree {
+    match term {
+        ITerm::Ann(cterm, _) => SoundTree::new(make_melody(&cterm, depth), vec![ctreeevaluate(cterm, depth, ctx)]),
+        ITerm::Star => SoundTree::new(imelody3(&term, depth), vec![]),  //need to sort this out at some point
+        ITerm::Pi(ty, body) => SoundTree::new(make_melody(&ty, depth), vec![]),
+        ITerm::Bound(_) => todo!(),
+        ITerm::Free(name) => todo!(),
+        ITerm::App(iterm, cterm) => todo!(),
+        ITerm::Nat => todo!(),
+        ITerm::Zero => todo!(),
+        ITerm::Succ(cterm) => todo!(),
+        ITerm::NatElim(cterm, cterm1, cterm2, cterm3) => todo!(),
+        ITerm::Fin(cterm) => todo!(),
+        ITerm::FinElim(cterm, cterm1, cterm2, cterm3, cterm4) => todo!(),
+        ITerm::FZero(cterm) => todo!(),
+        ITerm::FSucc(cterm, cterm1) => todo!(),
+    }
+}
+
+pub fn ctreeevaluate(term: CTerm, depth: usize, ctx: Vec<Melody>) -> SoundTree {
+    todo!()
 }
 
 pub fn itranslate(term: ITerm, depth: usize) -> SoundTree {

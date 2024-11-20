@@ -68,8 +68,9 @@ fn main() {
     //validation just makes sure it typechecks; we can't evaluate the paradox
     validate(&format!("{:?}", args.value), &term, false);
     let tree = itranslate(term, 0);
+    let time = args.time.unwrap_or(std::cmp::min(tree.size(), 1200) as f64);
+    // let tree: SoundTreeExpanding = tree.into();
     let tree = SoundTreeScaling(tree, scaling);
-    let time = args.time.unwrap_or(std::cmp::min(tree.0.size(), 1200) as f64);
     let mut seq = Sequencer::new(false, 1);
     println!("Sequencing...");
     tree.sequence(&mut seq, 0.0, time);

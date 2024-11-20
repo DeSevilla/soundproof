@@ -2,7 +2,10 @@ Soundproof is a tool for transforming formalized mathematical proofs into music,
 It is currently in a very preliminary stage. The audio synthesis is built with
 [FunDSP](https://github.com/SamiPerttu/fundsp). The mathematical proofs are constructed in a
 custom Rust implementation of [LambdaPi](https://www.andres-loeh.de/LambdaPi/), a simple
-version of the dependently-typed lambda calculus.
+version of the dependently-typed lambda calculus. 
+Artistic influences include Henry Flynt, Catherine Hennix, Iannis Xenakis, Drexciya, Perturbator, and Odz Manouk.
+
+An example of the output can be found [on SoundCloud here.](https://soundcloud.com/user-619734785/system-output-v12)
 
 Notably, LambdaPi forgoes the universe hierarchy of usual dependent type theories for simplicity, 
 so the type of Type is Type; this is essentially similar to the naive set theory idea 

@@ -6,6 +6,7 @@ use clap::*;
 use lambdapi::*;
 use soundproof::*;
 use music::*;
+use types::*;
 
 mod lambdapi;
 mod music;
@@ -64,13 +65,15 @@ struct Args {
 fn main() {
     let args = Args::parse();
     let scaling = args.scaling.unwrap_or(Scaling::SizeAligned);
-    let term = args.value.unwrap_or(NamedTerm::GirardReduced).term();
+    let term_name = args.value.unwrap_or(NamedTerm::GirardReduced);
+    let term = term_name.term();
     //validation just makes sure it typechecks; we can't evaluate the paradox
-    validate(&format!("{:?}", args.value), &term, false);
-    let tree = itranslate(term, 0);
+    validate(&format!("{:?}", term_name), &term, false);
+    // let tree = itranslate(term, 0);
+    let tree = translate_term(term.into());
     let time = args.time.unwrap_or(std::cmp::min(tree.size(), 1200) as f64);
     // let tree: SoundTreeExpanding = tree.into();
-    let tree = SoundTreeScaling(tree, scaling);
+    let tree = SoundTree2Scaling(tree, scaling);
     let mut seq = Sequencer::new(false, 1);
     println!("Sequencing...");
     tree.sequence(&mut seq, 0.0, time);

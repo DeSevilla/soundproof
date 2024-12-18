@@ -191,7 +191,7 @@ pub fn exfalso() -> ITerm {
 
 pub fn validate(name: &str, term: &ITerm, eval: bool) {
     println!("{name}");
-    println!("{term}");
+    // println!("{term}");
     let typ = i_type(0, vec![], term).expect("Term should be well-typed");
     if eval {
         let val = i_eval(term.clone(), vec![]);

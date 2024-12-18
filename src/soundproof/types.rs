@@ -127,109 +127,109 @@ impl Sequenceable for Melody {
 
 }
 
-pub struct SoundTree {
-    melody: Box<dyn Sequenceable>,
-    children: Vec<SoundTree>
-}
+// pub struct SoundTree {
+//     melody: Box<dyn Sequenceable>,
+//     children: Vec<SoundTree>
+// }
 
 fn round_by(x: f64, by: f64) -> f64 {
     (x / by).round() * by
 }
 
 
-impl SoundTree {
-    pub fn new(melody: impl Sequenceable + 'static, children: Vec<SoundTree>) -> SoundTree {
-        SoundTree {
-            melody: Box::new(melody),
-            children
-        }
-    }
+// impl SoundTree {
+//     pub fn new(melody: impl Sequenceable + 'static, children: Vec<SoundTree>) -> SoundTree {
+//         SoundTree {
+//             melody: Box::new(melody),
+//             children
+//         }
+//     }
 
-    pub fn size(&self) -> usize {
-        1 + self.children.iter().map(|x| x.size()).sum::<usize>()
-    }
+//     pub fn size(&self) -> usize {
+//         1 + self.children.iter().map(|x| x.size()).sum::<usize>()
+//     }
 
-    fn size_adjusted(&self) -> f64 {
-        if self.children.len() > 0 {
-            self.children.iter().map(|x| x.size_factor()).sum::<f64>()
-        }
-        else {
-            1.0
-        }
-    }
+//     fn size_adjusted(&self) -> f64 {
+//         if self.children.len() > 0 {
+//             self.children.iter().map(|x| x.size_factor()).sum::<f64>()
+//         }
+//         else {
+//             1.0
+//         }
+//     }
 
-    fn size_factor(&self) -> f64 {
-        self.size_adjusted().powf(0.85)
-    }
+//     fn size_factor(&self) -> f64 {
+//         self.size_adjusted().powf(0.85)
+//     }
 
-    fn generate_with(&self, start_time: f64, duration: f64, align_to: f64, seq: &mut Sequencer, scaling: Scaling) {
-        println!("Generating {start_time} {duration}");
-        if align_to > 0.0 {
-            self.melody.sequence_full(seq, start_time, align_to, duration);
-        }
-        else {
-            self.melody.sequence(seq, start_time, duration);
-        }
-        let child_count = self.children.len();
-        let segment = 0.5f64.powi(child_count as i32);
-        let mut time_elapsed = 0.0;
-        for child in self.children.iter() {
-            let ratio = match scaling {
-                Scaling::Linear => 1.0 / child_count as f64,
-                Scaling::Size => child.size_factor() / self.size_adjusted(),
-                Scaling::SizeAligned => round_by(child.size_factor() / self.size_adjusted(), segment),
-                Scaling::SizeRaw => child.size() as f64 / self.size() as f64,
-            };
-            let new_time = duration * ratio;
-            let mut align_to = align_to;
-            while align_to > new_time * 1.0000001 { align_to *= 0.5 };
-            child.generate_with(start_time + time_elapsed, new_time, align_to, seq, scaling);
-            time_elapsed += new_time;
-        }
-    }
-}
+//     fn generate_with(&self, start_time: f64, duration: f64, align_to: f64, seq: &mut Sequencer, scaling: Scaling) {
+//         println!("Generating {start_time} {duration}");
+//         if align_to > 0.0 {
+//             self.melody.sequence_full(seq, start_time, align_to, duration);
+//         }
+//         else {
+//             self.melody.sequence(seq, start_time, duration);
+//         }
+//         let child_count = self.children.len();
+//         let segment = 0.5f64.powi(child_count as i32);
+//         let mut time_elapsed = 0.0;
+//         for child in self.children.iter() {
+//             let ratio = match scaling {
+//                 Scaling::Linear => 1.0 / child_count as f64,
+//                 Scaling::Size => child.size_factor() / self.size_adjusted(),
+//                 Scaling::SizeAligned => round_by(child.size_factor() / self.size_adjusted(), segment),
+//                 Scaling::SizeRaw => child.size() as f64 / self.size() as f64,
+//             };
+//             let new_time = duration * ratio;
+//             let mut align_to = align_to;
+//             while align_to > new_time * 1.0000001 { align_to *= 0.5 };
+//             child.generate_with(start_time + time_elapsed, new_time, align_to, seq, scaling);
+//             time_elapsed += new_time;
+//         }
+//     }
+// }
 
-impl Sequenceable for SoundTree {
-    fn sequence_full(&self, seq: &mut Sequencer, start_time: f64, loop_duration: f64, total_duration: f64) {
-        self.generate_with(start_time, total_duration, loop_duration, seq, Scaling::Size);
-    }
-}
+// impl Sequenceable for SoundTree {
+//     fn sequence_full(&self, seq: &mut Sequencer, start_time: f64, loop_duration: f64, total_duration: f64) {
+//         self.generate_with(start_time, total_duration, loop_duration, seq, Scaling::Size);
+//     }
+// }
 
-pub struct SoundTreeScaling(pub SoundTree, pub Scaling);
+// pub struct SoundTreeScaling(pub SoundTree, pub Scaling);
 
-impl Sequenceable for SoundTreeScaling {
-    fn sequence_full(&self, seq: &mut Sequencer, start_time: f64, loop_duration: f64, total_duration: f64) {
-        self.0.generate_with(start_time, total_duration, loop_duration, seq, self.1);
-    }
-}
+// impl Sequenceable for SoundTreeScaling {
+//     fn sequence_full(&self, seq: &mut Sequencer, start_time: f64, loop_duration: f64, total_duration: f64) {
+//         self.0.generate_with(start_time, total_duration, loop_duration, seq, self.1);
+//     }
+// }
 
-pub struct SoundTreeExpanding {
-    melody: Box<dyn Sequenceable>,
-    children: Vec<SoundTreeExpanding>,
-}
+// pub struct SoundTreeExpanding {
+//     melody: Box<dyn Sequenceable>,
+//     children: Vec<SoundTreeExpanding>,
+// }
 
-impl From<SoundTree> for SoundTreeExpanding {
-    fn from(value: SoundTree) -> Self {
-        SoundTreeExpanding {
-            melody: value.melody,
-            children: value.children.into_iter().map(|x| x.into()).collect(),
-        }
-    }
-}
+// impl From<SoundTree> for SoundTreeExpanding {
+//     fn from(value: SoundTree) -> Self {
+//         SoundTreeExpanding {
+//             melody: value.melody,
+//             children: value.children.into_iter().map(|x| x.into()).collect(),
+//         }
+//     }
+// }
 
-impl Sequenceable for SoundTreeExpanding {
-    fn sequence_full(&self, seq: &mut Sequencer, start_time: f64, loop_duration: f64, total_duration: f64) {
-        let switch_time = total_duration * 0.2;
-        let rem_time = total_duration - switch_time;
-        let loop_time = switch_time * loop_duration / total_duration;
-        let rem_loop = loop_duration - loop_time;
-        self.melody.sequence_full(seq, start_time, loop_time, switch_time);
-        for (ii, child) in self.children.iter().enumerate() {
-            let extra_time = ii as f64 * 0.0001 * total_duration;
-            child.sequence_full(seq, start_time + switch_time + extra_time, rem_loop, rem_time - extra_time);
-        }
-    }
-}
+// impl Sequenceable for SoundTreeExpanding {
+//     fn sequence_full(&self, seq: &mut Sequencer, start_time: f64, loop_duration: f64, total_duration: f64) {
+//         let switch_time = total_duration * 0.2;
+//         let rem_time = total_duration - switch_time;
+//         let loop_time = switch_time * loop_duration / total_duration;
+//         let rem_loop = loop_duration - loop_time;
+//         self.melody.sequence_full(seq, start_time, loop_time, switch_time);
+//         for (ii, child) in self.children.iter().enumerate() {
+//             let extra_time = ii as f64 * 0.0001 * total_duration;
+//             child.sequence_full(seq, start_time + switch_time + extra_time, rem_loop, rem_time - extra_time);
+//         }
+//     }
+// }
 
 // #[derive(Clone)]
 // pub struct SoundContext(Vec<(Name, SoundTree2, Type)>);
@@ -257,6 +257,15 @@ impl SoundTree2 {
     pub fn new_sound(sound: impl Sequenceable + 'static) -> Self {
         Self::Sound(Box::new(sound))
     }
+
+    // pub fn new_simulseq(param: &[[Self]]) -> Self {
+    //     for row in param {
+    //         for elem in row {
+    //             println!("")
+    //         }
+    //     }
+    //     Self::Seq(vec![])
+    // }
 
     pub fn size(&self) -> usize {
         match self {
@@ -292,7 +301,7 @@ impl SoundTree2 {
                     let ratio = match scaling {
                         Scaling::Linear => 1.0 / child_count as f64,
                         Scaling::Size => child.size_factor() / self.size_adjusted(),
-                        // Scaling::SizeAligned => round_by(child.size_factor() / self.0.size_adjusted(), segment),
+                        // Scaling::SizeAligned => round_by(child.size_factor() / self.size_adjusted(), segment),
                         Scaling::SizeRaw => child.size() as f64 / self.size() as f64,
                         _ => panic!("SizeAligned not yet implemented for SoundTree2")
                     };
@@ -309,7 +318,7 @@ impl SoundTree2 {
 pub struct SoundTree2Scaling(pub SoundTree2, pub Scaling);
 
 impl Sequenceable for SoundTree2Scaling {
-    fn sequence_full(&self, seq: &mut Sequencer, start_time: f64, loop_duration: f64, total_duration: f64) {
+    fn sequence_full(&self, seq: &mut Sequencer, start_time: f64, _loop_duration: f64, total_duration: f64) {
         //TODO ignoring loop duration we may need more work on this api tbh
         //like maybe instead of building it in to Sequenceable we add a loop construct for any Sequenceable
         //this also lets us potentially modify behavior at call sites individually

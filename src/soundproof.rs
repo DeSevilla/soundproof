@@ -3,11 +3,12 @@
 pub mod types;
 pub mod translate;
 
-use crate::translate::*;
-use crate::lambdapi::ast::*;
 use types::*;
+use translate::*;
+use crate::lambdapi::ast::*;
+use crate::MelodySelector;
 
-pub fn translate_term(term: ITerm) -> SoundTree2 {
-    i_type_translate_full(0, vec![], &term, 0).unwrap().1
+pub fn itype_translate(term: ITerm, mel: MelodySelector) -> SoundTree2 {
+    itype_translate_full(0, vec![], &term, 1, mel).unwrap().1
     // ctypetranslate(0, 0, term, SoundContext(Vec::new()))
 }

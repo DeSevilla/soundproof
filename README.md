@@ -3,7 +3,7 @@ It is currently in a very preliminary stage. The audio synthesis is built with
 [FunDSP](https://github.com/SamiPerttu/fundsp). The mathematical proofs are constructed in a
 custom Rust implementation of [LambdaPi](https://www.andres-loeh.de/LambdaPi/), a simple
 version of the dependently-typed lambda calculus.
-Artistic influences include Iannis Xenakis, Henry Flynt, Catherine Hennix, Drexciya, Perturbator, and Odz Manouk.
+Artistic influences include Iannis Xenakis, Henry Flynt, Catherine Hennix, Drexciya, Perturbator, Sun Ra, and Odz Manouk.
 
 Example of the output can be found on SoundCloud [here (term-structured)](https://soundcloud.com/user-619734785/system-output-v12)
 and [here (type-structured)](https://soundcloud.com/user-619734785/system-output-v13).

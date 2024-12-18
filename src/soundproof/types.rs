@@ -81,9 +81,9 @@ impl Melody {
         self.notes = self.notes.iter_mut().map(|(x, d)| (f(x), *d)).collect();
     }
 
-    pub fn append(&mut self, other: Self) {
-        self.notes.append(&mut other.notes.into_iter().map(|(note, dur)| (Note { note: note.note + 12 * other.note_adjust, ..note}, dur)).collect());
-    }
+    // pub fn append(&mut self, other: Self) {
+    //     self.notes.append(&mut other.notes.into_iter().map(|(note, dur)| (Note { note: note.note + 12 * other.note_adjust, ..note}, dur)).collect());
+    // }
 
     pub fn adjust_depth(&mut self, depth: usize) {
         self.set_octave((depth as f64 / 2.5).sqrt().ceil() as i8 + 1);
@@ -127,14 +127,15 @@ impl Sequenceable for Melody {
 
 }
 
+fn round_by(x: f64, by: f64) -> f64 {
+    (x / by).round() * by
+}
+
+
 // pub struct SoundTree {
 //     melody: Box<dyn Sequenceable>,
 //     children: Vec<SoundTree>
 // }
-
-fn round_by(x: f64, by: f64) -> f64 {
-    (x / by).round() * by
-}
 
 
 // impl SoundTree {

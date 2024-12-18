@@ -2,12 +2,12 @@ Soundproof is a tool for transforming formalized mathematical proofs into music,
 It is currently in a very preliminary stage. The audio synthesis is built with
 [FunDSP](https://github.com/SamiPerttu/fundsp). The mathematical proofs are constructed in a
 custom Rust implementation of [LambdaPi](https://www.andres-loeh.de/LambdaPi/), a simple
-version of the dependently-typed lambda calculus. 
-Artistic influences include Henry Flynt, Catherine Hennix, Iannis Xenakis, Drexciya, Perturbator, and Odz Manouk.
+version of the dependently-typed lambda calculus.
+Artistic influences include Iannis Xenakis, Henry Flynt, Catherine Hennix, Drexciya, Perturbator, and Odz Manouk.
 
 An example of the output can be found [on SoundCloud here.](https://soundcloud.com/user-619734785/system-output-v12)
 
-Notably, LambdaPi forgoes the universe hierarchy of usual dependent type theories for simplicity, 
+Notably, LambdaPi forgoes the universe hierarchy of usual dependent type theories for simplicity,
 so the type of Type is Type; this is essentially similar to the naive set theory idea 
 of the "set of all sets", and leads to [Girard's Paradox](https://en.wikipedia.org/wiki/System_U).
 In fact, this paradox (in the simplification due to [Hurkens](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf)) 
@@ -27,9 +27,11 @@ on optimizations that are not enabled in debug mode.
 Usage: soundproof.exe [OPTIONS]
 
 Options:
-  -s, --scaling <SCALING>  [possible values: linear, size, size-aligned, size-raw]
+  -s, --scaling <SCALING>      [possible values: linear, size, size-aligned, size-raw]
   -t, --time <TIME>
-  -v, --value <VALUE>      [possible values: star, u, tau, girard, girard-reduced]
-  -h, --help               Print help
-  -V, --version            Print version
+  -v, --value <VALUE>          [possible values: star, u, tau, girard, girard-reduced]
+  -m, --melody <MELODY>        [possible values: first, second, third, fourth, pure-sine]
+  -S, --structure <STRUCTURE>  [possible values: term, type]
+  -h, --help                   Print help
+  -V, --version                Print version
 ```

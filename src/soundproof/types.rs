@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use fundsp::hacker32::*;
 use crate::music::notes::*;
 use crate::Scaling;
@@ -139,15 +141,31 @@ impl Sequenceable for Melody {
 //     (x / by).round() * by
 // }
 
+// #[derive(Clone)]
+// pub enum TypedTree {
+//     Simul(Vec<TypedTree>),
+//     Seq(Vec<TypedTree>),
+//     Sound(Type, Rc<dyn Sequenceable>)
+// }
+
+#[derive(Clone)]
 pub enum SoundTree {
     Simul(Vec<SoundTree>),
     Seq(Vec<SoundTree>),
-    Sound(Box<dyn Sequenceable>)
+    Sound(Rc<dyn Sequenceable>)
 }
 
 impl SoundTree {
-    pub fn new_sound(sound: impl Sequenceable + 'static) -> Self {
-        Self::Sound(Box::new(sound))
+    pub fn sound(sound: impl Sequenceable + 'static) -> Self {
+        Self::Sound(Rc::new(sound))
+    }
+
+    pub fn seq(values: &[SoundTree]) -> Self {
+        Self::Seq(values.to_vec())
+    }
+
+    pub fn simul(values: &[SoundTree]) -> Self {
+        Self::Simul(values.to_vec())
     }
 
     // pub fn new_simulseq(param: &[[Self]]) -> Self {
@@ -195,7 +213,7 @@ impl SoundTree {
                         Scaling::Size => child.size_factor() / self.size_adjusted(),
                         // Scaling::SizeAligned => round_by(child.size_factor() / self.size_adjusted(), segment),
                         Scaling::SizeRaw => child.size() as f64 / self.size() as f64,
-                        _ => panic!("SizeAligned not yet implemented for SoundTree2")
+                        // _ => panic!("SizeAligned not yet implemented for SoundTree2")
                     };
                     let new_time = duration * ratio;
                     child.generate_with(seq, start_time + time_elapsed, new_time, scaling);
@@ -205,6 +223,16 @@ impl SoundTree {
             SoundTree::Sound(sound) => sound.sequence(seq, start_time, duration),
         }
     }
+
+    // pub fn print_sizes(&self, depth: usize) {
+    //     let tabs = "\t".repeat(depth);
+    //     println!("{tabs}{}", self.size());
+    //     match self {
+    //         SoundTree::Simul(vec) => for child in vec { child.print_sizes(depth + 1); },
+    //         SoundTree::Seq(vec) => for child in vec { child.print_sizes(depth + 1); },
+    //         SoundTree::Sound(_) => (),
+    //     }
+    // }
 
     // pub fn show(&self, depth: usize) -> String {
     //     // let tabs = " ".repeat(depth);

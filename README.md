@@ -27,11 +27,11 @@ on optimizations that are not enabled in debug mode.
 Usage: soundproof.exe [OPTIONS]
 
 Options:
-  -s, --scaling <SCALING>      [possible values: linear, size, size-aligned, size-raw]
-  -t, --time <TIME>
-  -v, --value <VALUE>          [possible values: star, u, tau, girard, girard-reduced]
-  -m, --melody <MELODY>        [possible values: first, second, third, fourth, pure-sine]
-  -S, --structure <STRUCTURE>  [possible values: term, type]
+  -s, --scaling <SCALING>      [default: linear] [possible values: linear, size, size-aligned, size-raw]
+  -t, --time <TIME>            If unset, scales with size of term
+  -v, --value <VALUE>          [default: girard-reduced] [possible values: star, u, tau, girard, girard-reduced]
+  -m, --melody <MELODY>        [default: fourth] [possible values: first, second, third, fourth, pure-sine]
+  -S, --structure <STRUCTURE>  [default: type] [possible values: term, type]
   -h, --help                   Print help
   -V, --version                Print version
 ```

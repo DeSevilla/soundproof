@@ -77,7 +77,7 @@ pub fn octarp(length: f32, time: f32) -> An<impl AudioNode<Inputs=U0, Outputs=U1
                 3.0 * 0.5
             }
             else {
-                4.0 * 0.33333333333
+                4.0 / 3.0
             }
         }
         else {

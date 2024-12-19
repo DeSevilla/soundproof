@@ -138,7 +138,7 @@ pub fn cmelody_oneinstr(instrument: impl AudioUnit + 'static, term: &CTerm, dept
 
 pub fn itype_translate_full(i: usize, ctx: Context, term: &ITerm, depth: usize, mel: MelodySelector) -> Result<(Type, SoundTree), String> {
     // println!("{i}typing term {term:?} in context {}", ctx.iter().fold("".to_owned(), |acc, e| acc + &format!(" {:?}", e.0)));
-    let base_tree = SoundTree::sound(mel.imelody(&term, depth));
+    let base_tree = SoundTree::sound(mel.imelody(term, depth));
     match term {
         ITerm::Ann(ct, cty) => {
             let tytree = ctype_translate_full(i, ctx.clone(), cty, Value::Star, depth + 1, mel)?; // TODO figure this out better
@@ -271,7 +271,7 @@ pub fn ctype_translate_full(i: usize, ctx: Context, term: &CTerm, ty: Type, dept
                 new_ctx.push((Name::Local(i), *src));
                 // println!("Pushed {i} to ctx");
                 let subtree = ctype_translate_full(i + 1, new_ctx, &c_subst(0, ITerm::Free(Name::Local(i)), *body.clone()), trg(vfree(Name::Local(i))), depth + 1, mel)?;
-                Ok(SoundTree::simul(&[SoundTree::sound(mel.cmelody(&term, depth)), subtree]))
+                Ok(SoundTree::simul(&[SoundTree::sound(mel.cmelody(term, depth)), subtree]))
             },
             _ => Err("Function must have pi type".to_owned())
         }

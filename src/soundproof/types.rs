@@ -64,7 +64,7 @@ impl Melody {
     pub fn new_even(instrument: impl AudioUnit + 'static, notes: &[i8]) -> Self {
         Melody {
             instrument: unit(Box::new(instrument)),
-            notes: notes.into_iter().map(|x| (Note { note: *x, time: 0.75, volume: 1.0, attack: 0.25, decay: 0.25, sustain: 0.5, release: 0.1 }, 1.0)).collect(),
+            notes: notes.iter().map(|x| (Note { note: *x, time: 0.75, volume: 1.0, attack: 0.25, decay: 0.25, sustain: 0.5, release: 0.1 }, 1.0)).collect(),
             note_adjust: 0
         }
     }
@@ -80,7 +80,7 @@ impl Melody {
     //     self.notes = self.notes.iter_mut().map(|(x, t)| { x.length *= ratio; x.attack *= ratio32; x.decay *= ratio32; x.release *= ratio32; (*x, *t * ratio)} ).collect();
     // }
 
-    pub fn set_octave(&mut self, octave: i8) -> () {
+    pub fn set_octave(&mut self, octave: i8) {
         self.note_adjust = 12 * octave;
     }
 

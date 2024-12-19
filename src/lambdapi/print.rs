@@ -20,7 +20,7 @@ fn varname(i: usize) -> String {
     let mut result = "".to_owned();
     while val > ct {
         result.push(VARCHARS[val % ct] as char);
-        val = val / ct;
+        val /= ct;
     }
     result.push(VARCHARS[val % ct] as char);
     result

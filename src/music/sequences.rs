@@ -11,7 +11,7 @@ pub fn major_chord_notes(notes: Vec<i8>, octave: i8, increment: f32, instrument:
     let env1 = notes_envelope(notes, octave, increment);
     let env2 = notes_envelope(notes2, octave, increment);
     let env3 = notes_envelope(notes3, octave, increment);
-    (env1 | env2 | env3) >> (instrument.clone() + instrument.clone() + instrument.clone()) * 0.5 >> shape_fn(tanh)
+    (env1 | env2 | env3) >> ((instrument.clone() + instrument.clone() + instrument.clone()) * 0.5) >> shape_fn(tanh)
 }
 
 pub fn double_envelope(notes: Vec<i8>, octave: i8, increment: f32) -> An<impl AudioNode<Inputs=U0, Outputs=U1>> {
@@ -108,12 +108,12 @@ fn adsr_equivalents(instrument: An<impl AudioNode<Inputs=U1, Outputs=U1>>, incr:
     let sfac = 0.2;
     let rfac = 0.5;
     split::<U6>() >> (
-        (mul(0.25)  >> instrument.clone() * (onepress(incr / 8.0, incr) >> adsr_live(0.1 * afac, 0.2 * dfac, 0.8 * sfac, 0.3 * rfac)) >> mul(0.4)) |
-        (mul(0.5)   >> instrument.clone() * (onepress(incr / 6.0, incr) >> adsr_live(0.05 * afac, 0.6 * dfac, 0.2 * sfac, 0.2 * rfac)) >> mul(0.6)) |
-        (pass()     >> instrument.clone() * (onepress(incr / 4.0, incr) >> adsr_live(0.02 * afac, 0.1 * dfac, 0.4 * sfac, 0.2 * rfac)) >> pass()) |
-        (mul(2.0)   >> instrument.clone() * (onepress(incr / 3.0, incr) >> adsr_live(0.01 * afac, 0.1 * dfac, 0.4 * sfac, 0.3 * rfac)) >> mul(0.6)) |
-        (mul(4.0)   >> instrument.clone() * (onepress(incr / 2.0, incr) >> adsr_live(0.0 * afac, 0.07 * dfac, 0.3 * sfac, 0.3 * rfac)) >> mul(0.4)) |
-        (mul(8.0)   >> instrument.clone() * (onepress(incr / 1.5, incr) >> adsr_live(0.0 * afac, 0.05 * dfac, 0.2 * sfac, 0.3 * rfac)) >> mul(0.3))
+        (mul(0.25) >> (instrument.clone() * (onepress(incr / 8.0, incr) >> adsr_live(0.1 * afac, 0.2 * dfac, 0.8 * sfac, 0.3 * rfac))) >> mul(0.4)) |
+        (mul(0.5) >> (instrument.clone() * (onepress(incr / 6.0, incr) >> adsr_live(0.05 * afac, 0.6 * dfac, 0.2 * sfac, 0.2 * rfac))) >> mul(0.6)) |
+        (pass() >> (instrument.clone() * (onepress(incr / 4.0, incr) >> adsr_live(0.02 * afac, 0.1 * dfac, 0.4 * sfac, 0.2 * rfac))) >> pass()) |
+        (mul(2.0) >> (instrument.clone() * (onepress(incr / 3.0, incr) >> adsr_live(0.01 * afac, 0.1 * dfac, 0.4 * sfac, 0.3 * rfac))) >> mul(0.6)) |
+        (mul(4.0) >> (instrument.clone() * (onepress(incr / 2.0, incr) >> adsr_live(0.0 * afac, 0.07 * dfac, 0.3 * sfac, 0.3 * rfac))) >> mul(0.4)) |
+        (mul(8.0) >> (instrument.clone() * (onepress(incr / 1.5, incr) >> adsr_live(0.0 * afac, 0.05 * dfac, 0.2 * sfac, 0.3 * rfac))) >> mul(0.3))
     ) >> join::<U6>()
 }
 

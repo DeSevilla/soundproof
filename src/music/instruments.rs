@@ -44,7 +44,7 @@ pub fn all_harmonics(adsrs: &[(f32, f32, f32, f32)]) -> Vec<(f32, f32, f32, f32,
 fn additive_array(instrument: An<impl AudioNode<Inputs=U1, Outputs=U1> + 'static>, incr: f32, adsrs: &[(f32, f32, f32, f32, f32)]) -> An<impl AudioNode<Inputs=U2, Outputs=U1>>  {
     let mut net = Net::wrap(Box::new((sink() | sink()) >> constant(0.0)));
     for (h, a, d, s, r) in adsrs.iter() {
-        net = net & (mul(*h) >> instrument.clone()) * adsr_live(*a * incr, *d * incr, *s, *r * incr)
+        net = net & ((mul(*h) >> instrument.clone()) * adsr_live(*a * incr, *d * incr, *s, *r * incr))
     }
     unit(Box::new(net))
 }
@@ -127,7 +127,7 @@ pub fn karplus() -> An<impl AudioNode<Inputs=U1, Outputs=U1>> {
     let instrument = white();
     let instrument = instrument * onepress(0.001, 0.5);
     split() >>
-        ((instrument | constant(0.25) | pass() * 1.2 | constant(0.6)) >> 
+        ((instrument | constant(0.25) | (pass() * 1.2) | constant(0.6)) >> 
         (lowpass_hz(BASE_HZ, 0.5) | multipass::<U3>()) >> fbdf(-4.0)) >> 
         shape_fn(tanh) >> lowpass_hz(BASE_HZ, 1.0)
 }
@@ -153,19 +153,19 @@ pub fn fm_sines(mult: f32, amp_min: f32, amp_max: f32, amp_freq: f32) -> An<impl
     let base = amp_min + gap;
     let ratio = 1.0 / BASE_HZ;
     // let ratio = ratio + (ratio / 2.0) * sine_hz(0.25);
-    (split() >> (mul(mult) >> sine()) * (base + sine_hz(amp_freq) * gap) * pass() * ratio) & pass() >> sine()
+    (split() >> ((mul(mult) >> sine()) * (base + sine_hz(amp_freq) * gap) * pass() * ratio)) & pass() >> sine()
 }
 
 
 pub fn violinish() -> An<impl AudioNode<Inputs=U1, Outputs=U1>> {
-    let instrument = pass() + 5.0 * (saw_hz(0.33) * 4.0 + 7.0 >> sine());
+    let instrument = pass() + 5.0 * ((saw_hz(0.33) * 4.0 + 7.0) >> sine());
     // let instrument = instrument >> saw() >> fir((1.0, 0.25, 0.25,  1.0));
     let instrument = instrument >> saw() >> fir((1.0, 0.25, 0.25,  1.0));
     // let instrument = instrument >> saw() >> split() >> (pass() | pass() * 5.0) >> moog_q(1.0);
-    let instrument = split() >> (instrument | pass() - (sine_hz(0.33) + 1.25 >> sine()) * 20.0 | constant(5.0));
-    let instrument = instrument >> highpass(); //>> shape_fn(tanh);
+    let instrument = split() >> (instrument | (pass() - ((sine_hz(0.33) + 1.25) >> sine()) * 20.0) | constant(5.0));
+     //>> shape_fn(tanh);
     // let instrument = instrument >> split() >> !fbd(0.2, -2.0) >> !fbd(0.3, -3.0) >> fbd(0.1, -4.0);
-    instrument
+    instrument >> highpass()
 }
 
 pub fn invert() -> An<impl AudioNode<Inputs=U1, Outputs=U1>> {
@@ -173,11 +173,11 @@ pub fn invert() -> An<impl AudioNode<Inputs=U1, Outputs=U1>> {
 }
 
 pub fn wobbly_sine() -> An<impl AudioNode<Inputs=U1, Outputs=U1>> {
-    pass() + 20.0 * sine_hz(8.0) >> sine()
+    (pass() + 20.0 * sine_hz(8.0)) >> sine()
 }
 
 pub fn sinesaw() -> An<impl AudioNode<Inputs=U1, Outputs=U1>> {
-    sine() * 3.0 & saw()
+    (sine() * 3.0) & saw()
 }
 
 pub fn pink_sine() -> An<impl AudioNode<Inputs=U1, Outputs=U1>> {
@@ -201,7 +201,7 @@ pub fn reverb_lowpass() -> An<impl AudioNode<Inputs=U1, Outputs=U1>> {
 }
 
 pub fn reverb_distort() -> An<impl AudioNode<Inputs=U1, Outputs=U1>> {
-    split::<U3>() >> (pass() + (reverb_stereo(30.0, 2.0, 0.5) >> join::<U2>()) >> mul(5.0) >> shape_fn(tanh))
+    split::<U3>() >> ((pass() + (reverb_stereo(30.0, 2.0, 0.5) >> join::<U2>())) >> mul(5.0) >> shape_fn(tanh))
 }
 
 pub fn fbd(t: f32, db: f32) -> An<impl AudioNode<Inputs=U2, Outputs=U1>> {
@@ -213,11 +213,11 @@ pub fn fbf(t: f32, db: f32) -> An<impl AudioNode<Inputs=U3, Outputs=U1>> {
 }
 
 pub fn fbft(t: f32, db: f32) -> An<impl AudioNode<Inputs=U3, Outputs=U1>> {
-    feedback((((pass() | constant(t)) >> tap(1.0/10000.0, 5.0)) | pass() | pass()) >> !lowpass() * db_amp(db)) >> (pass() | sink() | sink())
+    feedback((((pass() | constant(t)) >> tap(1.0/10000.0, 5.0)) | pass() | pass()) >> (!lowpass() * db_amp(db))) >> (pass() | sink() | sink())
 }
 
 pub fn fbf_q(t: f32, db: f32, q: f32) -> An<impl AudioNode<Inputs=U2, Outputs=U1>> {
-    feedback((delay(t) | pass()) >> !lowpass_q(q) * db_amp(db)) >> (pass() | sink())
+    feedback((delay(t) | pass()) >> (!lowpass_q(q) * db_amp(db))) >> (pass() | sink())
 }
 
 /// - Input 0: audio
@@ -251,7 +251,7 @@ pub fn major_chord() -> An<impl AudioNode<Inputs=U1, Outputs=U3>> {
 }
 
 pub fn triple(instrument: An<impl AudioNode<Inputs=U1, Outputs=U1>>) -> An<impl AudioNode<Inputs=U3, Outputs=U1>> {
-    instrument.clone() + instrument.clone() + instrument.clone() * 0.5 >> shape_fn(tanh)
+    (instrument.clone() + instrument.clone() + instrument.clone() * 0.5) >> shape_fn(tanh)
 }
 
 pub fn five_equivalents(instrument: An<impl AudioNode<Inputs=U1, Outputs=U1>>) -> An<impl AudioNode<Inputs=U1, Outputs=U1>> {

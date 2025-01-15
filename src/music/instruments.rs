@@ -254,7 +254,7 @@ pub fn triple(instrument: An<impl AudioNode<Inputs=U1, Outputs=U1>>) -> An<impl 
     (instrument.clone() + instrument.clone() + instrument.clone() * 0.5) >> shape_fn(tanh)
 }
 
-pub fn n_equivalents(instrument: An<impl AudioNode<Inputs=U1, Outputs=U1>>) -> An<impl AudioNode<Inputs=U1, Outputs=U1>> {
+pub fn five_equivalents(instrument: An<impl AudioNode<Inputs=U1, Outputs=U1>>) -> An<impl AudioNode<Inputs=U1, Outputs=U1>> {
     split::<U5>() >>
         // (mul(0.5)           | pass()             | mul(2.0)           | mul(4.0)           | mul(8.0)) >>
         stacki::<U5, _, _>(|i| mul(2.pow(i) as f32)) >>
@@ -265,29 +265,29 @@ pub fn n_equivalents(instrument: An<impl AudioNode<Inputs=U1, Outputs=U1>>) -> A
     join::<U5>()
 }
 
-pub fn read_spectrum(filename: &str, instrument: An<impl AudioNode<Inputs=U1, Outputs=U1> + 'static>) -> An<impl AudioNode<Inputs=U0, Outputs=U1>> {
-    println!("Reading {filename}");
-    let file_str = fs::read_to_string(format!("input/{filename}")).unwrap_or_else(|_| panic!("Could not open {filename}"));
-    let lines = file_str.lines();
-    let mut net = Net::wrap(Box::new(constant(0.0)));
-    let mut count = 0;
-    let mut spectrum = Vec::new();
-    for (ii, text) in lines.into_iter().enumerate().skip(1) {
-        let (freq_text, db_text) = text.split_once(|c: char| c.is_whitespace()).unwrap_or_else(|| panic!("Invalid format at line {ii}: {text}"));
-        let freq: f32 = freq_text.parse().unwrap_or_else(|_| panic!("Invalid frequency at line {ii}: {freq_text}"));
-        let db: f32 = db_text.parse().unwrap_or_else(|_| panic!("Invalid db at line {ii}: {db_text}"));
-        spectrum.push((freq, db));
-    }
-    spectrum.sort_by(|(f, d), (f2, d2)| f32::total_cmp(d2, d));
-    for (freq, db) in spectrum.into_iter().take(200) {
-        println!("{freq} {db}");
-        let node = constant(freq) >> instrument.clone() >> mul(2.0.pow(db * 0.5));
-        count += 1;
-        net = net + node;
-    }
-    net = net >> mul(1.0 / count as f32);
-    unit(Box::new(net))
-}
+// pub fn read_spectrum(filename: &str, instrument: An<impl AudioNode<Inputs=U1, Outputs=U1> + 'static>) -> An<impl AudioNode<Inputs=U0, Outputs=U1>> {
+//     println!("Reading {filename}");
+//     let file_str = fs::read_to_string(format!("input/{filename}")).expect(&format!("Could not open {filename}"));
+//     let lines = file_str.lines();
+//     let mut net = Net::wrap(Box::new(constant(0.0)));
+//     let mut count = 0;
+//     let mut spectrum = Vec::new();
+//     for (ii, text) in lines.into_iter().enumerate().skip(1) {
+//         let (freq_text, db_text) = text.split_once(|c: char| c.is_whitespace()).expect(&format!("Invalid format at line {ii}: {text}"));
+//         let freq: f32 = freq_text.parse().expect(&format!("Invalid frequency at line {ii}: {freq_text}"));
+//         let db: f32 = db_text.parse().expect(&format!("Invalid db at line {ii}: {db_text}"));
+//         spectrum.push((freq, db));
+//     }
+//     spectrum.sort_by(|(f, d), (f2, d2)| f32::total_cmp(d2, d));
+//     for (freq, db) in spectrum.into_iter().take(200) {
+//         println!("{freq} {db}");
+//         let node = constant(freq) >> instrument.clone() >> mul(2.0.pow(db * 0.5));
+//         count += 1;
+//         net = net + node;
+//     }
+//     net = net >> mul(1.0 / count as f32);
+//     unit(Box::new(net))
+// }
 
 pub fn sample_nearby(instrument: An<impl AudioNode<Inputs=U1, Outputs=U1>>) -> An<impl AudioNode<Inputs=U1, Outputs=U1>> {
     split::<U5>() >>

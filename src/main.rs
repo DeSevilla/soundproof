@@ -59,6 +59,7 @@ pub enum MelodySelector {
     Second,
     Third,
     Fourth,
+    Fifth,
     PureSine
 }
 
@@ -69,6 +70,7 @@ impl MelodySelector {
             MelodySelector::Second => imelody2(term, depth),
             MelodySelector::Third => imelody3(term, depth),
             MelodySelector::Fourth => imelody4(term, depth),
+            MelodySelector::Fifth => imelody5(term, depth),
             MelodySelector::PureSine => imelody_oneinstr(sine(), term, depth),
         }
     }
@@ -79,6 +81,7 @@ impl MelodySelector {
             MelodySelector::Second => cmelody2(term, depth),
             MelodySelector::Third => cmelody3(term, depth),
             MelodySelector::Fourth => cmelody4(term, depth),
+            MelodySelector::Fifth => cmelody5(term, depth),
             MelodySelector::PureSine => cmelody_oneinstr(sine(), term, depth),
         }
     }
@@ -88,6 +91,7 @@ impl MelodySelector {
 enum Structure {
     Term,
     Type,
+    Test,
 }
 
 #[derive(Parser, Debug)]
@@ -117,6 +121,32 @@ fn main() {
     let tree = match args.structure {
         Structure::Term => iterm_translate(term, 0, args.melody),
         Structure::Type => itype_translate(term, args.melody),
+        Structure::Test => {
+            let melodies = [
+            	ITerm::Star,
+            	ITerm::Ann(ITerm::Star.into(), ITerm::Star.into()),
+            	ITerm::Pi(ITerm::Star.into(), ITerm::Star.into()),
+            	ITerm::Bound(0),
+            	ITerm::Free(ast::Name::Local(0)),
+            	ITerm::App(Box::new(ITerm::Star), ITerm::Star.into()),
+            	ITerm::Zero,
+            	ITerm::Fin(ITerm::Zero.into()),
+            ];
+            let mut sounds = Vec::new();
+            let depth = 2;
+            for term in melodies {
+                let onemel = SoundTree::sound(args.melody.imelody(&term, depth));
+                sounds.push(onemel.clone());
+                sounds.push(onemel.clone());
+                sounds.push(onemel.clone());
+                sounds.push(onemel)
+            }
+            sounds.push(SoundTree::sound(args.melody.cmelody(&CTerm::Lam(Box::new(ITerm::Star.into())), depth)));
+            sounds.push(SoundTree::sound(args.melody.cmelody(&CTerm::Lam(Box::new(ITerm::Star.into())), depth)));
+            sounds.push(SoundTree::sound(args.melody.cmelody(&CTerm::Lam(Box::new(ITerm::Star.into())), depth)));
+            sounds.push(SoundTree::sound(args.melody.cmelody(&CTerm::Lam(Box::new(ITerm::Star.into())), depth)));
+            SoundTree::seq(&sounds)
+        }
     };
     // println!("{}", tree.show(0));
     let time = args.time.unwrap_or(std::cmp::min(tree.size(), 1200) as f64);
@@ -125,6 +155,7 @@ fn main() {
     // let scaling = args.scaling; //.unwrap_or(Scaling::SizeAligned);
     tree.generate_with(&mut seq, 0.0, time, args.scaling);
     // tree.print_sizes(0);
+    // println!("{}", tree.show(0));
     let mut output = unit::<U0, U1>(Box::new(seq)) >> shape(Adaptive::new(0.1, Tanh(0.5)));
     save(&mut output, time);
     println!("Done");

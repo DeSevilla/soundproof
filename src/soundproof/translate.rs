@@ -110,6 +110,31 @@ pub fn cmelody4(term: &CTerm, depth: usize) -> Melody {
     result
 }
 
+pub fn imelody5(term: &ITerm, depth: usize) -> Melody {
+    let mut result = match term {
+        ITerm::Ann(_, _) => Melody::new_even(violinish(), &[A, D, F, A]),
+        ITerm::Star => Melody::new_even(wobbly_sine(), &[A, A + 12, E, F]),
+        ITerm::Pi(_, _) => Melody::new_even(sine(), &[E, C, A, C]),
+        ITerm::Bound(n) => Melody::new_even(sinesaw() >> split() >> fbd(*n as f32 / 10.0, -5.0), &[A, E, C, B]),
+        ITerm::Free(_) => Melody::new_even(violinish(), &[A, A, E, C]),
+        ITerm::App(_, _) => Melody::new_even(sawfir(), &[D, F, E, C]),
+        ITerm::Zero => Melody::new_timed(sinesaw(), &[(E, 1.0), (F, 0.5), (E, 0.5), (C, 1.0), (A, 1.0)]),
+        ITerm::Fin(_) => Melody::new_timed(violinish(), &[(B, 1.0), (A, 0.5), (E, 0.5), (C, 1.0), (B, 1.0)]),
+        _ => panic!("{term} not implemented")
+    };
+    result.adjust_depth(depth);
+    result
+}
+
+pub fn cmelody5(term: &CTerm, depth: usize) -> Melody {
+    let mut result = match term {
+        CTerm::Inf(_) => Melody::new_even(sine(), &[]), //never used
+        CTerm::Lam(_) => Melody::new_timed(violinish(), &[(B, 0.5), (C, 0.5), (E, 3.0)]),
+    };
+    result.adjust_depth(depth);
+    result
+}
+
 pub fn imelody_oneinstr(instrument: impl AudioUnit + 'static, term: &ITerm, depth: usize) -> Melody {
     let mut result = match term {
         ITerm::Ann(_, _) => Melody::new_even(instrument, &[C, E, B, E]),
@@ -138,7 +163,7 @@ pub fn cmelody_oneinstr(instrument: impl AudioUnit + 'static, term: &CTerm, dept
 
 pub fn itype_translate_full(i: usize, ctx: Context, term: &ITerm, depth: usize, mel: MelodySelector) -> Result<(Type, SoundTree), String> {
     // println!("{i}typing term {term:?} in context {}", ctx.iter().fold("".to_owned(), |acc, e| acc + &format!(" {:?}", e.0)));
-    let base_tree = SoundTree::sound(mel.imelody(&term, depth));
+    let base_tree = SoundTree::sound(mel.imelody(term, depth));
     match term {
         ITerm::Ann(ct, cty) => {
             let tytree = ctype_translate_full(i, ctx.clone(), cty, Value::Star, depth + 1, mel)?; // TODO figure this out better
@@ -271,7 +296,7 @@ pub fn ctype_translate_full(i: usize, ctx: Context, term: &CTerm, ty: Type, dept
                 new_ctx.push((Name::Local(i), *src));
                 // println!("Pushed {i} to ctx");
                 let subtree = ctype_translate_full(i + 1, new_ctx, &c_subst(0, ITerm::Free(Name::Local(i)), *body.clone()), trg(vfree(Name::Local(i))), depth + 1, mel)?;
-                Ok(SoundTree::simul(&[SoundTree::sound(mel.cmelody(&term, depth)), subtree]))
+                Ok(SoundTree::simul(&[SoundTree::sound(mel.cmelody(term, depth)), subtree]))
             },
             _ => Err("Function must have pi type".to_owned())
         }

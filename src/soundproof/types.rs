@@ -27,7 +27,9 @@ pub trait Sequenceable {
 // }
 
 // impl Sequenceable for Clip {
-//     todo!()
+//     fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64) {
+//         self.audio.p
+//     }
 // }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -64,10 +66,26 @@ impl Melody {
     pub fn new_even(instrument: impl AudioUnit + 'static, notes: &[i8]) -> Self {
         Melody {
             instrument: unit(Box::new(instrument)),
-            notes: notes.into_iter().map(|x| (Note { note: *x, time: 0.75, volume: 1.0, attack: 0.25, decay: 0.25, sustain: 0.5, release: 0.1 }, 1.0)).collect(),
+            notes: notes.iter().map(|x| (Note { note: *x, time: 0.75, volume: 1.0, attack: 0.25, decay: 0.25, sustain: 0.5, release: 0.1 }, 1.0)).collect(),
             note_adjust: 0
         }
     }
+
+    pub fn new_timed(instrument: impl AudioUnit + 'static, notes: &[(i8, f64)]) -> Self {
+        Melody {
+            instrument: unit(Box::new(instrument)),
+            notes: notes.iter().map(|(x, t)| (Note { note: *x, time: 0.85 * t, volume: 1.0, attack: 0.25, decay: 0.25, sustain: 0.5, release: 0.1 }, *t)).collect(),
+            note_adjust: 0
+        }
+    }
+
+    // pub fn new_notes(instrument: impl AudioUnit + 'static, notes: &[(Note, f64)]) -> Self {
+    //     Melody {
+    //         instrument: unit(Box::new(instrument)),
+    //         notes: notes.to_vec(),
+    //         note_adjust: 0
+    //     }
+    // }
 
     pub fn duration(&self) -> f64 {
         self.notes.iter().map(|(_, x)| x).sum()
@@ -165,17 +183,23 @@ impl SoundTree {
     }
 
     pub fn simul(values: &[SoundTree]) -> Self {
-        Self::Simul(values.to_vec())
+        //as long as all Simuls are constructed through this function,
+        //this will ensure we don't have redundant nested Simuls
+        let mut result = Vec::new();
+        for val in values {
+            match val.clone() {
+                SoundTree::Simul(mut trees) => result.append(&mut trees),
+                other => result.push(other)
+            }
+        }
+        Self::Simul(result)
     }
 
-    // pub fn new_simulseq(param: &[[Self]]) -> Self {
-    //     for row in param {
-    //         for elem in row {
-    //             println!("")
-    //         }
+    // pub fn is_simul(&self) -> bool {
+    //     match self {
+    //         Self::Simul(_) => true,
+    //         _ => false
     //     }
-    //     Self::Seq(vec![])
-    // }
 
     pub fn size(&self) -> usize {
         match self {
@@ -237,9 +261,9 @@ impl SoundTree {
     // pub fn show(&self, depth: usize) -> String {
     //     // let tabs = " ".repeat(depth);
     //     match self {
-    //         SoundTree2::Simul(vec) => "{".to_owned() + &vec.iter().map(|x| x.show(depth + 1)).collect::<Vec<String>>().join("\n") + "}\n",
-    //         SoundTree2::Seq(vec) => "[".to_owned() + &vec.iter().map(|x| x.show(depth + 1)).collect::<Vec<String>>().join(", ") + "]",
-    //         SoundTree2::Sound(seqable) => seqable.show(),
+    //         SoundTree::Simul(vec) => "{".to_owned() + &vec.iter().map(|x| x.show(depth + 1)).collect::<Vec<String>>().join("\n") + "}\n",
+    //         SoundTree::Seq(vec) => "[".to_owned() + &vec.iter().map(|x| x.show(depth + 1)).collect::<Vec<String>>().join(", ") + "]",
+    //         SoundTree::Sound(seqable) => "mel".to_owned(),
     //     }
     // }
 }

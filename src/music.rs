@@ -13,10 +13,10 @@ pub fn save(au: &mut dyn AudioUnit, dur: f64) {
     let mut wave1 = Wave::render(SAMPLE_RATE as f64, dur, au);
     wave1.normalize();
     let filename = Path::new("output/output.wav");
-    wave1.save_wav16(&filename).expect("Could not save wave.");
+    wave1.save_wav16(filename).expect("Could not save wave.");
     println!("File saved. Computing spectrograph...");
     let mut spectrograph = SpecOptionsBuilder::new(2.pow(12))
-        .load_data_from_file(&filename).unwrap()
+        .load_data_from_file(filename).unwrap()
         .build().unwrap();
     let mut spectrograph = spectrograph.compute();
     let mut gradient = ColourGradient::new();

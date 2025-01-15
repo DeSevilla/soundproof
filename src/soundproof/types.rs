@@ -98,7 +98,7 @@ impl Melody {
     //     self.notes = self.notes.iter_mut().map(|(x, t)| { x.length *= ratio; x.attack *= ratio32; x.decay *= ratio32; x.release *= ratio32; (*x, *t * ratio)} ).collect();
     // }
 
-    pub fn set_octave(&mut self, octave: i8) -> () {
+    pub fn set_octave(&mut self, octave: i8) {
         self.note_adjust = 12 * octave;
     }
 
@@ -131,10 +131,10 @@ impl Sequenceable for Melody {
             let dur = dur * ratio;
             let note = note.mul_duration(ratio);
             let hz = get_hz(note.note + self.note_adjust);
-            let instr = constant(hz) >> self.instrument.clone() * (
+            let instr = constant(hz) >> (self.instrument.clone() * (
                 envelope(move |t| if t < note.time as f32 { 1.0 } else { 0.0 }) >> 
                 adsr_live(note.attack, note.decay, note.sustain, note.release)
-            ) >> shape(Clip(1.0));
+            )) >> shape(Clip(1.0));
             seq.push_duration(start_time + elapsed, dur, Fade::Power, 0.0, 0.0, Box::new(instr));
             elapsed += dur;
         }

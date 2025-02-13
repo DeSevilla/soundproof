@@ -17,7 +17,7 @@ mod soundproof;
 pub enum Scaling {
     Linear,
     Size,
-    // SizeAligned,  //has conceptual issues & is not supported
+    // SizeAligned,  //goal here was to align to a rhythm but this has conceptual/structural issues
     SizeRaw,
 }
 
@@ -31,12 +31,6 @@ enum NamedTerm {
     Girard,
     GirardReduced
 }
-
-// impl Default for NamedTerm {
-//     fn default() -> Self {
-//         Self::GirardReduced
-//     }
-// }
 
 impl NamedTerm {
     fn term(&self) -> ITerm {
@@ -122,7 +116,7 @@ fn main() {
         Structure::Term => iterm_translate(term, 0, args.melody),
         Structure::Type => itype_translate(term, args.melody),
         Structure::Test => {
-            let melodies = [
+            let test_terms = [
             	ITerm::Star,
             	ITerm::Ann(ITerm::Star.into(), ITerm::Star.into()),
             	ITerm::Pi(ITerm::Star.into(), ITerm::Star.into()),
@@ -134,7 +128,7 @@ fn main() {
             ];
             let mut sounds = Vec::new();
             let depth = 2;
-            for term in melodies {
+            for term in test_terms {
                 let onemel = SoundTree::sound(args.melody.imelody(&term, depth));
                 sounds.push(onemel.clone());
                 sounds.push(onemel.clone());
@@ -148,8 +142,8 @@ fn main() {
             SoundTree::seq(&sounds)
         }
     };
-    // println!("{}", tree.show(0));
     let time = args.time.unwrap_or(std::cmp::min(tree.size(), 1200) as f64);
+    println!("{}", tree.show(time));
     let mut seq = Sequencer::new(false, 1);
     println!("Sequencing...");
     // let scaling = args.scaling; //.unwrap_or(Scaling::SizeAligned);

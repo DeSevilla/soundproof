@@ -103,7 +103,7 @@ pub fn imelody4(term: &ITerm, depth: usize) -> Melody {
 
 pub fn cmelody4(term: &CTerm, depth: usize) -> Melody {
     let mut result = match term {
-        CTerm::Inf(_) => Melody::new_even(sine(), &[]), //never used
+        CTerm::Inf(_) => Melody::new_even(sine(), &[]),
         CTerm::Lam(_) => Melody::new_even(wobbly_sine(), &[G, B, E, C]),
     };
     result.adjust_depth(depth);
@@ -128,7 +128,7 @@ pub fn imelody5(term: &ITerm, depth: usize) -> Melody {
 
 pub fn cmelody5(term: &CTerm, depth: usize) -> Melody {
     let mut result = match term {
-        CTerm::Inf(_) => Melody::new_even(sine(), &[]), //never used
+        CTerm::Inf(_) => Melody::new_even(sine(), &[G, G, G, G]), //never used
         CTerm::Lam(_) => Melody::new_timed(violinish(), &[(B, 0.5), (C, 0.5), (E, 3.0)]),
     };
     result.adjust_depth(depth);
@@ -163,45 +163,49 @@ pub fn cmelody_oneinstr(instrument: impl AudioUnit + 'static, term: &CTerm, dept
 
 pub fn itype_translate_full(i: usize, ctx: Context, term: &ITerm, depth: usize, mel: MelodySelector) -> Result<(Type, SoundTree), String> {
     // println!("{i}typing term {term:?} in context {}", ctx.iter().fold("".to_owned(), |acc, e| acc + &format!(" {:?}", e.0)));
-    let base_tree = SoundTree::sound(mel.imelody(term, depth));
+    let node_melody = SoundTree::sound(mel.imelody(term, depth));
     match term {
         ITerm::Ann(ct, cty) => {
-            let tytree = ctype_translate_full(i, ctx.clone(), cty, Value::Star, depth + 1, mel)?; // TODO figure this out better
+            let tytree = ctype_translate_full(i, ctx.clone(), cty, Value::Star, depth + 1, mel)?; // is this the right way to structure this?
             let ty = c_eval(cty.clone(), vec![]);
-            let termtree = ctype_translate_full(i, ctx, ct, ty.clone(), depth + 1, mel)?;
-            let tree = SoundTree::simul(&[base_tree, termtree, tytree]);
+            let termtree = ctype_translate_full(i, ctx, ct, ty.clone(), depth + 1, mel)?;  // should we have the type and term at diff depths?
+            let tree = SoundTree::simul(&[node_melody, SoundTree::seq(&[termtree, tytree])]); //annotations before or after...?
             Ok((ty, tree))
         }
-        ITerm::Star => Ok((Value::Star, base_tree)),
+        ITerm::Star => Ok((Value::Star, node_melody)),
         ITerm::Pi(src, trg) => {
             let srctree = ctype_translate_full(i, ctx.clone(), src, Value::Star, depth + 1, mel)?;
             let ty = c_eval(src.clone(), vec![]);
             let mut new_ctx = ctx.clone();
             new_ctx.push((Name::Local(i), ty.clone()));
-            // println!("Pushing {i} to ctx");
             let trgtree = ctype_translate_full(i + 1, new_ctx, &c_subst(0, ITerm::Free(Name::Local(i)), trg.clone()), Value::Star, depth + 1, mel)?;
-            let tree = SoundTree::simul(&[base_tree, SoundTree::seq(&[srctree, trgtree])]); // TODO fill this in
+            let tree = SoundTree::simul(&[node_melody, SoundTree::seq(&[srctree, trgtree])]);
             Ok((Value::Star, tree))
         },
-        ITerm::Free(name) => ctx.iter().find(|x| x.0 == *name)
-            .map(|x| (x.1.clone(), SoundTree::sound(mel.cmelody(&quote0(x.1.clone()), 0))))
-            .ok_or("Could not find variable".to_owned()),
+        ITerm::Free(name) => { 
+            // want to assign a melody to the name... randomization? fixed sequence? how do we associate?
+            // maybe we put a hashmap or smth in the MelodySelector?
+            let val = ctx.iter().find(|x| x.0 == *name).ok_or("Could not find variable".to_owned())?;
+            let ty = ctype_translate_full(i, ctx.clone(), &quote0(val.1.clone()), Value::Star, depth + 1, mel)?;
+            let tree = ty;
+            Ok((val.1.clone(), tree))
+        },
         ITerm::App(f, x) => {
             let (fty, ftree) = itype_translate_full(i, ctx.clone(), f, depth + 1, mel)?;
             match fty {
                 Value::Pi(src, trg) => {
                     let xtree = ctype_translate_full(i, ctx, x, *src, depth + 1, mel)?;
-                    Ok((trg(c_eval(x.clone(), vec![])), SoundTree::simul(&[base_tree, SoundTree::seq(&[ftree, xtree])])))
+                    Ok((trg(c_eval(x.clone(), vec![])), SoundTree::simul(&[node_melody, SoundTree::seq(&[ftree, xtree])])))
                 },
                 _ => Err("Invalid function call".to_owned())
             }
         },
-        ITerm::Nat => Ok((Value::Star, base_tree)),
-        ITerm::Zero => Ok((Value::Nat, base_tree)),
+        ITerm::Nat => Ok((Value::Star, node_melody)),
+        ITerm::Zero => Ok((Value::Nat, node_melody)),
         ITerm::Succ(k) => {
             let subtree = ctype_translate_full(i, ctx, k, Value::Nat, depth + 1, mel)?;
             // TODO we need succ to be a different sort of thing... not a full melody
-            Ok((Value::Nat, SoundTree::seq(&[base_tree, subtree])))
+            Ok((Value::Nat, SoundTree::seq(&[node_melody, subtree])))
         },
         ITerm::NatElim(motive, base, ind, k) => {
             let mtree = ctype_translate_full(i, ctx.clone(), motive, Value::Pi(Box::new(Value::Nat), Rc::new(|_| Value::Star)), depth + 1, mel)?;
@@ -217,17 +221,17 @@ pub fn itype_translate_full(i: usize, ctx: Context, term: &ITerm, depth: usize, 
             )?;
             let ktree = ctype_translate_full(i, ctx, k, Value::Nat, depth + 1, mel)?;
             let k_val = c_eval(k.clone(), vec![]);
-            Ok((vapp(m_val1, k_val), SoundTree::simul(&[base_tree, SoundTree::seq(&[mtree, bctree, indtree, ktree])])))
+            Ok((vapp(m_val1, k_val), SoundTree::simul(&[node_melody, SoundTree::seq(&[mtree, bctree, indtree, ktree])])))
         },
         ITerm::Fin(n) => {
             let subtree = ctype_translate_full(i, ctx, n, Value::Nat, depth + 1, mel)?;
             //TODO needs some work like Succ & in fact in parallel
-            Ok((Value::Star, SoundTree::simul(&[base_tree, subtree])))
+            Ok((Value::Star, SoundTree::simul(&[node_melody, subtree])))
         },
         ITerm::FZero(n) => {
             let subtree = ctype_translate_full(i, ctx, n, Value::Nat, depth + 1, mel)?;
             let n_val = c_eval(n.clone(), vec![]);
-            Ok((Value::Fin(Box::new(Value::Succ(Box::new(n_val)))), SoundTree::simul(&[base_tree, subtree])))
+            Ok((Value::Fin(Box::new(Value::Succ(Box::new(n_val)))), SoundTree::simul(&[node_melody, subtree])))
         },
         ITerm::FSucc(n, fp) => {
             let ntree = ctype_translate_full(i, ctx.clone(), n, Value::Nat, depth + 1, mel)?;
@@ -235,7 +239,7 @@ pub fn itype_translate_full(i: usize, ctx: Context, term: &ITerm, depth: usize, 
             match &n_val {
                 Value::Succ(m) => {
                     let fptree = ctype_translate_full(i, ctx, fp, Value::Fin(m.clone()), depth + 1, mel)?;
-                    let tree = SoundTree::simul(&[base_tree, SoundTree::seq(&[ntree, fptree])]);
+                    let tree = SoundTree::simul(&[node_melody, SoundTree::seq(&[ntree, fptree])]);
                     Ok((Value::Fin(Box::new(n_val)), tree))
                 }
                 _ => Err("oh no bad finitism".to_owned())
@@ -270,7 +274,7 @@ pub fn itype_translate_full(i: usize, ctx: Context, term: &ITerm, depth: usize, 
             )), depth + 1, mel)?;
             let ftree = ctype_translate_full(i, ctx, f, Value::Fin(Box::new(n_val.clone())), depth + 1, mel)?;
             let f_val = c_eval(f.clone(), vec![]);
-            let tree = SoundTree::simul(&[base_tree, SoundTree::seq(&[mtree, bctree, indtree, ftree, ntree])]);
+            let tree = SoundTree::simul(&[node_melody, SoundTree::seq(&[mtree, bctree, indtree, ftree, ntree])]);
             Ok((vapp(vapp(motive_val2, n_val), f_val), tree))
         },
         ITerm::Bound(n) => Err(format!("Not sure how to assign a type to Bound({n}) in context {}, how did we get this?", 
@@ -306,9 +310,7 @@ pub fn ctype_translate_full(i: usize, ctx: Context, term: &CTerm, ty: Type, dept
 pub fn iterm_translate(term: ITerm, depth: usize, mel: MelodySelector) -> SoundTree {
     //to customize the sound we edit this to change the function that produces the melody
     //if we wanted more customization I think we'd need to pass in files
-    // let mel = imelody2(&term, depth);
     let base_mel = mel.imelody(&term, depth);
-    // let mel = imelody_oneinstr((sinesaw() ^ pass() | constant(1.0)) >> lowpass(), &term, depth);
     match term {
         ITerm::Ann(cterm, cterm1) => SoundTree::simul(&[SoundTree::sound(base_mel), SoundTree::seq(&[cterm_translate(cterm, depth + 1, mel), cterm_translate(cterm1, depth + 1, mel)])]),
         ITerm::Star => SoundTree::sound(base_mel),
@@ -339,16 +341,9 @@ pub fn iterm_translate(term: ITerm, depth: usize, mel: MelodySelector) -> SoundT
 }
 
 pub fn cterm_translate(term: CTerm, depth: usize, mel: MelodySelector) -> SoundTree {
-    //to customize the sound we edit this to change function that produces the melody
-    // let mel = cmelody_oneinstr(sinesaw(), &term, depth);
     let melody = mel.cmelody(&term, depth);
     match term {
         CTerm::Inf(iterm) => iterm_translate(*iterm, depth, mel),
         CTerm::Lam(cterm) => SoundTree::simul(&[SoundTree::sound(melody), SoundTree::seq(&[cterm_translate(*cterm, depth + 1, mel)])]),
     }
 }
-
-// fn depth_amp(incr: f32, depth: usize) -> An<impl AudioNode<Inputs=U0, Outputs=U1>> {
-//     onepress(incr * lerp(0.25, 0.95, 1.0 / depth as f32), incr) >>
-//         adsr_live(incr * 0.2 / (depth as f32 + 0.1), incr * 0.25, lerp(0.25, 0.5, 1.0 / depth as f32), incr * 0.1)
-// }

@@ -9,10 +9,11 @@ pub mod notes;
 const SAMPLE_RATE: f32 = 44100.0;
 
 pub fn save(au: &mut dyn AudioUnit, dur: f64) {
-    println!("Saving .wav file ({dur} seconds)");
+    println!("Rendering .wav file ({dur} seconds)");
     let mut wave1 = Wave::render(SAMPLE_RATE as f64, dur, au);
     wave1.normalize();
     let filename = Path::new("output/output.wav");
+    println!("Saving .wav file ({dur} seconds)");
     wave1.save_wav16(filename).expect("Could not save wave.");
     println!("File saved. Computing spectrograph...");
     let mut spectrograph = SpecOptionsBuilder::new(2.pow(12))

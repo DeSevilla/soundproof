@@ -17,7 +17,6 @@ pub fn i_type(i: usize, ctx: Context, term: &ITerm) -> Result<Type, String> {
             let ty = c_eval(src.clone(), vec![]);
             let mut new_ctx = ctx.clone();
             new_ctx.push((Name::Local(i), ty.clone()));
-            // println!("Pushing {i} to ctx");
             c_type(i + 1, new_ctx, &c_subst(0, ITerm::Free(Name::Local(i)), trg.clone()), Value::Star)?;
             Ok(Value::Star)
         },
@@ -59,11 +58,13 @@ pub fn i_type(i: usize, ctx: Context, term: &ITerm) -> Result<Type, String> {
             Ok(Value::Star)
         },
         ITerm::FZero(n) => {
+            // FZero(n) with n: Nat is an element of Fin(n+1), so Fin(0) has no elements
             c_type(i, ctx, n, Value::Nat)?;
             let n_val = c_eval(n.clone(), vec![]);
             Ok(Value::Fin(Box::new(Value::Succ(Box::new(n_val)))))
         },
         ITerm::FSucc(n, fp) => {
+            // FSucc(m+1, fp) with fp: Fin(m) is an element of Fin(m+1), so Fin(m+1) adds one additional element to Fin(n)
             c_type(i, ctx.clone(), n, Value::Nat)?;
             let n_val = c_eval(n.clone(), vec![]);
             match &n_val {
@@ -71,7 +72,7 @@ pub fn i_type(i: usize, ctx: Context, term: &ITerm) -> Result<Type, String> {
                     c_type(i, ctx, fp, Value::Fin(m.clone()))?;
                     Ok(Value::Fin(Box::new(n_val)))
                 }
-                _ => Err("oh no bad finitism".to_owned())
+                _ => Err("Invalid element of finite type".to_owned())
             }
         },
         ITerm::FinElim(motive, base, ind, n, f) => {
@@ -81,14 +82,13 @@ pub fn i_type(i: usize, ctx: Context, term: &ITerm) -> Result<Type, String> {
             c_type(i, ctx.clone(), n, Value::Nat)?;
             let motive_val = c_eval(motive.clone(), vec![]); //we'll need NameEnv instead of just ctx if we want more parsing etc.
             let n_val = c_eval(n.clone(), vec![]);
-            let motive_val2 = motive_val.clone(); //jeez
+            let motive_val2 = motive_val.clone(); //annoying we have to do all this for ownership but oh well
             c_type(i, ctx.clone(), base, Value::Pi(Box::new(Value::Nat), Rc::new(
                 move |k| vapp(vapp(motive_val.clone(), Value::Succ(Box::new(k.clone()))), Value::FZero(Box::new(k)))
             )))?;
             let motive_val = motive_val2.clone();
             c_type(i, ctx.clone(), ind, Value::Pi(Box::new(Value::Nat), Rc::new(
                 move |k| { 
-                    // let k = k.clone(); 
                     let motive_val = motive_val.clone();
                     Value::Pi(Box::new(Value::Fin(Box::new(k.clone()))), Rc::new(
                         move |fk| {
@@ -111,7 +111,6 @@ pub fn i_type(i: usize, ctx: Context, term: &ITerm) -> Result<Type, String> {
 }
 
 pub fn c_type(i: usize, ctx: Context, term: &CTerm, ty: Type) -> Result<(), String> {
-    // let tm = term.clone();
     match term {
         CTerm::Inf(it) => {
             let ity = i_type(i, ctx, it)?;
@@ -126,7 +125,6 @@ pub fn c_type(i: usize, ctx: Context, term: &CTerm, ty: Type) -> Result<(), Stri
             Value::Pi(src, trg) => {
                 let mut new_ctx = ctx.clone();
                 new_ctx.push((Name::Local(i), *src));
-                // println!("Pushed {i} to ctx");
                 c_type(i + 1, new_ctx, &c_subst(0, ITerm::Free(Name::Local(i)), *body.clone()), trg(vfree(Name::Local(i))))
             },
             _ => Err("Function must have pi type".to_owned())

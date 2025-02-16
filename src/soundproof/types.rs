@@ -7,9 +7,9 @@ use crate::Scaling;
 pub trait Sequenceable {
     fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64);
 
-    fn show(&self) -> String {
-        "IDK".to_owned()
-    }
+    // fn show(&self) -> String {
+    //     "IDK".to_owned()
+    // }
 
     // TODO replicate the looping functionality, probably with some sort of special construct?
     // hard part will be nesting probably.
@@ -77,9 +77,6 @@ impl Melody {
     }
 
     pub fn new_timed(instrument: impl AudioUnit + 'static, notes: &[(i8, f64)]) -> Self {
-        if notes.len() < 3 {
-            println!("wtf is with the notes timed: {:?}", notes);
-        }
         Melody {
             instrument: unit(Box::new(instrument)),
             notes: notes.iter().map(|(x, t)| (Note { note: *x, time: 0.85 * t, volume: 1.0, attack: 0.25, decay: 0.25, sustain: 0.5, release: 0.1 }, *t)).collect(),
@@ -99,13 +96,6 @@ impl Melody {
         self.notes.iter().map(|(_, x)| x).sum()
     }
 
-    // pub fn set_duration(&mut self, time: f64) -> () {
-    //     let ratio = time / self.duration();
-    //     // let se = self.clone();
-    //     let ratio32 = ratio as f32;
-    //     self.notes = self.notes.iter_mut().map(|(x, t)| { x.length *= ratio; x.attack *= ratio32; x.decay *= ratio32; x.release *= ratio32; (*x, *t * ratio)} ).collect();
-    // }
-
     pub fn set_octave(&mut self, octave: i8) {
         self.note_adjust = 12 * octave;
     }
@@ -119,9 +109,9 @@ impl Melody {
     // }
 
     pub fn adjust_depth(&mut self, depth: usize) {
-        self.set_octave((depth as f64 / 2.5).sqrt().ceil() as i8 + 1);
+        self.set_octave((depth as f64 / 2.5).powf(0.5).ceil() as i8 + 1);
         self.map_notes(|&n| Note {
-            time: n.time * lerp(0.25, 0.95, 1.0 / depth as f32) as f64,
+            time: n.time * lerp(0.45, 0.95, 1.0 / depth as f32) as f64,
             attack: 0.2 / (depth as f32 + 0.1),
             sustain: lerp(0.25, 0.5, 1.0 / depth as f32),
             ..n
@@ -149,39 +139,29 @@ impl Sequenceable for Melody {
         assert!(elapsed > 0.0, "Melody must cause time to pass!")
     }
 
-    fn show(&self) -> String {
-        if self.notes.len() < 3 {
-            println!("wtf is with the notes: {:?}", self.notes);
-        }
-        let val: String = self.notes.iter().map(|(n, _)| match n.note % 12 {
-            A => 'A',
-            B => 'B',
-            C => 'C',
-            D => 'D',
-            E => 'E',
-            F => 'F',
-            G => 'G',
-            _ => '*'
-        }).collect();
-        val + "$" // &self.note_adjust.to_string()
-    }
+    // fn show(&self) -> String {
+    //     let val: String = self.notes.iter().map(|(n, _)| match n.note % 12 {
+    //         A => 'A',
+    //         B => 'B',
+    //         C => 'C',
+    //         D => 'D',
+    //         E => 'E',
+    //         F => 'F',
+    //         G => 'G',
+    //         _ => '*'
+    //     }).collect();
+    //     val + "$" // &self.note_adjust.to_string()
+    // }
 }
 
-// fn round_by(x: f64, by: f64) -> f64 {
-//     (x / by).round() * by
-// }
-
-// #[derive(Clone)]
-// pub enum TypedTree {
-//     Simul(Vec<TypedTree>),
-//     Seq(Vec<TypedTree>),
-//     Sound(Type, Rc<dyn Sequenceable>)
-// }
-
+/// Tree of simultaneous or sequenced sounds
 #[derive(Clone)]
 pub enum SoundTree {
+    /// Plays subtrees simultaneously
     Simul(Vec<SoundTree>),
+    /// Plays subtrees sequentially
     Seq(Vec<SoundTree>),
+    /// Plays a predefined sound
     Sound(Rc<dyn Sequenceable>)
 }
 
@@ -191,12 +171,19 @@ impl SoundTree {
     }
 
     pub fn seq(values: &[SoundTree]) -> Self {
-        Self::Seq(values.to_vec())
+        //avoids nested Seqs; this may be subject to change
+        let mut result = Vec::new();
+        for val in values {
+            match val.clone() {
+                SoundTree::Seq(mut trees) => result.append(&mut trees),
+                other => result.push(other),
+            }
+        }
+        Self::Seq(result)
     }
 
     pub fn simul(values: &[SoundTree]) -> Self {
-        //as long as all Simuls are constructed through this function,
-        //this will ensure we don't have redundant nested Simuls
+        //avoids redundant nested Simuls
         let mut result = Vec::new();
         for val in values {
             match val.clone() {
@@ -206,12 +193,6 @@ impl SoundTree {
         }
         Self::Simul(result)
     }
-
-    // pub fn is_simul(&self) -> bool {
-    //     match self {
-    //         Self::Simul(_) => true,
-    //         _ => false
-    //     }
 
     pub fn size(&self) -> usize {
         match self {
@@ -270,17 +251,17 @@ impl SoundTree {
     //     }
     // }
 
-    pub fn show(&self, depth: f64) -> String {
-        // let tabs = " ".repeat(depth);
-        match self {
-            SoundTree::Simul(vec) => {
-                "{".to_owned() + &depth.to_string() + "." + &vec.iter().map(|x| x.show(depth)).collect::<Vec<String>>().join(",\n") + "}"
-            },
-            SoundTree::Seq(vec) => {
-                let length = vec.len() as f64;
-                "[".to_owned() + &depth.to_string() + "." + &vec.iter().map(|x| x.show(depth / length)).collect::<Vec<String>>().join(", ") + "]"
-            },
-            SoundTree::Sound(seqable) => depth.to_string() + &seqable.show(),
-        }
-    }
+    // pub fn show(&self, depth: f64) -> String {
+    //     // let tabs = " ".repeat(depth);
+    //     match self {
+    //         SoundTree::Simul(vec) => {
+    //             "{".to_owned() + &depth.to_string() + "." + &vec.iter().map(|x| x.show(depth)).collect::<Vec<String>>().join(",\n") + "}"
+    //         },
+    //         SoundTree::Seq(vec) => {
+    //             let length = vec.len() as f64;
+    //             "[".to_owned() + &depth.to_string() + "." + &vec.iter().map(|x| x.show(depth / length)).collect::<Vec<String>>().join(", ") + "]"
+    //         },
+    //         SoundTree::Sound(seqable) => depth.to_string() + &seqable.show(),
+    //     }
+    // }
 }

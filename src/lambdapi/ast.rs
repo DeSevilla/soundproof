@@ -38,14 +38,17 @@ pub enum ITerm {
     FinElim(CTerm, CTerm, CTerm, CTerm, CTerm),   
 }
 
+
+
 /// Term whose type can be checked
 #[derive(PartialEq, Debug, Clone)]
 pub enum CTerm {
-    /// Inferrable term in a context where we want to be able to check it
+    /// Term whose type *could* be inferred, but in a context where we only need to check it
     Inf(Box<ITerm>),
     /// Lambda (body)
     Lam(Box<CTerm>),
 }
+
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum Name {

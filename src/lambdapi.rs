@@ -45,6 +45,7 @@ pub fn sets_of_u() -> ITerm {
     iapp(sets_of(), u())
 }
 
+/// P(P(U)) -> U
 pub fn tau() -> ITerm {
     iann(
         clam(clam(clam(clam(iapp(bnd(3),
@@ -53,6 +54,7 @@ pub fn tau() -> ITerm {
     )
 }
 
+/// U -> P(P(U))
 pub fn sigma() -> ITerm {
     iann(
         clam(iapp(iapp(bnd(0), u()), tau())),
@@ -159,9 +161,9 @@ pub fn girard() -> ITerm {
 }
 
 pub fn girard_reduced() -> ITerm {
-    let vty = quote0(i_eval(ipi(d(), void()), vec![]));
-    let vlem2 = iann(quote0(i_eval(lem2(), vec![])), vty);
-    let vlem3 = quote0(i_eval(lem3(), vec![]));
+    let vty = quote0(ipi(d(), void()).eval(vec![]));
+    let vlem2 = iann(quote0(lem2().eval(vec![])), vty);
+    let vlem3 = quote0(lem3().eval(vec![]));
     iann(iapp(vlem2, vlem3), void())
 }
 
@@ -192,11 +194,11 @@ pub fn exfalso() -> ITerm {
 pub fn validate(name: &str, term: &ITerm, eval: bool) {
     println!("{name}");
     // println!("{term}");
-    let typ = i_type(0, vec![], term).expect("Term should be well-typed");
+    let typ = term.infer_type(0, vec![]).expect("Term should be well-typed");
     if eval {
-        let val = i_eval(term.clone(), vec![]);
+        let val = term.clone().eval(vec![]);
         let qval = quote0(val);
-        c_type(0, vec![], &qval, typ.clone()).expect("Evaluation should preserve type");
+        qval.check_type(0, vec![], typ.clone()).expect("Evaluation should preserve type");
         let typ1 = quote0(typ);
         println!("\t{term} :::: {typ1}");
         println!("Passed type checks!");

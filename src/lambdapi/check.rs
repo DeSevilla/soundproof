@@ -1,133 +1,143 @@
 use std::rc::Rc;
 
-use crate::lambdapi::{eval::c_eval, ast::*, term::*};
+use crate::lambdapi::{ast::*, term::*};
 
-pub fn i_type(i: usize, ctx: Context, term: &ITerm) -> Result<Type, String> {
-    // println!("{i}typing term {term:?} in context {}", ctx.iter().fold("".to_owned(), |acc, e| acc + &format!(" {:?}", e.0)));
-    match term {
-        ITerm::Ann(ct, cty) => {
-            c_type(i, ctx.clone(), cty, Value::Star)?;
-            let ty = c_eval(cty.clone(), vec![]);
-            c_type(i, ctx, ct, ty.clone())?;
-            Ok(ty)
-        }
-        ITerm::Star => Ok(Value::Star),
-        ITerm::Pi(src, trg) => {
-            c_type(i, ctx.clone(), src, Value::Star)?;
-            let ty = c_eval(src.clone(), vec![]);
-            let mut new_ctx = ctx.clone();
-            new_ctx.push((Name::Local(i), ty.clone()));
-            c_type(i + 1, new_ctx, &c_subst(0, ITerm::Free(Name::Local(i)), trg.clone()), Value::Star)?;
-            Ok(Value::Star)
-        },
-        ITerm::Free(name) => ctx.iter().find(|x| x.0 == *name).map(|x| x.1.clone()).ok_or("Could not find variable".to_owned()),
-        ITerm::App(f, x) => {
-            let fty = i_type(i, ctx.clone(), f)?;
-            match fty {
-                Value::Pi(src, trg) => {
-                    c_type(i, ctx, x, *src)?;
-                    Ok(trg(c_eval(x.clone(), vec![])))
-                },
-                _ => Err("Invalid function call".to_owned())
+impl ITerm {
+    pub fn infer_type(&self, ii: usize, ctx: Context) -> Result<Type, String> {
+        // TODO remove i if possible?
+        // if i != ctx.len() {
+        //     println!("Got mismatch in i and length: {i} {:?}", ctx.clone().into_iter().map(|x| x.0).collect::<Vec<_>>());
+        // }
+        // else {
+        //     print!(" ")
+        // }
+        match self {
+            ITerm::Ann(ct, cty) => {
+                cty.check_type(ii, ctx.clone(), Value::Star)?;
+                let ty = cty.clone().eval(vec![]);
+                ct.check_type(ii, ctx, ty.clone())?;
+                Ok(ty)
             }
-        },
-        ITerm::Nat => Ok(Value::Star),
-        ITerm::Zero => Ok(Value::Nat),
-        ITerm::Succ(k) => {
-            c_type(i, ctx, k, Value::Nat)?;
-            Ok(Value::Nat)
-        },
-        ITerm::NatElim(motive, base, ind, k) => {
-            c_type(i, ctx.clone(), motive, Value::Pi(Box::new(Value::Nat), Rc::new(|_| Value::Star)))?;
-            let m_val = c_eval(motive.clone(), vec![]);
-            let m_val1 = m_val.clone();
-            c_type(i, ctx.clone(), base, vapp(m_val.clone(), Value::Zero))?;
-            c_type(i, ctx.clone(), ind,
-                Value::Pi(Box::new(Value::Nat),
-                    Rc::new(move |l| {let m_val2 = m_val.clone(); Value::Pi(Box::new(vapp(m_val.clone(), l.clone())), 
-                        Rc::new(move |_| vapp(m_val2.clone(), Value::Succ(Box::new(l.clone()))))) }
+            ITerm::Star => Ok(Value::Star),
+            ITerm::Pi(src, trg) => {
+                src.check_type(ii, ctx.clone(), Value::Star)?;
+                let ty = src.clone().eval(vec![]);
+                let mut new_ctx = ctx.clone();
+                new_ctx.push((Name::Local(ii), ty.clone()));
+                trg.clone().subst(0, ITerm::Free(Name::Local(ii))).check_type(ii + 1, new_ctx, Value::Star)?;
+                Ok(Value::Star)
+            },
+            ITerm::Free(name) => ctx.iter().find(|x| x.0 == *name).map(|x| x.1.clone()).ok_or("Could not find variable".to_owned()),
+            ITerm::App(f, x) => {
+                let fty = f.infer_type(ii, ctx.clone())?;
+                match fty {
+                    Value::Pi(src, trg) => {
+                        x.check_type(ii, ctx, *src)?;
+                        Ok(trg(x.clone().eval(vec![])))
+                    },
+                    _ => Err("Invalid function call".to_owned())
+                }
+            },
+            ITerm::Nat => Ok(Value::Star),
+            ITerm::Zero => Ok(Value::Nat),
+            ITerm::Succ(k) => {
+                k.check_type(ii, ctx, Value::Nat)?;
+                Ok(Value::Nat)
+            },
+            ITerm::NatElim(motive, base, ind, k) => {
+                motive.check_type(ii, ctx.clone(), Value::Pi(Box::new(Value::Nat), Rc::new(|_| Value::Star)))?;
+                let m_val = motive.clone().eval(vec![]);
+                let m_val1 = m_val.clone();
+                base.check_type(ii, ctx.clone(), vapp(m_val.clone(), Value::Zero))?;
+                ind.check_type(ii, ctx.clone(),
+                    Value::Pi(Box::new(Value::Nat),
+                        Rc::new(move |l| {let m_val2 = m_val.clone(); Value::Pi(Box::new(vapp(m_val.clone(), l.clone())), 
+                            Rc::new(move |_| vapp(m_val2.clone(), Value::Succ(Box::new(l.clone()))))) }
+                        )
                     )
-                )
-            )?;
-            c_type(i, ctx, k, Value::Nat)?;
-            let k_val = c_eval(k.clone(), vec![]);
-            Ok(vapp(m_val1, k_val))
-        },
-        ITerm::Fin(n) => {
-            c_type(i, ctx, n, Value::Nat)?;
-            Ok(Value::Star)
-        },
-        ITerm::FZero(n) => {
-            // FZero(n) with n: Nat is an element of Fin(n+1), so Fin(0) has no elements
-            c_type(i, ctx, n, Value::Nat)?;
-            let n_val = c_eval(n.clone(), vec![]);
-            Ok(Value::Fin(Box::new(Value::Succ(Box::new(n_val)))))
-        },
-        ITerm::FSucc(n, fp) => {
-            // FSucc(m+1, fp) with fp: Fin(m) is an element of Fin(m+1), so Fin(m+1) adds one additional element to Fin(n)
-            c_type(i, ctx.clone(), n, Value::Nat)?;
-            let n_val = c_eval(n.clone(), vec![]);
-            match &n_val {
-                Value::Succ(m) => {
-                    c_type(i, ctx, fp, Value::Fin(m.clone()))?;
-                    Ok(Value::Fin(Box::new(n_val)))
+                )?;
+                k.check_type(ii, ctx, Value::Nat)?;
+                let k_val = k.clone().eval(vec![]);
+                Ok(vapp(m_val1, k_val))
+            },
+            ITerm::Fin(n) => {
+                n.check_type(ii, ctx, Value::Nat)?;
+                Ok(Value::Star)
+            },
+            ITerm::FZero(n) => {
+                // FZero(n) with n: Nat is an element of Fin(n+1), so Fin(0) has no elements
+                n.check_type(ii, ctx, Value::Nat)?;
+                let n_val = n.clone().eval(vec![]);
+                Ok(Value::Fin(Box::new(Value::Succ(Box::new(n_val)))))
+            },
+            ITerm::FSucc(n, fp) => {
+                // FSucc(m+1, fp) with fp: Fin(m) is an element of Fin(m+1), so Fin(m+1) adds one additional element to Fin(n)
+                n.check_type(ii, ctx.clone(), Value::Nat)?;
+                let n_val = n.clone().eval(vec![]);
+                match &n_val {
+                    Value::Succ(m) => {
+                        fp.check_type(ii, ctx, Value::Fin(m.clone()))?;
+                        Ok(Value::Fin(Box::new(n_val)))
+                    }
+                    _ => Err("Invalid element of finite type".to_owned())
                 }
-                _ => Err("Invalid element of finite type".to_owned())
-            }
-        },
-        ITerm::FinElim(motive, base, ind, n, f) => {
-            c_type(i, ctx.clone(), motive, Value::Pi(Box::new(Value::Nat), Rc::new(|k| 
-                Value::Pi(Box::new(Value::Fin(Box::new(k))), Rc::new(|_| Value::Star))
-            )))?;
-            c_type(i, ctx.clone(), n, Value::Nat)?;
-            let motive_val = c_eval(motive.clone(), vec![]); //we'll need NameEnv instead of just ctx if we want more parsing etc.
-            let n_val = c_eval(n.clone(), vec![]);
-            let motive_val2 = motive_val.clone(); //annoying we have to do all this for ownership but oh well
-            c_type(i, ctx.clone(), base, Value::Pi(Box::new(Value::Nat), Rc::new(
-                move |k| vapp(vapp(motive_val.clone(), Value::Succ(Box::new(k.clone()))), Value::FZero(Box::new(k)))
-            )))?;
-            let motive_val = motive_val2.clone();
-            c_type(i, ctx.clone(), ind, Value::Pi(Box::new(Value::Nat), Rc::new(
-                move |k| { 
-                    let motive_val = motive_val.clone();
-                    Value::Pi(Box::new(Value::Fin(Box::new(k.clone()))), Rc::new(
-                        move |fk| {
-                            let k = k.clone();
-                            let motive_val = motive_val.clone();
-                            Value::Pi(Box::new(vapp(vapp(motive_val.clone(), k.clone()), fk.clone())), Rc::new(
-                                move |_| vapp(vapp(motive_val.clone(), Value::Succ(Box::new(k.clone()))), Value::FSucc(Box::new(k.clone()), Box::new(fk.clone())))
-                            ))
-                        }
-                    ))
-                }
-            )))?;
-            c_type(i, ctx, f, Value::Fin(Box::new(n_val.clone())))?;
-            let f_val = c_eval(f.clone(), vec![]);
-            Ok(vapp(vapp(motive_val2, n_val), f_val))
-        },
-        ITerm::Bound(n) => Err(format!("Not sure how to assign a type to Bound({n}) in context {}, how did we get this?", 
-            ctx.iter().map(|x| x.0.clone()).fold("".to_owned(), |acc, e| acc + &format!(" {:?}", e))))
+            },
+            ITerm::FinElim(motive, base, ind, n, f) => {
+                motive.check_type(ii, ctx.clone(), Value::Pi(Box::new(Value::Nat), Rc::new(|k| 
+                    Value::Pi(Box::new(Value::Fin(Box::new(k))), Rc::new(|_| Value::Star))
+                )))?;
+                n.check_type(ii, ctx.clone(), Value::Nat)?;
+                let motive_val = motive.clone().eval(vec![]); //we'll need NameEnv instead of just ctx if we want more parsing etc.
+                let n_val = n.clone().eval(vec![]);
+                let motive_val2 = motive_val.clone(); //annoying we have to do all this for ownership but oh well
+                base.check_type(ii, ctx.clone(), Value::Pi(Box::new(Value::Nat), Rc::new(
+                    move |k| vapp(vapp(motive_val.clone(), Value::Succ(Box::new(k.clone()))), Value::FZero(Box::new(k)))
+                )))?;
+                let motive_val = motive_val2.clone();
+                ind.check_type(ii, ctx.clone(), Value::Pi(Box::new(Value::Nat), Rc::new(
+                    move |k| { 
+                        let motive_val = motive_val.clone();
+                        Value::Pi(Box::new(Value::Fin(Box::new(k.clone()))), Rc::new(
+                            move |fk| {
+                                let k = k.clone();
+                                let motive_val = motive_val.clone();
+                                Value::Pi(Box::new(vapp(vapp(motive_val.clone(), k.clone()), fk.clone())), Rc::new(
+                                    move |_| vapp(vapp(motive_val.clone(), Value::Succ(Box::new(k.clone()))), Value::FSucc(Box::new(k.clone()), Box::new(fk.clone())))
+                                ))
+                            }
+                        ))
+                    }
+                )))?;
+                f.check_type(ii, ctx, Value::Fin(Box::new(n_val.clone())))?;
+                let f_val = f.clone().eval(vec![]);
+                Ok(vapp(vapp(motive_val2, n_val), f_val))
+            },
+            ITerm::Bound(n) => Err(format!("Not sure how to assign a type to Bound({n}) in context {}, how did we get this?", 
+                ctx.iter().map(|x| x.0.clone()).fold("".to_owned(), |acc, e| acc + &format!(" {:?}", e))))
+        }
     }
 }
 
-pub fn c_type(i: usize, ctx: Context, term: &CTerm, ty: Type) -> Result<(), String> {
-    match term {
-        CTerm::Inf(it) => {
-            let ity = i_type(i, ctx, it)?;
-            if quote0(ity.clone()) != quote0(ty.clone()) {
-                Err(format!("Expected {}, inferred {}, for term {}, level {i}", quote(i, ty), quote(i, ity), term))
-            }
-            else {
-                Ok(())
-            }
-        },
-        CTerm::Lam(body) => match ty {
-            Value::Pi(src, trg) => {
-                let mut new_ctx = ctx.clone();
-                new_ctx.push((Name::Local(i), *src));
-                c_type(i + 1, new_ctx, &c_subst(0, ITerm::Free(Name::Local(i)), *body.clone()), trg(vfree(Name::Local(i))))
+impl CTerm {
+    pub fn check_type(&self, ii: usize, ctx: Context, ty: Type) -> Result<(), String> {
+        match self {
+            CTerm::Inf(it) => {
+                let ity = it.infer_type(ii, ctx)?;
+                if quote0(ity.clone()) != quote0(ty.clone()) {
+                    Err(format!("Expected {}, inferred {}, for term {}, level {ii}", quote(ii, ty), quote(ii, ity), self))
+                }
+                else {
+                    Ok(())
+                }
             },
-            _ => Err("Function must have pi type".to_owned())
+            CTerm::Lam(body) => match ty {
+                Value::Pi(src, trg) => {
+                    let mut new_ctx = ctx.clone();
+                    new_ctx.push((Name::Local(ii), *src));
+                    body.clone().subst(0, ITerm::Free(Name::Local(ii))).check_type(ii + 1, new_ctx, trg(vfree(Name::Local(ii))))
+                },
+                _ => Err("Function must have pi type".to_owned())
+            }
         }
     }
 }

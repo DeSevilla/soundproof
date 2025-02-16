@@ -2,42 +2,52 @@ use std::borrow::Borrow;
 
 use crate::lambdapi::ast::*;
 
+/// Abbreviated constructor for free variable Values.
 pub fn vfree(name: Name) -> Value {
     Value::Neutral(Neutral::Free(name))
 }
 
-pub fn vapp(lam: Value, param: Value) -> Value {
+/// Value for the application of a lambda value to an argument value.
+/// Panics if `lam` can't be a lambda.
+pub fn vapp(lam: Value, arg: Value) -> Value {
     match lam {
-        Value::Lam(f) => (*f)(param),
-        Value::Neutral(n) => Value::Neutral(Neutral::App(Box::new(n), Box::new(param))),
-        _ => panic!()  // should there be something else here?
+        Value::Lam(f) => (*f)(arg),
+        Value::Neutral(n) => Value::Neutral(Neutral::App(Box::new(n), Box::new(arg))),
+        _ => panic!()  // No other Values can be lambdas
     }
 }
 
+/// Converts anything that can be borrowed as an ITerm into a CTerm by cloning.
 pub fn itoc<T: Borrow<ITerm>>(i: T) -> CTerm {
     CTerm::Inf(Box::new(i.borrow().clone()))
 }
 
+/// Abbreviated constructor for lambda-application ITerms.
 pub fn iapp<T: Borrow<ITerm>, U: Into<CTerm>>(f: T, x: U) -> ITerm {
     ITerm::App(Box::new(f.borrow().clone()), x.into())
 }
 
+/// Abbreviated constructor for type-annotation ITerms.
 pub fn iann<T: Into<CTerm>, U: Into<CTerm>>(term: T, ty: U) -> ITerm {
     ITerm::Ann(term.into(), ty.into())
 }
 
+/// Abbreviated constructor for pi-type ITerms.
 pub fn ipi<T: Into<CTerm>, U: Into<CTerm>>(src: T, trg: U) -> ITerm {
     ITerm::Pi(src.into(), trg.into())
 }
 
+/// Abbreviated constructor for lambda CTerms
 pub fn clam<T: Into<CTerm>>(body: T) -> CTerm {
     CTerm::Lam(Box::new(body.into()))
 }
 
+/// Abbreviation for bound-variable ITerm
 pub fn bnd(n: usize) -> ITerm {
     ITerm::Bound(n)
 }
 
+/// Converts usize to ITerm natural numbers
 pub fn inat(n: usize) -> ITerm {
     if n == 0 {
         ITerm::Zero
@@ -47,38 +57,49 @@ pub fn inat(n: usize) -> ITerm {
     }
 }
 
-pub fn i_subst(i: usize, new: ITerm, term: ITerm) -> ITerm {
-    match term {
-        ITerm::Ann(b, t) => ITerm::Ann(c_subst(i, new.clone(), b), c_subst(i, new, t)),
-        ITerm::Star => ITerm::Star,
-        ITerm::Pi(src, trg) => ITerm::Pi(c_subst(i, new.clone(), src), c_subst(i + 1, new, trg)),
-        ITerm::Bound(j) => if i == j { new } else { ITerm::Bound(j) },
-        ITerm::Free(n) => ITerm::Free(n),
-        ITerm::App(f, x) => ITerm::App(Box::new(i_subst(i, new.clone(), *f)), c_subst(i, new, x)),
-        ITerm::Nat => ITerm::Nat,
-        ITerm::Zero => ITerm::Zero,
-        ITerm::Succ(cterm) => ITerm::Succ(c_subst(i, new, cterm)),
-        ITerm::NatElim(motive, base, ind, k) => ITerm::NatElim(
-            c_subst(i, new.clone(), motive), c_subst(i, new.clone(), base), c_subst(i, new.clone(), ind), c_subst(i, new, k)
-        ),
-        ITerm::Fin(cterm) => ITerm::Fin(c_subst(i, new, cterm)),
-        ITerm::FinElim(motive, base, ind, n, f) => ITerm::FinElim(c_subst(i, new.clone(), motive), c_subst(i, new.clone(), base), c_subst(i, new.clone(), ind), c_subst(i, new.clone(), n), c_subst(i, new, f)),
-        ITerm::FZero(cterm) => ITerm::FZero(c_subst(i, new, cterm)),
-        ITerm::FSucc(n, f) => ITerm::FSucc(c_subst(i, new.clone(), n), c_subst(i, new, f)),
+impl ITerm {
+    /// Recursively substitute in a new ITerm for a bound variable
+    pub fn subst(self, i: usize, new: ITerm) -> Self {
+        match self {
+            ITerm::Ann(b, t) => ITerm::Ann(b.subst(i, new.clone()), t.subst(i, new)),
+            ITerm::Star => ITerm::Star,
+            ITerm::Pi(src, trg) => ITerm::Pi(src.subst(i, new.clone()), trg.subst(i + 1, new)),
+            ITerm::Bound(j) => if i == j { new } else { ITerm::Bound(j) },
+            ITerm::Free(n) => ITerm::Free(n),
+            ITerm::App(f, x) => ITerm::App(Box::new(f.subst(i, new.clone())), x.subst(i, new)),
+            ITerm::Nat => ITerm::Nat,
+            ITerm::Zero => ITerm::Zero,
+            ITerm::Succ(cterm) => ITerm::Succ(cterm.subst(i, new)),
+            ITerm::NatElim(motive, base, ind, k) => ITerm::NatElim(
+                motive.subst(i, new.clone()), base.subst(i, new.clone()), ind.subst(i, new.clone()), k.subst(i, new)
+            ),
+            ITerm::Fin(cterm) => ITerm::Fin(cterm.subst(i, new)),
+            ITerm::FinElim(motive, base, ind, n, f) => ITerm::FinElim(
+                motive.subst(i, new.clone()), base.subst(i, new.clone()), ind.subst(i, new.clone()), n.subst(i, new.clone()), f.subst(i, new)
+            ),
+            ITerm::FZero(cterm) => ITerm::FZero(cterm.subst(i, new)),
+            ITerm::FSucc(n, f) => ITerm::FSucc(n.subst(i, new.clone()), f.subst(i, new)),
+        }
     }
 }
 
-pub fn c_subst(i: usize, new: ITerm, term: CTerm) -> CTerm {
-    match term {
-        CTerm::Inf(it) => CTerm::Inf(Box::new(i_subst(i, new, *it))),
-        CTerm::Lam(body) => CTerm::Lam(Box::new(c_subst(i + 1, new, *body)))
+
+impl CTerm {
+    /// Recursively substitute in a new ITerm for a bound variable
+    pub fn subst(self, i: usize, new: ITerm) -> Self {
+        match self {
+            CTerm::Inf(it) => CTerm::Inf(Box::new(it.subst(i, new))),
+            CTerm::Lam(body) => CTerm::Lam(Box::new(body.subst(i + 1, new)))
+        }
     }
 }
 
+/// Convert a Value into a term, under no binders
 pub fn quote0(val: Value) -> CTerm {
     quote(0, val)
 }
 
+/// Convert a Value into a term, under `i` binders
 pub fn quote(i: usize, val: Value) -> CTerm {
     match val {
         Value::Lam(f) => CTerm::Lam(Box::new(quote(i + 1, f(vfree(Name::Quote(i)))))),

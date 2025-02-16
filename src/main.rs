@@ -9,12 +9,16 @@ use types::*;
 use translate::*;
 use ast::{CTerm, ITerm};
 
-mod lambdapi;
-mod music;
-mod soundproof;
+/// Implementation of a simple dependently-typed lambda calculus. See the AST submodule page for most of the operative pieces.
+pub mod lambdapi;
+/// Synths and utilities for generating audio.
+pub mod music;
+/// Translation from LambdaPi to music.
+pub mod soundproof;
 
+/// Modes for structuring the translation from LambdaPi term to SoundTree.
 #[derive(PartialEq, Eq, Clone, Copy, Debug, ValueEnum)]
-enum Structure {
+pub enum Structure {
     /// Assign melodies according to the structure of terms themselves
     Term,
     /// Assign melodies mostly according to the types of terms
@@ -23,7 +27,7 @@ enum Structure {
     Test,
 }
 
-/// Determines how time is broken down between sequential segments
+/// Determines how time is broken down between sequential segments.
 #[derive(PartialEq, Eq, Clone, Copy, Debug, ValueEnum)]
 pub enum Scaling {
     /// At each node, just splits time evenly among sequential children. Outer terms get much more time relative to deeper subtrees.
@@ -35,24 +39,24 @@ pub enum Scaling {
     SizeRaw,
 }
 
-/// Predefined term from the dependently typed lambda calculus
+/// Predefined terms of the dependently typed lambda calculus. Terms are drawn from those used to construct Girard's Paradox.
 #[derive(PartialEq, Eq, Clone, Copy, Debug, ValueEnum)]
-enum NamedTerm {
-    /// The type of types
+pub enum NamedTerm {
+    /// The type of types.
     Star,
     // SetsOfNat, //these two commented out are not supported by the current preliminary melody functions
     // ExFalso,
-    /// The "universe" type used to derive Girard's Paradox, i.e. forall (X :: *) . (P(P(X)) -> X) -> P(P(X));
+    /// The "universe" type U used to derive Girard's Paradox: forall (X :: *) . (P(P(X)) -> X) -> P(P(X)).
     U,
-    /// Term of type P(P(U)) -> U
+    /// A term of type P(P(U)) -> U.
     Tau,
-    /// Term of type U -> P(P(U))
+    /// A term of type U -> P(P(U)).
     Sigma,
-    /// A term of type U
+    /// A term of type U.
     Omega,
-    /// Girard's Paradox, full term
+    /// Girard's Paradox, full term according to the Hurkens approach.
     Girard,
-    /// Girard's Paradox, reduced as far as possible without nontermination
+    /// Girard's Paradox, reduced as far as possible without nontermination.
     GirardReduced
 }
 
@@ -72,18 +76,25 @@ impl NamedTerm {
     }
 }
 
-/// Determines which set of melodies to use
+/// Determines which set of melodies to use when generating melodies for a term.
 #[derive(PartialEq, Eq, Clone, Copy, Debug, ValueEnum)]
 pub enum MelodySelector {
+    /// First, highly arbitary melody suite. See [imelody1] and [cmelody2] (there is no cmelody1).
     A,
+    /// Melodies based on B, C, E, and G with arbitrarily-chosen instruments. See [imelody2] and [cmelody2].
     B,
+    /// More intentionally-chosen melodies with still-arbitrary instruments. See [imelody3] and [cmelody3].
     C,
+    /// Same melodies as C but with cleaner-sounding instruments. See [imelody4] and [cmelody4].
     D,
+    /// Melody suite with some hints of dissonance. See [imelody5] and [cmelody5].
     E,
+    /// Same melodies as B and C but exclusively as sines. See [imelody_oneinstr] and [cmelody_oneinstr].
     PureSine
 }
 
 impl MelodySelector {
+    /// Get the appropriate melody for a certain type of [ITerm].
     fn imelody(&self, term: &ITerm, depth: usize) -> Melody {
         match self {
             MelodySelector::A => imelody1(term, depth),
@@ -95,6 +106,7 @@ impl MelodySelector {
         }
     }
 
+    /// Get the appropriate melody for a certain type of [CTerm].
     fn cmelody(&self, term: &CTerm, depth: usize) -> Melody {
         match self {
             MelodySelector::A => cmelody2(term, depth),
@@ -107,31 +119,31 @@ impl MelodySelector {
     }
 }
 
-
+/// Command-line arguments to Soundproof.
 #[derive(Parser, Debug)]
 #[command(version, about, long_about=None)]
-struct Args {
-    /// Determines how time is broken down between sequential segments
+pub struct Args {
+    /// Determines how time is broken down between sequential segments.
     #[arg(short, long, default_value="size")]
     scaling: Scaling,
-    /// In seconds. If unset, scales with size of term
+    /// In seconds. If unset, scales with size of term.
     #[arg(short, long)]
     time: Option<f64>,
-    /// Predefined term from the dependently typed lambda calculus
+    /// Predefined terms of the dependently typed lambda calculus.
     #[arg(short, long, default_value="girard-reduced")]
     value: NamedTerm,
-    /// Determines which set of melodies to use
+    /// Determines which set of melodies to use.
     #[arg(short, long, default_value="fourth")]
     melody: MelodySelector,
-    /// How to assign sound-tree structure to a term
+    /// How to assign sound-tree structure to a term.
     #[arg(short('S'), long, default_value="type")]
     structure: Structure,
 }
 
-fn main() {
+pub fn main() {
     let args = Args::parse();
     let term = args.value.term();
-    //validation just makes sure it typechecks; we can't evaluate the paradox
+    //validation just makes sure it typechecks; we can't evaluate the paradox or it'll run forever.
     validate(&format!("{:?}", args.value), &term, false);
     let tree = match args.structure {
         Structure::Term => iterm_translate(term, 0, args.melody),

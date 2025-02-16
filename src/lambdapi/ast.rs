@@ -5,94 +5,102 @@ use std::rc::Rc;
 // are more natural in Haskell than Rust, but they work out alright -- just requires a fair amount of 
 // cloning to deal with ownership and Boxes to make types finitely-sized.
 
-/// Term whose type can be inferred
+/// Term whose type can be inferred.
 #[derive(PartialEq, Debug, Clone)]
 pub enum ITerm {
-    /// Annotation (term, type)
+    /// Type annotation. (term, type)
     Ann(CTerm, CTerm),
-    /// Type of types
+    /// Type of types.
     Star, 
-    /// Dependent function type (parameter type, body type)
+    /// Dependent function type. (parameter type, body type)
     Pi(CTerm, CTerm),
-    /// Bound variable (de Bruijn index)
+    /// Bound variable. (de Bruijn index)
     Bound(usize),
-    /// Free variable (name)
+    /// Free variable. (name)
     Free(Name),
-    /// Application (function term, argument term)
+    /// Lambda application. (function term, argument term)
     App(Box<ITerm>, CTerm),
-    /// Type of natural numbers
+    /// Type of natural numbers.
     Nat,
-    /// 0
+    /// Natural number 0.
     Zero,
-    /// Successor of n (n)
+    /// Natural number successor of n. (n)
     Succ(CTerm),
-    /// Natural number eliminator, for induction (motive, base case, successor case, number to fill into motive)
+    /// Natural number eliminator, for induction. (motive, base case, successor case, number to fill into motive)
     NatElim(CTerm, CTerm, CTerm, CTerm),
-    /// Finite type with n elements (n)
+    /// Finite type with n elements. (n)
     Fin(CTerm),
-    /// 0 element of type with n+1 elements (n)
+    /// Zero element of the type with n+1 elements. (n)
     FZero(CTerm),
-    /// Successor element of the type with n+1 elements (n+1, member of Fin(n))
+    /// Successor element of the type with n+1 elements. (n+1, member of Fin(n))
     FSucc(CTerm, CTerm),
-    /// Eliminator for induction on finite types (motive, base case, successor case, size of type, value to fill into motive)
+    /// Eliminator for induction on finite types. (motive, base case, successor case, size of type, value to fill into motive)
     FinElim(CTerm, CTerm, CTerm, CTerm, CTerm),   
 }
 
-
-
-/// Term whose type can be checked
+/// Term whose type can be checked.
 #[derive(PartialEq, Debug, Clone)]
 pub enum CTerm {
-    /// Term whose type *could* be inferred, but in a context where we only need to check it
+    /// Term whose type *could* be inferred, but in a context where we only need to check it.
     Inf(Box<ITerm>),
-    /// Lambda (body)
+    /// Lambda abstraction. (body)
     Lam(Box<CTerm>),
 }
 
-
+/// Variable names for free variables in a term
 #[derive(PartialEq, Debug, Clone)]
 pub enum Name {
+    /// Completely free variable
     Global(String),
+    /// Local variable, free in this term but expected to be bound in an outer term.
     Local(usize),
+    /// Quoted variable, used for conversion of [Values](Value) into [CTerms](CTerm).
     Quote(usize),
 }
 
-/// Value that can't be reduced any further
+/// Value that can't be reduced any further.
 #[derive(Clone)]
 pub enum Value {
-    /// Lambda value using higher-order abstract syntax (closure substituting arg into body)
+    /// Lambda value using higher-order abstract syntax. (closure substituting arg into body)
     Lam(Rc<dyn Fn(Value) -> Value>),
-    /// Type of types
+    /// Type of types.
     Star,
-    /// Dependent function type using higher-order abstract syntax (closure substituting arg into body)
+    /// Dependent function type using higher-order abstract syntax. (closure substituting arg into body)
     Pi(Box<Value>, Rc<dyn Fn(Value) -> Value>),
-    /// Neutral term that can't be reduced as it contains a free variable (term)
+    /// Neutral term that can't be reduced as it contains a free variable. (term)
     Neutral(Neutral),
-    /// Type of natural numbers
+    /// Type of natural numbers.
     Nat,
-    /// 0
+    /// Natural number 0.
     Zero,
-    /// Successor of n (n)
+    /// Natural number successor of n. (n)
     Succ(Box<Value>),
-    /// Finite type with n elements (n)
+    /// Finite type with n elements. (n)
     Fin(Box<Value>),
-    /// Zero value for finite type with n+1 elements (n)
+    /// Zero value for finite type with n+1 elements. (n)
     FZero(Box<Value>),
-    /// Successor value for finite type with n+1 elements (n+1, element of Fin(n))
+    /// Successor value for finite type with n+1 elements. (n+1, element of Fin(n))
     FSucc(Box<Value>, Box<Value>),
 }
 
-/// Term containing a free variable somewhere
+/// Term containing a free variable somewhere, which can't be reduced while it's still there.
 #[derive(Clone)]
 pub enum Neutral {
+    /// A free variable itself.
     Free(Name),
+    /// Lambda application. (function, argument)
     App(Box<Neutral>, Box<Value>),
+    /// Natural number eliminator. (motive, base case, successor case, number to fill into motive)
     NatElim(Box<Value>, Box<Value>, Box<Value>, Box<Neutral>),
+    /// Finite type eliminator. (motive, base case, successor case, size of type, value to fill into motive)
     FinElim(Box<Value>, Box<Value>, Box<Value>, Box<Value>, Box<Neutral>)
 }
 
+/// Environment containing values of local variables for evaluation of de Bruijn indices.
 pub type Env = Vec<Value>;
+/// Used for values which necessarily represent types.
 pub type Type = Value;
+/// Context of free variables for typechecking.
 pub type Context = Vec<(Name, Type)>;
 
 impl From<ITerm> for CTerm {

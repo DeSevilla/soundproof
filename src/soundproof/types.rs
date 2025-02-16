@@ -4,7 +4,9 @@ use fundsp::hacker32::*;
 use crate::music::notes::*;
 use crate::Scaling;
 
+/// Objects that can be used to generate audio output through a FunDSP [Sequencer].
 pub trait Sequenceable {
+    /// Generate audio into the sequencer for a duration starting at the selected time.
     fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64);
 
     // fn show(&self) -> String {
@@ -34,18 +36,27 @@ pub trait Sequenceable {
 //     }
 // }
 
+/// A single note within a [Melody], containing pitch, ADSR, and volume info.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Note {
+    /// Pitch of the note as an integer in 12-tone equal temperament.
     note: i8,
+    /// Duration of the "key press" for the note. In a [Melody], will be scaled according to the melody's duration when output.
     time: f64,
+    /// Volume of the note.
     volume: f64,
+    /// Time in seconds from the start of "key press" to when the note reaches max volume.
     attack: f32,
+    /// Time in seconds between max volume and sustain volume.
     decay: f32,
+    /// Fraction of max volume for a held note.
     sustain: f32,
+    /// Time between releasing the note and volume reaching 0. 
     release: f32,
 }
 
 impl Note {
+    /// Scale the duration of the note, modifying ADSR along with it.
     pub fn mul_duration(self, factor: f64) -> Self {
         Note {
             time: self.time * factor,
@@ -57,14 +68,19 @@ impl Note {
     }
 }
 
+/// A sequence of notes played on a particular instrument.
 #[derive(Clone)]
 pub struct Melody {
+    /// A FunDSP [AudioUnit] which is used to play the notes.
     instrument: An<Unit<U1, U1>>,
+    /// [Note]s and how much time they're allowed to use.
     notes: Vec<(Note, f64)>,
+    /// Adjustment to the pitch of all [Note]s, stored here so it can be easily tweaked.
     note_adjust: i8,
 }
 
 impl Melody {
+    /// Create a melody from a sequence of notes as integers in 12-tone equal temperament.
     pub fn new_even(instrument: impl AudioUnit + 'static, notes: &[i8]) -> Self {
         if notes.len() < 3 {
             println!("wtf is with the notes even: {:?}", notes);
@@ -76,6 +92,7 @@ impl Melody {
         }
     }
 
+    /// Create a melody from a sequence of notes as integers in equal temperament, with specified durations.
     pub fn new_timed(instrument: impl AudioUnit + 'static, notes: &[(i8, f64)]) -> Self {
         Melody {
             instrument: unit(Box::new(instrument)),
@@ -92,14 +109,17 @@ impl Melody {
     //     }
     // }
 
+    /// Duration of the melody if played at its default speed. Used as a basis for sequencing at arbitrary durations.
     pub fn duration(&self) -> f64 {
         self.notes.iter().map(|(_, x)| x).sum()
     }
 
+    /// Adjust the octave of all notes.
     pub fn set_octave(&mut self, octave: i8) {
         self.note_adjust = 12 * octave;
     }
 
+    /// Takes a closure and applies it to each [Note] in the melody.
     pub fn map_notes(&mut self, mut f: impl FnMut(&Note) -> Note) {
         self.notes = self.notes.iter_mut().map(|(x, d)| (f(x), *d)).collect();
     }
@@ -108,6 +128,8 @@ impl Melody {
     //     self.notes.append(&mut other.notes.into_iter().map(|(note, dur)| (Note { note: note.note + 12 * other.note_adjust, ..note}, dur)).collect());
     // }
 
+    /// Applies some adjustments to melodies according to their depth in a [SoundTree].
+    /// Melodies deeper into the tree will be higher-pitched and have shorter notes.
     pub fn adjust_depth(&mut self, depth: usize) {
         self.set_octave((depth as f64 / 2.5).powf(0.5).ceil() as i8 + 1);
         self.map_notes(|&n| Note {
@@ -118,6 +140,7 @@ impl Melody {
         });
     }
 }
+
 impl Sequenceable for Melody {
     fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64) {
         if self.duration() <= 0.0 {
@@ -154,26 +177,28 @@ impl Sequenceable for Melody {
     // }
 }
 
-/// Tree of simultaneous or sequenced sounds
+/// Tree of simultaneous and/or sequential sounds. Lambda calculus terms are translated into this structure.
 #[derive(Clone)]
 pub enum SoundTree {
-    /// Plays subtrees simultaneously
+    /// Subtrees will play simultaneously.
     Simul(Vec<SoundTree>),
-    /// Plays subtrees sequentially
+    /// Subtrees will play sequentially.
     Seq(Vec<SoundTree>),
-    /// Plays a predefined sound
+    /// Plays a predefined sound-pattern.
     Sound(Rc<dyn Sequenceable>)
 }
 
 impl SoundTree {
+    /// Constructs a SoundTree containing a single sound-pattern.
     pub fn sound(sound: impl Sequenceable + 'static) -> Self {
         Self::Sound(Rc::new(sound))
     }
 
-    pub fn seq(values: &[SoundTree]) -> Self {
-        //avoids nested Seqs; this may be subject to change
+    /// Constructs a SoundTree which plays its subtrees one after another.
+    pub fn seq(subtrees: &[SoundTree]) -> Self {
+        //avoids nested Seqs; this can affect duration assignments.
         let mut result = Vec::new();
-        for val in values {
+        for val in subtrees {
             match val.clone() {
                 SoundTree::Seq(mut trees) => result.append(&mut trees),
                 other => result.push(other),
@@ -182,10 +207,11 @@ impl SoundTree {
         Self::Seq(result)
     }
 
-    pub fn simul(values: &[SoundTree]) -> Self {
-        //avoids redundant nested Simuls
+    /// Constructs a SoundTree which plays its subtrees simultaneously.
+    pub fn simul(subtrees: &[SoundTree]) -> Self {
+        //avoids redundant nested Simuls; this cannot affect the resulting audio
         let mut result = Vec::new();
-        for val in values {
+        for val in subtrees {
             match val.clone() {
                 SoundTree::Simul(mut trees) => result.append(&mut trees),
                 other => result.push(other)
@@ -194,6 +220,7 @@ impl SoundTree {
         Self::Simul(result)
     }
 
+    /// The number of nodes in a tree.
     pub fn size(&self) -> usize {
         match self {
             SoundTree::Simul(vec) => vec.iter().map(|x| x.size()).max().unwrap_or(0),
@@ -202,19 +229,24 @@ impl SoundTree {
         }
     }
 
-    pub fn size_adjusted(&self) -> f64 {
+    /// The weight of a tree for duration scaling.
+    pub fn weight(&self) -> f64 {
         match self {
-            SoundTree::Simul(vec) => vec.iter().map(|x| x.size_factor()).reduce(f64::max).unwrap_or(0.0),
-            SoundTree::Seq(vec) => vec.iter().map(|x| x.size_factor()).sum::<f64>(),
+            SoundTree::Simul(vec) => vec.iter().map(|x| x.subtree_weight()).reduce(f64::max).unwrap_or(0.0),
+            SoundTree::Seq(vec) => vec.iter().map(|x| x.subtree_weight()).sum::<f64>(),
             SoundTree::Sound(_) => 1.0,
         }
     }
 
-    pub fn size_factor(&self) -> f64 {
-        self.size_adjusted().powf(0.85)
+    /// The weight of a tree considered as a subtree for duration scaling.
+    pub fn subtree_weight(&self) -> f64 {
+        self.weight().powf(0.85)
     }
 
+    /// Generate audio into a [Sequencer] for the tree, according to the selected [scaling](Scaling).
     pub fn generate_with(&self, seq: &mut Sequencer, start_time: f64, duration: f64, scaling: Scaling) {
+        // this function is mostly like Sequenceable.sequence but carries scaling info around
+        // we could refactor to use the trait but then we'd have to carry scaling on each tree node instead
         match self {
             SoundTree::Simul(vec) => {
                 for elem in vec {
@@ -227,10 +259,9 @@ impl SoundTree {
                 for child in vec {
                     let ratio = match scaling {
                         Scaling::Linear => 1.0 / child_count as f64,
-                        Scaling::Size => child.size_factor() / self.size_adjusted(),
+                        Scaling::Size => child.subtree_weight() / self.weight(),
                         // Scaling::SizeAligned => round_by(child.size_factor() / self.size_adjusted(), segment),
                         Scaling::SizeRaw => child.size() as f64 / self.size() as f64,
-                        // _ => panic!("SizeAligned not yet implemented for SoundTree2")
                     };
                     let new_time = duration * ratio;
                     child.generate_with(seq, start_time + time_elapsed, new_time, scaling);
@@ -241,16 +272,7 @@ impl SoundTree {
         }
     }
 
-    // pub fn print_sizes(&self, depth: usize) {
-    //     let tabs = "\t".repeat(depth);
-    //     println!("{tabs}{}", self.size());
-    //     match self {
-    //         SoundTree::Simul(vec) => for child in vec { child.print_sizes(depth + 1); },
-    //         SoundTree::Seq(vec) => for child in vec { child.print_sizes(depth + 1); },
-    //         SoundTree::Sound(_) => (),
-    //     }
-    // }
-
+    // I think this one needs a different approach anyway
     // pub fn show(&self, depth: f64) -> String {
     //     // let tabs = " ".repeat(depth);
     //     match self {

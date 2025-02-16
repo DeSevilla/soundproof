@@ -1,8 +1,15 @@
 #![allow(unused)]
+/// Abstract syntax tree (AST) structs for the lambda calculus.
 pub mod ast;
+/// Typechecking of lambda calculus terms. Code is an impl on the AST types.
+#[doc(hidden)]
 pub mod check;
+/// Evaluation of lambda calculus terms. Code is an impl on the AST types.
+#[doc(hidden)]
 pub mod eval;
+/// Functions for rendering terms and types as strings.
 pub mod print;
+/// Functions for constructing and modifying terms beyond the basic struct definitions.
 pub mod term;
 
 use ast::*;
@@ -10,13 +17,15 @@ use term::*;
 use check::*;
 use eval::*;
 
-/* this mostly contains specific terms of LambdaPi */
-/* at some point we should add a parser and switch to constructing from that */
+// this mostly contains constructors for specific terms of LambdaPi
+// at some point we could add a parser to extend it to more of a general tool
 
+/// Type with 0 elements, i.e. False.
 pub fn void() -> ITerm {
     ITerm::Fin(ITerm::Zero.into())
 }
 
+/// Powerset, implemented by P(X) = X -> * (each subset is a predicate).
 pub fn sets_of() -> ITerm {
     iann(
         clam(ipi(bnd(0), ITerm::Star)),
@@ -24,10 +33,12 @@ pub fn sets_of() -> ITerm {
     )
 }
 
+/// Sets of natural numbers.
 pub fn sets_of_nat() -> ITerm {
     iapp(sets_of(), ITerm::Nat)
 }
 
+/// The "universe" type U used to derive Girard's Paradox: forall (X :: *) . (P(P(X)) -> X) -> P(P(X)).
 pub fn u() -> ITerm {
     ipi(      //function that takes X
         ITerm::Star,          //of type *
@@ -41,11 +52,12 @@ pub fn u() -> ITerm {
     )
 }
 
+/// Powerset of U.
 pub fn sets_of_u() -> ITerm {
     iapp(sets_of(), u())
 }
 
-/// P(P(U)) -> U
+/// A term of type P(P(U)) -> U.
 pub fn tau() -> ITerm {
     iann(
         clam(clam(clam(clam(iapp(bnd(3),
@@ -54,13 +66,14 @@ pub fn tau() -> ITerm {
     )
 }
 
-/// U -> P(P(U))
+/// A term of type U -> P(P(U)).
 pub fn sigma() -> ITerm {
     iann(
         clam(iapp(iapp(bnd(0), u()), tau())),
         ipi(u(), iapp(sets_of(), iapp(sets_of(), u())))
     )
 }
+
 
 pub fn delta() -> ITerm {
     iann(
@@ -91,6 +104,7 @@ pub fn preomega() -> ITerm {
     )
 }
 
+/// A term of type U.
 pub fn omega() -> ITerm {
     iann(iapp(tau(), preomega()), u())
 }
@@ -118,6 +132,9 @@ pub fn sigma_omega() -> ITerm {
     iapp(sigma(), omega())
 }
 
+/// The type: forall (x: P(U)), forall (y: sigma(omega)(x)), x(tau(sigma(omega))).
+/// In other words, the proposition that every subset of U which is in
+/// sigma(omega) must contain tau(sigma(omega)).
 pub fn d() -> ITerm {
     ipi(
         sets_of_u(),
@@ -128,6 +145,7 @@ pub fn d() -> ITerm {
     )
 }
 
+/// A proof of Not(D).
 pub fn lem2() -> ITerm {
     iann(
         iapp(iapp(lem0(), delta()), clam(
@@ -145,6 +163,7 @@ pub fn lem2() -> ITerm {
     )
 }
 
+/// A proof of D.
 pub fn lem3() -> ITerm {
     iann(
         clam(
@@ -156,10 +175,12 @@ pub fn lem3() -> ITerm {
     )
 }
 
+/// Girard's Paradox.
 pub fn girard() -> ITerm {
     iann(iapp(lem2(), lem3()), void())
 }
 
+/// Girard's Paradox, with the lemmas reduced as far as possible.
 pub fn girard_reduced() -> ITerm {
     let vty = quote0(ipi(d(), void()).eval(vec![]));
     let vlem2 = iann(quote0(lem2().eval(vec![])), vty);
@@ -167,6 +188,7 @@ pub fn girard_reduced() -> ITerm {
     iann(iapp(vlem2, vlem3), void())
 }
 
+/// for all types X, a function from False to X. Ex falso sequitur quodlibet.
 pub fn exfalso() -> ITerm {
     iann(
         clam(
@@ -194,11 +216,11 @@ pub fn exfalso() -> ITerm {
 pub fn validate(name: &str, term: &ITerm, eval: bool) {
     println!("{name}");
     // println!("{term}");
-    let typ = term.infer_type(0, vec![]).expect("Term should be well-typed");
+    let typ = term.infer_type(vec![]).expect("Term should be well-typed");
     if eval {
         let val = term.clone().eval(vec![]);
         let qval = quote0(val);
-        qval.check_type(0, vec![], typ.clone()).expect("Evaluation should preserve type");
+        qval.check_type(vec![], typ.clone()).expect("Evaluation should preserve type");
         let typ1 = quote0(typ);
         println!("\t{term} :::: {typ1}");
         println!("Passed type checks!");

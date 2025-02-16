@@ -14,6 +14,8 @@ fn parens_if(cond: bool, text: String) -> String {
 
 const VARCHARS: &[u8] = "xyzabcdefghijklmnopqrstuvw".as_bytes();
 
+// This isn't quite correct, but it's wrong in Klyuchnikov too so I'm not sure how to solve it
+// We may simply not have enough state?
 fn varname(i: usize) -> String {
     let ct = VARCHARS.len();
     let mut val = i;

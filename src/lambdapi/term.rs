@@ -7,8 +7,8 @@ pub fn vfree(name: Name) -> Value {
     Value::Neutral(Neutral::Free(name))
 }
 
-/// Value for the application of a lambda value to an argument value.
-/// Panics if `lam` can't be a lambda.
+/// Applies a lambda value to an argument value.
+/// Panics if `lam` isn't actually a possible lambda.
 pub fn vapp(lam: Value, arg: Value) -> Value {
     match lam {
         Value::Lam(f) => (*f)(arg),
@@ -37,17 +37,17 @@ pub fn ipi<T: Into<CTerm>, U: Into<CTerm>>(src: T, trg: U) -> ITerm {
     ITerm::Pi(src.into(), trg.into())
 }
 
-/// Abbreviated constructor for lambda CTerms
+/// Abbreviated constructor for lambda CTerms.
 pub fn clam<T: Into<CTerm>>(body: T) -> CTerm {
     CTerm::Lam(Box::new(body.into()))
 }
 
-/// Abbreviation for bound-variable ITerm
+/// Abbreviation for bound-variable ITerm.
 pub fn bnd(n: usize) -> ITerm {
     ITerm::Bound(n)
 }
 
-/// Converts usize to ITerm natural numbers
+/// Converts usize to ITerm natural numbers.
 pub fn inat(n: usize) -> ITerm {
     if n == 0 {
         ITerm::Zero
@@ -58,7 +58,7 @@ pub fn inat(n: usize) -> ITerm {
 }
 
 impl ITerm {
-    /// Recursively substitute in a new ITerm for a bound variable
+    /// Recursively substitutes in a new ITerm for a bound variable.
     pub fn subst(self, i: usize, new: ITerm) -> Self {
         match self {
             ITerm::Ann(b, t) => ITerm::Ann(b.subst(i, new.clone()), t.subst(i, new)),
@@ -85,7 +85,7 @@ impl ITerm {
 
 
 impl CTerm {
-    /// Recursively substitute in a new ITerm for a bound variable
+    /// Recursively substitutes in a new ITerm for a bound variable.
     pub fn subst(self, i: usize, new: ITerm) -> Self {
         match self {
             CTerm::Inf(it) => CTerm::Inf(Box::new(it.subst(i, new))),
@@ -94,12 +94,12 @@ impl CTerm {
     }
 }
 
-/// Convert a Value into a term, under no binders
+/// Converts a Value into a term, under no binders.
 pub fn quote0(val: Value) -> CTerm {
     quote(0, val)
 }
 
-/// Convert a Value into a term, under `i` binders
+/// Converts a Value into a term, under `i` binders.
 pub fn quote(i: usize, val: Value) -> CTerm {
     match val {
         Value::Lam(f) => CTerm::Lam(Box::new(quote(i + 1, f(vfree(Name::Quote(i)))))),
@@ -115,6 +115,7 @@ pub fn quote(i: usize, val: Value) -> CTerm {
     }
 }
 
+/// Converts a neutral term (containing free variable) into an ITerm.
 pub fn neutral_quote(i: usize, neutral: Neutral) -> ITerm {
     match neutral {
         Neutral::Free(x) => boundfree(i, x),
@@ -124,6 +125,7 @@ pub fn neutral_quote(i: usize, neutral: Neutral) -> ITerm {
     }
 }
 
+/// Quotes a name into a bound or free variable term as appropriate.
 pub fn boundfree(i: usize, name: Name) -> ITerm {
     match name {
         Name::Quote(k) => ITerm::Bound(i - k - 1),

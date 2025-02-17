@@ -128,7 +128,7 @@ impl MelodySelector {
 #[command(version, about, long_about=None)]
 pub struct Args {
     /// Determines how time is broken down between sequential segments.
-    #[arg(short, long, default_value="weight")]
+    #[arg(short, long, default_value="size")]
     scaling: Scaling,
     /// In seconds. If unset, scales with size of tree.
     #[arg(short, long)]

@@ -9,15 +9,27 @@ Artistic influences include Iannis Xenakis, Henry Flynt, Catherine Hennix, Drexc
 Example of the output can be found on SoundCloud [here (type-structured)](https://soundcloud.com/user-619734785/system-output-v13)
 and [here (term-structured)](https://soundcloud.com/user-619734785/system-output-v12).
 
+The [lambda calculus](https://en.wikipedia.org/wiki/Lambda_calculus) is a formal system for computability,
+built around the concept of functions. Adding type systems to lambda calculi allows them to [represent logical
+connections](https://en.wikipedia.org/wiki/Curry%E2%80%93Howard_correspondence) by having propositions as types
+and proofs as elements of those types. For example, a function from type A to type B takes a proof of proposition A
+and produces a proof of proposition B, which corresponds to logical implication. 
+[Dependent types](https://en.wikipedia.org/wiki/Dependent_type) can represent essentially all mathematical propositions,
+and thus are used as the basis for many theorem provers, including 
+[Coq](https://coq.inria.fr/)/[Rocq](https://rocq-prover.org/about#history), [Agda](https://github.com/agda/agda),
+and [Lean](https://lean-lang.org/).
+
+This project is based on [LambdaPi](https://www.andres-loeh.de/LambdaPi/), a very simple version
+of the DTLC whose first priority is ease of implementation.
 Notably, LambdaPi forgoes the universe hierarchy of usual dependent type theories for simplicity,
 so the type of Type is Type; this is essentially similar to the naive set theory idea 
 of the "set of all sets", and leads to [Girard's Paradox](https://en.wikipedia.org/wiki/System_U).
-This paradox is the primary term I'm focusing on representing musically at the moment.
-I'm using the simplification due to [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf),
-adapting from [this Agda implementation](https://github.com/nzl-nott/PhD-of-nzl/blob/master/Exercise/Ex4/girard.agda).
+I chose LambdaPi partly for its simplicity but also because this paradox is the primary 
+term I'm focusing on representing musically at the moment.
 The choice of a paradox is in part due to [Henry Flynt's idea of "concept art"](https://henryflynt.org/aesthetics/conart.html), 
 which would incorporate mathematics but reject the idea of "discovering" truths in favor of constructing
 beautiful concepts.
+I'm using the version of the paradox due to [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf).
 
 Various desirable features of LambdaPi (equality types, a parser, etc.) have been left out for now,
 as they're not necessary for the paradox or for the musical side of the problem.
@@ -25,9 +37,9 @@ I would also like to add a small-step evaluator and incorporate the (unlimited)
 evaluation process of the non-normalizing term for Girard's Paradox, but there are some structural and
 conceptual obstacles before this can be done.
 
-Soundproof has some command-line options, but I mostly use it by directly editing and recompiling the code.
-It should always be compiled with `--release`, as the synth portions depend highly
-on optimizations that are not enabled in debug mode.
+Soundproof should always be compiled with `--release`, as the synth portions using FunDSP depend highly
+on optimizations that are not enabled in debug mode. It will not run in any reasonable time
+otherwise.
 
 ```
 Usage: soundproof.exe [OPTIONS]

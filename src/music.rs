@@ -13,6 +13,7 @@ const SAMPLE_RATE: f32 = 44100.0;
 
 /// Render and save a spectrograph for a WAV file.
 pub fn make_spectrograph(input_wav: &Path, output_png: &Path) {
+    println!("Computing spectrograph...");
     let mut spectrograph = SpecOptionsBuilder::new(2.pow(12))
         .load_data_from_file(input_wav).unwrap()
         .build().unwrap();
@@ -56,7 +57,7 @@ pub fn save(au: &mut dyn AudioUnit, dur: f64) {
     let filename = Path::new("output/output.wav");
     println!("Saving .wav file ({dur} seconds)");
     wave1.save_wav16(filename).expect("Could not save wave.");
-    println!("File saved. Computing spectrograph...");
+    println!("File saved.");
     let png_file = Path::new("output/output.png");
     make_spectrograph(filename, png_file);
     println!("Done saving.");

@@ -73,7 +73,7 @@ pub fn sigma() -> ITerm {
     )
 }
 
-/// The subset of U such that for an element x, tau(sigma(x)) is not a "predecessor" of x.
+/// The subset of U such that for an element x, [tau]\([sigma]\(x)) is not a "predecessor" of x.
 /// See [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf) for details.
 pub fn delta() -> ITerm {
     iann(
@@ -106,13 +106,13 @@ pub fn preomega() -> ITerm {
     )
 }
 
-/// Tau of the set of inductive subsets of U.
+/// An element of U -- [tau] of the set of inductive subsets of U.
 /// See [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf) for details.
 pub fn omega() -> ITerm {
     iann(iapp(tau(), preomega()), u())
 }
 
-/// Proof that omega is "well-founded", meaning that it's in all inductive subsets of U.
+/// Proof that [omega] is "well-founded", meaning that it's in all inductive subsets of U.
 /// See [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf) for details.
 pub fn lem0() -> ITerm {
     iann(
@@ -133,13 +133,13 @@ pub fn lem0() -> ITerm {
     )
 }
 
-/// Sigma of omega.
+/// [Sigma](sigma) of [omega].
 /// See [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf) for details.
 pub fn sigma_omega() -> ITerm {
     iapp(sigma(), omega())
 }
 
-/// The proposition that omega is well-founded.
+/// The proposition that any subset of U which is in [sigma]\([omega]\) contains [tau]\([sigma]\([omega])).
 /// See [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf) for details.
 pub fn d() -> ITerm {
     ipi(
@@ -151,7 +151,7 @@ pub fn d() -> ITerm {
     )
 }
 
-/// A proof that omega is not well-founded.
+/// A proof that proposition [D](d) is false.
 /// See [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf) for details.
 pub fn lem2() -> ITerm {
     iann(
@@ -170,7 +170,7 @@ pub fn lem2() -> ITerm {
     )
 }
 
-/// A proof that omega is well-founded.
+/// A proof of proposition [D](d).
 /// See [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf) for details.
 pub fn lem3() -> ITerm {
     iann(
@@ -183,7 +183,7 @@ pub fn lem3() -> ITerm {
     )
 }
 
-/// Girard's Paradox, the combination of lemmas 2 and 3.
+/// Girard's Paradox, the combination of lemmas [2](lem2) and [3](lem3).
 /// See [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf) for details.
 pub fn girard() -> ITerm {
     iann(iapp(lem2(), lem3()), void())

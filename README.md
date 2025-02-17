@@ -1,8 +1,7 @@
-Soundproof transforms formalized mathematical proofs into music.
+Soundproof transforms formalized mathematical proofs (or propositions) into music.
 It is currently in a very preliminary stage and has a limited selection of terms. The audio synthesis is built with
 [FunDSP](https://github.com/SamiPerttu/fundsp). The mathematical proofs are constructed in a
-custom Rust implementation of [LambdaPi](https://www.andres-loeh.de/LambdaPi/), a simple
-version of the dependently-typed lambda calculus (originally in Haskell);
+custom Rust implementation of [LambdaPi](https://www.andres-loeh.de/LambdaPi/) (originally in Haskell);
 [Ilya Klyuchnikov's version](https://github.com/ilya-klyuchnikov/lambdapi) was a particular model.
 Artistic influences include Iannis Xenakis, Henry Flynt, Catherine Hennix, Drexciya, Perturbator, Sun Ra, and Odz Manouk.
 
@@ -15,11 +14,11 @@ connections](https://en.wikipedia.org/wiki/Curry%E2%80%93Howard_correspondence) 
 and proofs as elements of those types. For example, a function from type A to type B takes a proof of proposition A
 and produces a proof of proposition B, which corresponds to logical implication. 
 [Dependent types](https://en.wikipedia.org/wiki/Dependent_type) can represent essentially all mathematical propositions,
-and thus are used as the basis for many theorem provers, including 
+and thus dependently-typed lambda calculi are used as the basis for many theorem provers, including 
 [Coq](https://coq.inria.fr/)/[Rocq](https://rocq-prover.org/about#history), [Agda](https://github.com/agda/agda),
 and [Lean](https://lean-lang.org/).
 
-This project is based on [LambdaPi](https://www.andres-loeh.de/LambdaPi/), a very simple version
+This project's DTLC is based on [LambdaPi](https://www.andres-loeh.de/LambdaPi/), a very simple version
 of the DTLC whose first priority is ease of implementation.
 Notably, LambdaPi forgoes the universe hierarchy of usual dependent type theories for simplicity,
 so the type of Type is Type; this is essentially similar to the naive set theory idea 
@@ -31,11 +30,21 @@ which would incorporate mathematics but reject the idea of "discovering" truths 
 beautiful concepts.
 I'm using the version of the paradox due to [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf).
 
+The precise method of generating music is subject to change, but to sum up the term-structured 
+version of the translation: proof terms and types are structured naturally as trees, so we give 
+each sort of term/type a little fragment of melody. Then, for a particular term/type we wish to 
+translate, we give it a duration. We play the melody for the root of the tree over the whole
+duration, and then along with the root's melody we split up that duration and give it to the subtrees
+to play their translations in sequential order (potentially increased in pitch, etc. for distinction).
+The type-structured translation is more complicated, using the types of the terms and having more
+variation in the precise interpretation of different sorts of term/type, but follows a similar approach.
+
 Various desirable features of LambdaPi (equality types, a parser, etc.) have been left out for now,
 as they're not necessary for the paradox or for the musical side of the problem.
-I would also like to add a small-step evaluator and incorporate the (unlimited)
+I would like to add a small-step evaluator and incorporate the (unlimited)
 evaluation process of the non-normalizing term for Girard's Paradox, but there are some structural and
-conceptual obstacles before this can be done.
+conceptual obstacles before this can be done. I'm also experimenting with the musical side of things,
+which I'd like to structure in a more interesting way.
 
 Soundproof should always be compiled with `--release`, as the synth portions using FunDSP depend highly
 on optimizations that are not enabled in debug mode. It will not run in any reasonable time
@@ -51,9 +60,9 @@ Options:
           [default: weight]
 
           Possible values:
-          - linear: At each node, just splits time evenly among sequential children. Outer terms get much more time relative to deeper subtrees  
+          - linear: At each node, just splits time evenly among sequential children. Outer terms get much more time relative to deeper subtrees
           - weight: Splits time according to the size of the subtree, but adjusted to give a bit more weight to outer terms
-          - size:   Splits time according to the size of the subtree in terms of pure number of nodes, no increased weight of outer terms        
+          - size:   Splits time according to the size of the subtree in terms of pure number of nodes, no increased weight of outer terms
 
   -t, --time <TIME>
           In seconds. If unset, scales with size of tree

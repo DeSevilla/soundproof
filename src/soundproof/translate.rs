@@ -179,12 +179,16 @@ pub fn term_translate(term: ITerm, mel: MelodySelector) -> SoundTree {
 
 /// Translates ITerms into SoundTrees according to their type structure.
 /// Subterms have their types checked or inferred and have their own melodies combined with their types' melodies.
-// Should be initially called from [type_translate].
+/// The code here is basically an extended version of ITerm's [infer_type](ITerm::infer_type).
+/// Should be initially called from [type_translate].
 fn itype_translate_full(ii: usize, ctx: Context, term: &ITerm, depth: usize, mel: MelodySelector) -> Result<(Type, SoundTree), String> {
+    // the process for defining the sounds is fairly subjective - there's no one correct answer,
+    // we just want something that sounds good and represents the structure.
     let node_melody = SoundTree::sound(mel.imelody(term, depth));
     match term {
         ITerm::Ann(ct, cty) => {
-            let tytree = ctype_translate_full(ii, ctx.clone(), cty, Value::Star, depth + 1, mel)?; // is this the right way to structure this?
+            // should we modify something in this to present an annotation better? term-translate the type, maybe?
+            let tytree = ctype_translate_full(ii, ctx.clone(), cty, Value::Star, depth + 1, mel)?;
             let ty = cty.clone().eval(vec![]);
             let termtree = ctype_translate_full(ii, ctx, ct, ty.clone(), depth + 1, mel)?;  // should we have the type and term at diff depths?
             let tree = SoundTree::simul(&[node_melody, SoundTree::seq(&[termtree, tytree])]);

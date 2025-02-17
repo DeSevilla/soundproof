@@ -1,11 +1,11 @@
 use std::rc::Rc;
 
-// LambdaPi was originally written for Haskell and I had to translate it to Rust myself.
+// LambdaPi was originally written for Haskell and I translated it to rust.
 // Certain design choices (bidirectional typing, a term/value split, higher-order abstract syntax)
 // are more natural in Haskell than Rust, but they work out alright -- just requires a fair amount of 
 // cloning to deal with ownership and Boxes to make types finitely-sized.
 
-/// Term whose type can be inferred.
+/// Term whose type can be inferred. Types are included, as their type is always Star.
 #[derive(PartialEq, Debug, Clone)]
 pub enum ITerm {
     /// Type annotation. (term, type)
@@ -98,7 +98,7 @@ pub enum Neutral {
 
 /// Environment containing values of local variables for evaluation of de Bruijn indices.
 pub type Env = Vec<Value>;
-/// Used for values which necessarily represent types.
+/// We do our typechecking with values.
 pub type Type = Value;
 /// Context of free variables for typechecking.
 pub type Context = Vec<(Name, Type)>;

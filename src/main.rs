@@ -9,12 +9,12 @@ use types::*;
 use translate::*;
 use ast::{CTerm, ITerm};
 
-/// Implementation of a simple dependently-typed lambda calculus, 
-/// translated from Loeh, McBride, and Swierstra's [LambdaPi](https://www.andres-loeh.de/LambdaPi/LambdaPi.pdf)
+/// The "proof" side. Implementation of a simple dependently-typed lambda calculus, 
+/// translated from Löh, McBride, and Swierstra's [LambdaPi](https://www.andres-loeh.de/LambdaPi/LambdaPi.pdf)
 /// and in particular [Ilya Klyuchnikov's implementation](https://github.com/ilya-klyuchnikov/lambdapi/).
 /// See the AST submodule page for most of the operative pieces.
 pub mod lambdapi;
-/// Synths and utilities for generating audio.
+/// The "sound" side. Synths and utilities for generating audio.
 pub mod music;
 /// Translation from LambdaPi to music.
 pub mod soundproof;
@@ -128,7 +128,7 @@ impl MelodySelector {
 #[command(version, about, long_about=None)]
 pub struct Args {
     /// Determines how time is broken down between sequential segments.
-    #[arg(short, long, default_value="size")]
+    #[arg(short, long, default_value="weight")]
     scaling: Scaling,
     /// In seconds. If unset, scales with size of tree.
     #[arg(short, long)]

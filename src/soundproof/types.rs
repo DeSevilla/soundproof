@@ -81,6 +81,14 @@ pub struct Melody {
 
 impl Melody {
     /// Create a melody from a sequence of notes as integers in 12-tone equal temperament.
+    /// 
+    /// # Examples:
+    /// ```
+    /// use music::notes::{A, D, F};
+    /// use fundsp::hacker32::sine;
+    /// 
+    /// let mel = Melody::new_even(sine(), &[A, D, F, A]);
+    /// ```
     pub fn new_even(instrument: impl AudioUnit + 'static, notes: &[i8]) -> Self {
         if notes.len() < 3 {
             println!("wtf is with the notes even: {:?}", notes);
@@ -93,6 +101,14 @@ impl Melody {
     }
 
     /// Create a melody from a sequence of notes as integers in equal temperament, with specified durations.
+    /// 
+    /// # Examples:
+    /// ```
+    /// use music::notes::{B, C, E};
+    /// use fundsp::hacker32::sine;
+    /// 
+    /// let mel = Melody::new_timed(sine(), &[(B, 0.5), (C, 0.5), (E, 3.0)])
+    /// ```
     pub fn new_timed(instrument: impl AudioUnit + 'static, notes: &[(i8, f64)]) -> Self {
         Melody {
             instrument: unit(Box::new(instrument)),
@@ -110,6 +126,17 @@ impl Melody {
     // }
 
     /// Duration of the melody if played at its default speed. Used as a basis for sequencing at arbitrary durations.
+    /// 
+    /// # Examples:
+    /// 
+    /// ```
+    /// use music::notes::{B, C, E};
+    /// use fundsp::hacker32::sine;
+    /// 
+    /// let mel = Melody::new_timed(sine(), &[(B, 0.5), (C, 0.5), (E, 3.0)]);
+    /// let dur = mel.duration();
+    /// assert_eq!(dur, 4.0);
+    /// ```
     pub fn duration(&self) -> f64 {
         self.notes.iter().map(|(_, x)| x).sum()
     }
@@ -259,9 +286,9 @@ impl SoundTree {
                 for child in vec {
                     let ratio = match scaling {
                         Scaling::Linear => 1.0 / child_count as f64,
-                        Scaling::Size => child.subtree_weight() / self.weight(),
+                        Scaling::Weight => child.subtree_weight() / self.weight(),
                         // Scaling::SizeAligned => round_by(child.size_factor() / self.size_adjusted(), segment),
-                        Scaling::SizeRaw => child.size() as f64 / self.size() as f64,
+                        Scaling::Size => child.size() as f64 / self.size() as f64,
                     };
                     let new_time = duration * ratio;
                     child.generate_with(seq, start_time + time_elapsed, new_time, scaling);

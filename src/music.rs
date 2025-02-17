@@ -2,22 +2,19 @@ use std::path::Path;
 use fundsp::hacker32::*;
 use sonogram::{ColourGradient, FrequencyScale, RGBAColour, SpecOptionsBuilder};
 
+/// Synth instruments. Many of these are unused currently, but kept around for tinkering.
 pub mod instruments;
+/// Synth envelopes for controlling key presses. Many of these are unused currently, but kept around for tinkering.
 pub mod sequences;
+/// Constants and functions for twelve-tone equal temperament notes and converting them to frequencies.
 pub mod notes;
 
 const SAMPLE_RATE: f32 = 44100.0;
 
-pub fn save(au: &mut dyn AudioUnit, dur: f64) {
-    println!("Rendering .wav file ({dur} seconds)");
-    let mut wave1 = Wave::render(SAMPLE_RATE as f64, dur, au);
-    wave1.normalize();
-    let filename = Path::new("output/output.wav");
-    println!("Saving .wav file ({dur} seconds)");
-    wave1.save_wav16(filename).expect("Could not save wave.");
-    println!("File saved. Computing spectrograph...");
+/// Render and save a spectrograph for a WAV file.
+pub fn make_spectrograph(input_wav: &Path, output_png: &Path) {
     let mut spectrograph = SpecOptionsBuilder::new(2.pow(12))
-        .load_data_from_file(filename).unwrap()
+        .load_data_from_file(input_wav).unwrap()
         .build().unwrap();
     let mut spectrograph = spectrograph.compute();
     let mut gradient = ColourGradient::new();
@@ -42,12 +39,25 @@ pub fn save(au: &mut dyn AudioUnit, dur: f64) {
     gradient.add_colour(RGBAColour::new(225, 225, 200, 255)); // White
     gradient.add_colour(RGBAColour::new(255, 255, 255, 255)); // White
     gradient.add_colour(RGBAColour::new(255, 255, 255, 255)); // White
-    let png_file = Path::new("output/output.png");
     println!("Saving image...");
-    spectrograph.to_png(png_file,
+    spectrograph.to_png(output_png,
         FrequencyScale::Log,
         &mut gradient, 
         4096, 2048
     ).expect("Could not save as PNG");
+
+}
+
+/// Render an [AudioUnit] (in practice this is a [Sequencer]) to a WAV file and generate a spectrograph for it.
+pub fn save(au: &mut dyn AudioUnit, dur: f64) {
+    println!("Rendering .wav file ({dur} seconds)");
+    let mut wave1 = Wave::render(SAMPLE_RATE as f64, dur, au);
+    wave1.normalize();
+    let filename = Path::new("output/output.wav");
+    println!("Saving .wav file ({dur} seconds)");
+    wave1.save_wav16(filename).expect("Could not save wave.");
+    println!("File saved. Computing spectrograph...");
+    let png_file = Path::new("output/output.png");
+    make_spectrograph(filename, png_file);
     println!("Done saving.");
 }

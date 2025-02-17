@@ -2,16 +2,15 @@
 /// Abstract syntax tree (AST) structs for the lambda calculus.
 pub mod ast;
 /// Typechecking of lambda calculus terms. Code is an impl on the AST types.
-#[doc(hidden)]
 pub mod check;
 /// Evaluation of lambda calculus terms. Code is an impl on the AST types.
-#[doc(hidden)]
 pub mod eval;
 /// Functions for rendering terms and types as strings.
 pub mod print;
 /// Functions for constructing and modifying terms beyond the basic struct definitions.
 pub mod term;
 
+// this module structure is essentially Klyuchnikov's
 use ast::*;
 use term::*;
 use check::*;
@@ -57,7 +56,7 @@ pub fn sets_of_u() -> ITerm {
     iapp(sets_of(), u())
 }
 
-/// A term of type P(P(U)) -> U.
+/// A term of type P(P(U)) -> U. See [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf) for details.
 pub fn tau() -> ITerm {
     iann(
         clam(clam(clam(clam(iapp(bnd(3),
@@ -66,7 +65,7 @@ pub fn tau() -> ITerm {
     )
 }
 
-/// A term of type U -> P(P(U)).
+/// A term of type U -> P(P(U)). See [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf) for details.
 pub fn sigma() -> ITerm {
     iann(
         clam(iapp(iapp(bnd(0), u()), tau())),
@@ -74,7 +73,8 @@ pub fn sigma() -> ITerm {
     )
 }
 
-
+/// The subset of U such that for an element x, tau(sigma(x)) is not a "predecessor" of x.
+/// See [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf) for details.
 pub fn delta() -> ITerm {
     iann(
         clam(ipi(
@@ -91,6 +91,8 @@ pub fn delta() -> ITerm {
     )
 }
 
+/// The set of "inductive" subsets of U, which is itself an element of P(P(U)).
+/// See [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf) for details.
 pub fn preomega() -> ITerm {
     iann(
         clam(ipi(
@@ -104,11 +106,14 @@ pub fn preomega() -> ITerm {
     )
 }
 
-/// A term of type U.
+/// Tau of the set of inductive subsets of U.
+/// See [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf) for details.
 pub fn omega() -> ITerm {
     iann(iapp(tau(), preomega()), u())
 }
 
+/// Proof that omega is "well-founded", meaning that it's in all inductive subsets of U.
+/// See [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf) for details.
 pub fn lem0() -> ITerm {
     iann(
         clam(clam(iapp(iapp(bnd(0), omega()), clam(iapp(bnd(1), iapp(tau(), iapp(sigma(), bnd(0)))))))),
@@ -128,13 +133,14 @@ pub fn lem0() -> ITerm {
     )
 }
 
+/// Sigma of omega.
+/// See [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf) for details.
 pub fn sigma_omega() -> ITerm {
     iapp(sigma(), omega())
 }
 
-/// The type: forall (x: P(U)), forall (y: sigma(omega)(x)), x(tau(sigma(omega))).
-/// In other words, the proposition that every subset of U which is in
-/// sigma(omega) must contain tau(sigma(omega)).
+/// The proposition that omega is well-founded.
+/// See [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf) for details.
 pub fn d() -> ITerm {
     ipi(
         sets_of_u(),
@@ -145,7 +151,8 @@ pub fn d() -> ITerm {
     )
 }
 
-/// A proof of Not(D).
+/// A proof that omega is not well-founded.
+/// See [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf) for details.
 pub fn lem2() -> ITerm {
     iann(
         iapp(iapp(lem0(), delta()), clam(
@@ -163,7 +170,8 @@ pub fn lem2() -> ITerm {
     )
 }
 
-/// A proof of D.
+/// A proof that omega is well-founded.
+/// See [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf) for details.
 pub fn lem3() -> ITerm {
     iann(
         clam(
@@ -175,12 +183,14 @@ pub fn lem3() -> ITerm {
     )
 }
 
-/// Girard's Paradox.
+/// Girard's Paradox, the combination of lemmas 2 and 3.
+/// See [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf) for details.
 pub fn girard() -> ITerm {
     iann(iapp(lem2(), lem3()), void())
 }
 
 /// Girard's Paradox, with the lemmas reduced as far as possible.
+/// See [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf) for details.
 pub fn girard_reduced() -> ITerm {
     let vty = quote0(ipi(d(), void()).eval(vec![]));
     let vlem2 = iann(quote0(lem2().eval(vec![])), vty);
@@ -188,7 +198,7 @@ pub fn girard_reduced() -> ITerm {
     iann(iapp(vlem2, vlem3), void())
 }
 
-/// for all types X, a function from False to X. Ex falso sequitur quodlibet.
+/// For all types X, a function from False to X. Ex falso sequitur quodlibet.
 pub fn exfalso() -> ITerm {
     iann(
         clam(
@@ -213,6 +223,7 @@ pub fn exfalso() -> ITerm {
     )
 }
 
+/// Make sure a term typechecks, and (if it can be evaluated) that evaluation preserves type.
 pub fn validate(name: &str, term: &ITerm, eval: bool) {
     println!("{name}");
     // println!("{term}");

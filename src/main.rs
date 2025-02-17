@@ -9,7 +9,10 @@ use types::*;
 use translate::*;
 use ast::{CTerm, ITerm};
 
-/// Implementation of a simple dependently-typed lambda calculus. See the AST submodule page for most of the operative pieces.
+/// Implementation of a simple dependently-typed lambda calculus, 
+/// translated from Loeh, McBride, and Swierstra's [LambdaPi](https://www.andres-loeh.de/LambdaPi/LambdaPi.pdf)
+/// and in particular [Ilya Klyuchnikov's implementation](https://github.com/ilya-klyuchnikov/lambdapi/).
+/// See the AST submodule page for most of the operative pieces.
 pub mod lambdapi;
 /// Synths and utilities for generating audio.
 pub mod music;
@@ -33,20 +36,21 @@ pub enum Scaling {
     /// At each node, just splits time evenly among sequential children. Outer terms get much more time relative to deeper subtrees.
     Linear,
     /// Splits time according to the size of the subtree, but adjusted to give a bit more weight to outer terms.
-    Size,
+    Weight,
     // SizeAligned,  //goal here was to align to a rhythm but this has conceptual/structural issues
-    /// Splits time according to the size of the subtree, no increased weight of outer terms.
-    SizeRaw,
+    /// Splits time according to the size of the subtree in terms of pure number of nodes, no increased weight of outer terms.
+    Size,
 }
 
-/// Predefined terms of the dependently typed lambda calculus. Terms are drawn from those used to construct Girard's Paradox.
+/// Predefined terms of the dependently typed lambda calculus. Options are drawn from terms used to construct Girard's Paradox.
+/// See [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf) for details of the paradox.
 #[derive(PartialEq, Eq, Clone, Copy, Debug, ValueEnum)]
 pub enum NamedTerm {
     /// The type of types.
     Star,
     // SetsOfNat, //these two commented out are not supported by the current preliminary melody functions
     // ExFalso,
-    /// The "universe" type U used to derive Girard's Paradox: forall (X :: *) . (P(P(X)) -> X) -> P(P(X)).
+    /// The "universe" type U used to derive Girard's Paradox: `forall (X :: *) . (P(P(X)) -> X) -> P(P(X))`.
     U,
     /// A term of type P(P(U)) -> U.
     Tau,
@@ -119,21 +123,21 @@ impl MelodySelector {
     }
 }
 
-/// Command-line arguments to Soundproof.
+/// A system which converts dependently-typed lambda calculus into music, with a focus on Girard's Paradox.
 #[derive(Parser, Debug)]
 #[command(version, about, long_about=None)]
 pub struct Args {
     /// Determines how time is broken down between sequential segments.
-    #[arg(short, long, default_value="size")]
+    #[arg(short, long, default_value="weight")]
     scaling: Scaling,
-    /// In seconds. If unset, scales with size of term.
+    /// In seconds. If unset, scales with size of tree.
     #[arg(short, long)]
     time: Option<f64>,
     /// Predefined terms of the dependently typed lambda calculus.
     #[arg(short, long, default_value="girard-reduced")]
     value: NamedTerm,
     /// Determines which set of melodies to use.
-    #[arg(short, long, default_value="fourth")]
+    #[arg(short, long, default_value="e")]
     melody: MelodySelector,
     /// How to assign sound-tree structure to a term.
     #[arg(short('S'), long, default_value="type")]
@@ -146,34 +150,9 @@ pub fn main() {
     //validation just makes sure it typechecks; we can't evaluate the paradox or it'll run forever.
     validate(&format!("{:?}", args.value), &term, false);
     let tree = match args.structure {
-        Structure::Term => iterm_translate(term, 0, args.melody),
-        Structure::Type => itype_translate(term, args.melody),
-        Structure::Test => {
-            let test_terms = [
-            	ITerm::Star,
-            	ITerm::Ann(ITerm::Star.into(), ITerm::Star.into()),
-            	ITerm::Pi(ITerm::Star.into(), ITerm::Star.into()),
-            	ITerm::Bound(0),
-            	ITerm::Free(ast::Name::Local(0)),
-            	ITerm::App(Box::new(ITerm::Star), ITerm::Star.into()),
-            	ITerm::Zero,
-            	ITerm::Fin(ITerm::Zero.into()),
-            ];
-            let mut sounds = Vec::new();
-            let depth = 2;
-            for term in test_terms {
-                let onemel = SoundTree::sound(args.melody.imelody(&term, depth));
-                sounds.push(onemel.clone());
-                sounds.push(onemel.clone());
-                sounds.push(onemel.clone());
-                sounds.push(onemel)
-            }
-            sounds.push(SoundTree::sound(args.melody.cmelody(&CTerm::Lam(Box::new(ITerm::Star.into())), depth)));
-            sounds.push(SoundTree::sound(args.melody.cmelody(&CTerm::Lam(Box::new(ITerm::Star.into())), depth)));
-            sounds.push(SoundTree::sound(args.melody.cmelody(&CTerm::Lam(Box::new(ITerm::Star.into())), depth)));
-            sounds.push(SoundTree::sound(args.melody.cmelody(&CTerm::Lam(Box::new(ITerm::Star.into())), depth)));
-            SoundTree::seq(&sounds)
-        }
+        Structure::Term => term_translate(term, args.melody),
+        Structure::Type => type_translate(term, args.melody),
+        Structure::Test => test_tree(args.melody),
     };
     let time = args.time.unwrap_or(std::cmp::min(tree.size(), 1200) as f64);
     let mut seq = Sequencer::new(false, 1);

@@ -1,10 +1,10 @@
-#![allow(unused)]
 use fundsp::hacker32::*;
-use std::{f32::consts::{E, PI}, fs};
+use std::f32::consts::{E, PI};
 
 use crate::music::{notes::BASE_HZ, sequences::onepress};
 
-/* various little synth things, only some of which are actually used */
+// various synths, only some of which are actually used
+// we keep the library around for tinkering
 
 pub fn flanger_default() -> An<impl AudioNode<Inputs=U1, Outputs=U1>> {
     flanger(0.9, 0.005, 0.010, |t| lerp11(0.005, 0.010, sin_hz(0.7, t)))
@@ -15,15 +15,15 @@ pub fn additive_first(instrument: An<impl AudioNode<Inputs=U1, Outputs=U1>>, inc
     let i1 = 0.01 * incr;
     let i5 = 0.05 * incr;
     let i10 = 0.1 * incr;
-    let i12 = 0.125 * incr;
+    // let i12 = 0.125 * incr;
     let i20 = 0.2 * incr;
     let i25 = 0.25 * incr;
-    let i30 = 0.3 * incr;
-    let i40 = 0.4 * incr;
+    // let i30 = 0.3 * incr;
+    // let i40 = 0.4 * incr;
     let i50 = 0.5 * incr;
     let i60 = 0.6 * incr;
     let i75 = 0.75 * incr;
-    let i80 = 0.8 * incr;
+    // let i80 = 0.8 * incr;
     let i90 = 0.9 * incr;
     (instrument.clone() * adsr_live(i90, i5, 0.25, i1)) & 
     ((mul(2.0) >> instrument.clone()) * adsr_live(i25, i25, 0.1, i20)) &
@@ -169,7 +169,7 @@ pub fn violinish() -> An<impl AudioNode<Inputs=U1, Outputs=U1>> {
 }
 
 pub fn invert() -> An<impl AudioNode<Inputs=U1, Outputs=U1>> {
-    envelope2(|t, x| 1.0/x)
+    envelope2(|_t, x| 1.0/x)
 }
 
 pub fn wobbly_sine() -> An<impl AudioNode<Inputs=U1, Outputs=U1>> {
@@ -259,7 +259,7 @@ pub fn five_equivalents(instrument: An<impl AudioNode<Inputs=U1, Outputs=U1>>) -
         // (mul(0.5)           | pass()             | mul(2.0)           | mul(4.0)           | mul(8.0)) >>
         stacki::<U5, _, _>(|i| mul(2.pow(i) as f32)) >>
         // (instrument.clone() | instrument.clone() | instrument.clone() | instrument.clone() | instrument.clone()) >>
-        stacki::<U5, _, _>(|i| instrument.clone()) >>
+        stacki::<U5, _, _>(|_i| instrument.clone()) >>
         stacki::<U5, _, _>(|i| mul(0.8.pow(i as f32))) >>
         // (mul(0.4)           | pass()             | mul(0.4)           | mul(0.2)           | mul(0.1)) >>
     join::<U5>()

@@ -1,8 +1,8 @@
-#![allow(unused)]
 use fundsp::hacker32::*;
 use crate::music::notes::note_hz;
 
-/* various envelope things, only some of which are actually used */
+// various envelopes for synths, most of which aren't currently used
+// we keep them around for tinkering
 
 pub fn major_chord_notes(notes: Vec<i8>, octave: i8, increment: f32, instrument: An<impl AudioNode<Inputs=U1, Outputs=U1>>) ->
         An<impl AudioNode<Inputs=U0, Outputs=U1>> {
@@ -102,7 +102,7 @@ pub fn delay_envelope(notes: Vec<i8>, octave: i8, increment: f32) -> An<impl Aud
     })
 }
 
-fn adsr_equivalents(instrument: An<impl AudioNode<Inputs=U1, Outputs=U1>>, incr: f32) -> An<impl AudioNode<Inputs=U1, Outputs=U1>> {
+pub fn adsr_equivalents(instrument: An<impl AudioNode<Inputs=U1, Outputs=U1>>, incr: f32) -> An<impl AudioNode<Inputs=U1, Outputs=U1>> {
     let afac = 0.1;
     let dfac = 2.0;
     let sfac = 0.2;

@@ -348,7 +348,7 @@ impl SoundTree {
                 let base_lean = dir * scale / 2.0;
                 // for (ii, elem) in vec.iter().enumerate() {
                 for elem in vec {
-                    let local_lean = (base_lean - dir * elem.size() as f32) / scale; // can't divide by 0 bc if scale is 0 vec is empty
+                    let local_lean = (base_lean - dir * elem.size() as f32) * 0.8 / scale; // can't divide by 0 bc if scale is 0 vec is empty
                     elem.generate_with(seq, start_time, duration, scaling, lean + local_lean);
                 }
             },

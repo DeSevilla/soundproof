@@ -28,7 +28,7 @@ term I'm focusing on representing musically at the moment.
 The choice of a paradox is in part due to [Henry Flynt's idea of "concept art"](https://henryflynt.org/aesthetics/conart.html), 
 which would incorporate mathematics but reject the idea of "discovering" truths in favor of constructing
 beautiful concepts.
-I'm using the version of the paradox due to [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf).
+I'm using the simplified version of the paradox due to [Hurkens](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf).
 
 The precise method of generating music is subject to change, but to sum up the term-structured 
 version of the translation: proof terms and types are structured naturally as trees, so we give 

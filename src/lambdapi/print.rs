@@ -25,7 +25,7 @@ fn varname(i: usize) -> String {
         val /= ct;
     }
     result.push(VARCHARS[val % ct] as char);
-    result
+    result.chars().rev().collect()
 }
 
 fn i_print(p: usize, i: usize, term: ITerm) -> String {
@@ -35,6 +35,7 @@ fn i_print(p: usize, i: usize, term: ITerm) -> String {
         ITerm::Pi(cterm, cterm1) => parens_if(p > 0, "forall (".to_owned() + &varname(i + 1) + " : " + &c_print(p, i, cterm) + ") . " + &c_print(p, i + 1, cterm1)),
         ITerm::Bound(k) => varname(i - k - 1),
         ITerm::Free(Name::Global(name)) => name,
+        ITerm::Free(Name::Local(n)) => varname(i + 1200),
         ITerm::Free(n) => format!("{n:?}"),
         ITerm::App(f, x) => parens_if(p > 2, i_print(2, i, *f) + " " + &c_print(3, i, x)),
         ITerm::Nat => "Nat".to_owned(),

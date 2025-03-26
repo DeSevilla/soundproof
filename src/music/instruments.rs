@@ -265,6 +265,17 @@ pub fn five_equivalents(instrument: An<impl AudioNode<Inputs=U1, Outputs=U1>>) -
     join::<U5>()
 }
 
+pub fn three_equivalents(instrument: An<impl AudioNode<Inputs=U1, Outputs=U1>>) -> An<impl AudioNode<Inputs=U1, Outputs=U1>> {
+    split::<U3>() >>
+        // (mul(0.5)           | pass()             | mul(2.0)           | mul(4.0)           | mul(8.0)) >>
+        stacki::<U3, _, _>(|i| mul(2.pow(i) as f32)) >>
+        // (instrument.clone() | instrument.clone() | instrument.clone() | instrument.clone() | instrument.clone()) >>
+        stacki::<U3, _, _>(|_i| instrument.clone()) >>
+        stacki::<U3, _, _>(|i| mul(0.8.pow(i as f32))) >>
+        // (mul(0.4)           | pass()             | mul(0.4)           | mul(0.2)           | mul(0.1)) >>
+    join::<U3>()
+}
+
 // pub fn read_spectrum(filename: &str, instrument: An<impl AudioNode<Inputs=U1, Outputs=U1> + 'static>) -> An<impl AudioNode<Inputs=U0, Outputs=U1>> {
 //     println!("Reading {filename}");
 //     let file_str = fs::read_to_string(format!("input/{filename}")).expect(&format!("Could not open {filename}"));

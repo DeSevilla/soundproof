@@ -4,6 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-fundsp = "0.19"
+fundsp = "0.20"
 sonogram = "0.7.1"
 clap = { version = "4.5.16", features = ["derive"] }

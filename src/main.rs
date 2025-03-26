@@ -42,6 +42,12 @@ pub enum Scaling {
     Size,
 }
 
+impl Scaling {
+    fn exponent() -> f64 {
+        0.85
+    }
+}
+
 /// Predefined terms of the dependently typed lambda calculus. Options are drawn from terms used to construct Girard's Paradox.
 /// See [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf) for details of the paradox.
 #[derive(PartialEq, Eq, Clone, Copy, Debug, ValueEnum)]
@@ -93,6 +99,8 @@ pub enum MelodySelector {
     D,
     /// Melody suite with some hints of dissonance. See [imelody5] and [cmelody5].
     E,
+    /// Like E, but switched around and more textured
+    F,
     /// Same melodies as B and C but exclusively as sines. See [imelody_oneinstr] and [cmelody_oneinstr].
     PureSine
 }
@@ -106,6 +114,7 @@ impl MelodySelector {
             MelodySelector::C => imelody3(term, depth),
             MelodySelector::D => imelody4(term, depth),
             MelodySelector::E => imelody5(term, depth),
+            MelodySelector::F => imelody6(term, depth),
             MelodySelector::PureSine => imelody_oneinstr(sine(), term, depth),
         }
     }
@@ -118,6 +127,7 @@ impl MelodySelector {
             MelodySelector::C => cmelody3(term, depth),
             MelodySelector::D => cmelody4(term, depth),
             MelodySelector::E => cmelody5(term, depth),
+            MelodySelector::F => cmelody6(term, depth),
             MelodySelector::PureSine => cmelody_oneinstr(sine(), term, depth),
         }
     }
@@ -154,11 +164,15 @@ pub fn main() {
         Structure::Type => type_translate(term, args.melody),
         Structure::Test => test_tree(args.melody),
     };
+    // let txt = tree.metadata().name;
+    // println!("{txt}");
     let time = args.time.unwrap_or(std::cmp::min(tree.size(), 1200) as f64);
-    let mut seq = Sequencer::new(false, 1);
+    let mut seq = Sequencer::new(false, 2);
     println!("Sequencing...");
     tree.generate_with(&mut seq, 0.0, time, args.scaling);
-    let mut output = unit::<U0, U1>(Box::new(seq)) >> shape(Adaptive::new(0.1, Tanh(0.5)));
+    let mut output = unit::<U0, U2>(Box::new(seq)) >> 
+        stacki::<U2, _, _>(|_| shape(Adaptive::new(0.1, Tanh(0.5)))) >> 
+        stacki::<U2, _, _>(|_| lowpass_hz(2000.0, 1.0));
     save(&mut output, time);
     println!("Done");
 }

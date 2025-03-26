@@ -208,7 +208,7 @@ static SIGN: AtomicU32 = AtomicU32::new(0);
 #[derive(Clone, Debug, PartialEq)]
 pub struct TreeMetadata {
     pub name: String,
-    pub lean: f32,
+    // pub lean: f32,
 }
 
 impl SoundTree {
@@ -219,7 +219,7 @@ impl SoundTree {
         Self::Sound(Rc::new(sound), TreeMetadata { 
             name: term.to_string(),
             // name: "".to_owned(),
-            lean: 0.0,
+            // lean: 0.0,
         })
     }
 
@@ -244,7 +244,7 @@ impl SoundTree {
             }
         }
         names += "]";
-        Self::Seq(result, TreeMetadata { name: names, lean: 0.0 })
+        Self::Seq(result, TreeMetadata { name: names })
     }
 
     /// Constructs a SoundTree which plays its subtrees simultaneously.
@@ -268,32 +268,32 @@ impl SoundTree {
             }
         }
         names += "}";
-        Self::Simul(result, TreeMetadata { name: names, lean: 0.0 })
+        Self::Simul(result, TreeMetadata { name: names })
     }
 
-    pub fn set_leans(&mut self, lean: f32) {
-        match self {
-            SoundTree::Simul(subtrees, meta) => {
-                let val = SIGN.fetch_add(1, Ordering::Relaxed);
-                let dir = if val % 2 == 0 { 1.0 } else { -1.0 };
-                // print!("{}", if dir > 0.0 { "l" } else { "r" });
-                meta.lean = lean;
-                let base_lean = (subtrees.len() as f32) * dir / 2.0;  // could also be based on size
-                for (ii, tree) in subtrees.iter_mut().enumerate() {
-                    tree.set_leans(lean + (base_lean + ii as f32) * 0.8_f32);
-                }
-            },
-            SoundTree::Seq(subtrees, meta) => {
-                meta.lean = lean;
-                for tree in subtrees {
-                    tree.set_leans(lean);
-                }
-            },
-            SoundTree::Sound(_, meta) => {
-                meta.lean = lean;
-            },
-        }
-    }
+    // pub fn set_leans(&mut self, lean: f32) {
+    //     match self {
+    //         SoundTree::Simul(subtrees, meta) => {
+    //             let val = SIGN.fetch_add(1, Ordering::Relaxed);
+    //             let dir = if val % 2 == 0 { 1.0 } else { -1.0 };
+    //             // print!("{}", if dir > 0.0 { "l" } else { "r" });
+    //             meta.lean = lean;
+    //             let base_lean = (subtrees.len() as f32) * dir / 2.0;  // could also be based on size
+    //             for (ii, tree) in subtrees.iter_mut().enumerate() {
+    //                 tree.set_leans(lean + (base_lean + ii as f32) * 0.8_f32);
+    //             }
+    //         },
+    //         SoundTree::Seq(subtrees, meta) => {
+    //             meta.lean = lean;
+    //             for tree in subtrees {
+    //                 tree.set_leans(lean);
+    //             }
+    //         },
+    //         SoundTree::Sound(_, meta) => {
+    //             meta.lean = lean;
+    //         },
+    //     }
+    // }
 
     pub fn metadata(&self) -> &TreeMetadata {
         match self {
@@ -335,33 +335,41 @@ impl SoundTree {
     }
 
     /// Generate audio into a [Sequencer] for the tree, distributing subtree durations by the selected [scaling](Scaling).
-    pub fn generate_with(&self, seq: &mut Sequencer, start_time: f64, duration: f64, scaling: Scaling) {
-        // this function is mostly like Sequenceable.sequence but carries scaling info around
-        // we could refactor to use the trait but then we'd have to carry scaling on every individual tree node instead
-        // although that could allow within-tree variation.... but we're not there yet.
+    pub fn generate_with(&self, seq: &mut Sequencer, start_time: f64, duration: f64, scaling: Scaling, lean: f32) {
+        // this function is mostly like Sequenceable.sequence but carries additional info around
+        // we could refactor to use the trait but then we'd have to carry scaling/lean in TreeMetadata instead
+        // setup would be tricky but could allow within-tree variation.... but we're not there yet.
         match self {
             SoundTree::Simul(vec, _) => {
+                let val = SIGN.fetch_add(1, Ordering::Relaxed);
+                let dir = if val % 2 == 0 { 1.0 } else { -1.0 };
+                // let base_lean = (vec.len() as f32) * dir / 2.0;
+                let scale = (self.size() - 1) as f32;
+                let base_lean = dir * scale / 2.0;
+                // for (ii, elem) in vec.iter().enumerate() {
                 for elem in vec {
-                    elem.generate_with(seq, start_time, duration, scaling);
+                    let local_lean = (base_lean - dir * elem.size() as f32) / scale; // can't divide by 0 bc if scale is 0 vec is empty
+                    elem.generate_with(seq, start_time, duration, scaling, lean + local_lean);
                 }
             },
             SoundTree::Seq(vec, _) => {
-                let child_count = vec.len();
+                // let child_count = vec.len();
                 let mut time_elapsed = 0.0;
                 for child in vec {
-                    let ratio = match scaling {
-                        Scaling::Linear => 1.0 / child_count as f64,
-                        Scaling::Weight => child.subtree_weight(Scaling::exponent()) / self.weight(Scaling::exponent()),
-                        // we do want scaling exponent to be an argument but for now...
-                        // Scaling::SizeAligned => round_by(child.size_factor() / self.size_adjusted(), segment),
-                        Scaling::Size => child.size() as f64 / self.size() as f64,
-                    };
+                    let ratio = scaling.child_scale(child) / scaling.parent_scale(self);
+                    // let ratio = match scaling {
+                    //     Scaling::Linear => 1.0 / vec.len() as f64,
+                    //     Scaling::Weight => child.subtree_weight(Scaling::exponent()) / self.weight(Scaling::exponent()),
+                    //     // we do want scaling exponent to be an argument but for now...
+                    //     // Scaling::SizeAligned => round_by(child.size_factor() / self.size_adjusted(), segment),
+                    //     Scaling::Size => child.size() as f64 / self.size() as f64,
+                    // };
                     let new_time = duration * ratio;
-                    child.generate_with(seq, start_time + time_elapsed, new_time, scaling);
+                    child.generate_with(seq, start_time + time_elapsed, new_time, scaling, lean);
                     time_elapsed += new_time;
                 }
             },
-            SoundTree::Sound(sound, meta) => sound.sequence(seq, start_time, duration, meta.lean),
+            SoundTree::Sound(sound, _) => sound.sequence(seq, start_time, duration, lean),
         }
     }
 }

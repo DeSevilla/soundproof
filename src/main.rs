@@ -46,6 +46,26 @@ impl Scaling {
     fn exponent() -> f64 {
         0.85
     }
+
+    fn child_scale(&self, child: &SoundTree) -> f64 {
+        match self {
+            Scaling::Linear => 1.0,
+            Scaling::Weight => child.subtree_weight(Self::exponent()),
+            Scaling::Size => child.size() as f64,
+        }
+    }
+
+    fn parent_scale(&self, parent: &SoundTree) -> f64 {
+        match self {
+            Scaling::Linear => match parent {
+                SoundTree::Simul(vec, _) => vec.len() as f64,
+                SoundTree::Seq(vec, _) => vec.len() as f64,
+                SoundTree::Sound(_, _) => 1.0,
+            },
+            Scaling::Weight => parent.weight(Self::exponent()),
+            Scaling::Size => parent.size() as f64,
+        }
+    }
 }
 
 /// Predefined terms of the dependently typed lambda calculus. Options are drawn from terms used to construct Girard's Paradox.
@@ -169,7 +189,7 @@ pub fn main() {
     let time = args.time.unwrap_or(std::cmp::min(tree.size(), 1200) as f64);
     let mut seq = Sequencer::new(false, 2);
     println!("Sequencing...");
-    tree.generate_with(&mut seq, 0.0, time, args.scaling);
+    tree.generate_with(&mut seq, 0.0, time, args.scaling, 0.0);
     let mut output = unit::<U0, U2>(Box::new(seq)) >> 
         stacki::<U2, _, _>(|_| shape(Adaptive::new(0.1, Tanh(0.5)))) >> 
         stacki::<U2, _, _>(|_| lowpass_hz(2000.0, 1.0));

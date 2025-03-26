@@ -195,16 +195,16 @@ pub fn cmelody_oneinstr(instrument: impl AudioUnit + 'static, term: &CTerm, dept
 /// Translates [ITerm]s into [SoundTree]s according to their type structure.
 /// Subterms have their types checked or inferred and have their melodies combined with their types' melodies.
 pub fn type_translate(term: ITerm, mel: MelodySelector) -> SoundTree {
-    let mut tree = itype_translate_full(0, vec![], &term, 1, mel).unwrap().1;
-    tree.set_leans(0.0);
+    let tree = itype_translate_full(0, vec![], &term, 1, mel).unwrap().1;
+    // tree.set_leans(0.0);
     tree
 }
 
 /// Translates [ITerm]s into [SoundTree]s according to their term structure.
 /// Subterms are converted to melodies and run along with their outer terms.
 pub fn term_translate(term: ITerm, mel: MelodySelector) -> SoundTree {
-    let mut tree = iterm_translate_full(&term, 0, mel);
-    tree.set_leans(0.0);
+    let tree = iterm_translate_full(&term, 0, mel);
+    // tree.set_leans(0.0);
     tree
 }
 

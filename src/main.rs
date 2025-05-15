@@ -4,10 +4,11 @@ use fundsp::hacker32::*;
 use clap::*;
 use lambdapi::*;
 use soundproof::*;
+use soundproof::select::*;
 use music::*;
 use types::*;
 use translate::*;
-use ast::{CTerm, ITerm};
+use ast::*;
 
 /// The "proof" side. Implementation of a simple dependently-typed lambda calculus, 
 /// translated from Löh, McBride, and Swierstra's [LambdaPi](https://www.andres-loeh.de/LambdaPi/LambdaPi.pdf)
@@ -106,10 +107,12 @@ impl NamedTerm {
     }
 }
 
-/// Determines which set of melodies to use when generating melodies for a term.
+
+
+/// Command-line options to determine which set of melodies to use when generating melodies for a term.
 #[derive(PartialEq, Eq, Clone, Copy, Debug, ValueEnum)]
-pub enum MelodySelector {
-    /// First, highly arbitary melody suite. See [imelody1] and [cmelody2] (there is no cmelody1).
+pub enum AudioSelectorOptions {
+     /// First, highly arbitary melody suite. See [imelody1] and [cmelody2] (there is no cmelody1).
     A,
     /// Melodies based on B, C, E, and G with arbitrarily-chosen instruments. See [imelody2] and [cmelody2].
     B,
@@ -122,33 +125,22 @@ pub enum MelodySelector {
     /// Like E, but switched around and more textured
     F,
     /// Same melodies as B and C but exclusively as sines. See [imelody_oneinstr] and [cmelody_oneinstr].
-    PureSine
+    PureSine,
+    /// Pulled from audio files
+    Concrete,
 }
 
-impl MelodySelector {
-    /// Get the appropriate melody for a certain type of [ITerm].
-    fn imelody(&self, term: &ITerm, depth: usize) -> Melody {
-        match self {
-            MelodySelector::A => imelody1(term, depth),
-            MelodySelector::B => imelody2(term, depth),
-            MelodySelector::C => imelody3(term, depth),
-            MelodySelector::D => imelody4(term, depth),
-            MelodySelector::E => imelody5(term, depth),
-            MelodySelector::F => imelody6(term, depth),
-            MelodySelector::PureSine => imelody_oneinstr(sine(), term, depth),
-        }
-    }
-
-    /// Get the appropriate melody for a certain type of [CTerm].
-    fn cmelody(&self, term: &CTerm, depth: usize) -> Melody {
-        match self {
-            MelodySelector::A => cmelody2(term, depth),
-            MelodySelector::B => cmelody2(term, depth),
-            MelodySelector::C => cmelody3(term, depth),
-            MelodySelector::D => cmelody4(term, depth),
-            MelodySelector::E => cmelody5(term, depth),
-            MelodySelector::F => cmelody6(term, depth),
-            MelodySelector::PureSine => cmelody_oneinstr(sine(), term, depth),
+impl From<AudioSelectorOptions> for MelodySelector {
+    fn from(value: AudioSelectorOptions) -> Self {
+        match value {
+            AudioSelectorOptions::A => Self::A,
+            AudioSelectorOptions::B => Self::B,
+            AudioSelectorOptions::C => Self::C,
+            AudioSelectorOptions::D => Self::D,
+            AudioSelectorOptions::E => Self::E, 
+            AudioSelectorOptions::F => Self::F,
+            AudioSelectorOptions::PureSine => Self::PureSine,
+            AudioSelectorOptions::Concrete => Self::Concrete(ClipSelector::names()),
         }
     }
 }
@@ -167,22 +159,25 @@ pub struct Args {
     #[arg(short, long, default_value="girard-reduced")]
     value: NamedTerm,
     /// Determines which set of melodies to use.
-    #[arg(short, long, default_value="e")]
-    melody: MelodySelector,
+    #[arg(short, long, default_value="f")]
+    melody: AudioSelectorOptions,
     /// How to assign sound-tree structure to a term.
     #[arg(short('S'), long, default_value="type")]
     structure: Structure,
 }
 
 pub fn main() {
+    // let wave = Wave::load("output/malhombrechords.wav").unwrap();
+    // let wave = retime_wave(wave, 6.0);
+    // wave.save_wav32("output/malhombreslow.wav").unwrap();
     let args = Args::parse();
     let term = args.value.term();
     //validation just makes sure it typechecks; we can't evaluate the paradox or it'll run forever.
     validate(&format!("{:?}", args.value), &term, false);
     let tree = match args.structure {
-        Structure::Term => term_translate(term, args.melody),
-        Structure::Type => type_translate(term, args.melody),
-        Structure::Test => test_tree(args.melody),
+        Structure::Term => term_translate(term, args.melody.into()),
+        Structure::Type => type_translate(term, args.melody.into()),
+        Structure::Test => test_tree(args.melody.into()),
     };
     // let txt = tree.metadata().name;
     // println!("{txt}");
@@ -190,9 +185,23 @@ pub fn main() {
     let mut seq = Sequencer::new(false, 2);
     println!("Sequencing...");
     tree.generate_with(&mut seq, 0.0, time, args.scaling, 0.0);
-    let mut output = unit::<U0, U2>(Box::new(seq)) >> 
-        stacki::<U2, _, _>(|_| shape(Adaptive::new(0.1, Tanh(0.5)))) >> 
-        stacki::<U2, _, _>(|_| lowpass_hz(2000.0, 1.0));
-    save(&mut output, time);
+    
+    let mut output = unit::<U0, U2>(Box::new(seq));
+    if args.melody != AudioSelectorOptions::Concrete {
+        println!("Putting on filter!");
+        save(
+            &mut (output >> 
+                stacki::<U2, _, _>(|_| 
+                    shape(Adaptive::new(0.1, Tanh(0.5))) >> 
+                    lowpass_hz(2500.0, 1.0) >>
+                    mul(0.05)
+                )), 
+            time
+        );
+    }
+    else {
+        println!("No filter!");
+        save(&mut output, time);
+    }
     println!("Done");
 }

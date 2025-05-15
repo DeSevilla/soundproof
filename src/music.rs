@@ -8,6 +8,8 @@ pub mod instruments;
 pub mod sequences;
 /// Constants and functions for twelve-tone equal temperament notes and converting them to frequencies.
 pub mod notes;
+/// Code for stretching audio clips. May be revised as needed
+pub mod stretch;
 
 const SAMPLE_RATE: f32 = 44100.0;
 
@@ -53,7 +55,9 @@ pub fn make_spectrograph(input_wav: &Path, output_png: &Path) {
 pub fn save(au: &mut dyn AudioUnit, dur: f64) {
     println!("Rendering .wav file ({dur} seconds)");
     let mut wave1 = Wave::render(SAMPLE_RATE as f64, dur, au);
-    wave1.normalize();
+    if wave1.amplitude() > 1.0 {
+        wave1.normalize();
+    }
     let filename = Path::new("output/output.wav");
     println!("Saving .wav file ({dur} seconds)");
     wave1.save_wav16(filename).expect("Could not save wave.");

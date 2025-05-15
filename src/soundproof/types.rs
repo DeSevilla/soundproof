@@ -1,27 +1,93 @@
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
 
 use fundsp::hacker32::*;
 use crate::lambdapi::ast::CTerm;
 use crate::music::notes::*;
+use crate::music::stretch::retime_wave;
 use crate::Scaling;
 
 /// Objects that can be used to generate audio output through a FunDSP [Sequencer].
 pub trait Sequenceable {
     /// Generate audio into the sequencer for a duration starting at the selected time.
     fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64, lean: f32);
+
+    /// Duration of the Sequenceable prior to stretching
+    fn base_duration(&self) -> f64;
 }
 
-// /// An audio clip, to be 
+// /// An audio clip, to be stretched etc as needed
+// /// this is commented out until we decide to store additional metadata over just a wave
 // pub struct Clip {
 //     wave: Wave
 // }
 
-// impl Sequenceable for Clip {
-//     fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64) {
-//         // we want to get signalsmith-stretch involved here
-//     }
-// }
+impl<T> Sequenceable for &T where T: Sequenceable {
+    fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64, lean: f32) {
+        (*self).sequence(seq, start_time, duration, lean);
+    }
+
+    fn base_duration(&self) -> f64 {
+        (*self).base_duration()
+    }
+}
+
+impl<T> Sequenceable for Rc<T> where T: Sequenceable {
+    fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64, lean: f32) {
+        Rc::as_ref(self).sequence(seq, start_time, duration, lean);
+    }
+
+    fn base_duration(&self) -> f64 {
+        Rc::as_ref(self).base_duration()
+    }
+}
+
+impl Sequenceable for Wave {
+    fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64, lean: f32) {
+        let scaled = retime_wave((*self).clone(), duration);
+        let wave_arc = Arc::new(scaled);
+        // TODO incorporate lean
+        let instr = wavech(&wave_arc, 0, None)
+            >> split()
+            >> (mul(2.0_f32.powf(lean)) | mul(2.0_f32.powf(-lean)));
+        seq.push_duration(start_time, duration, Fade::Smooth, 0.0, 0.0, Box::new(instr));
+    }
+
+    fn base_duration(&self) -> f64 {
+        self.duration()
+    }
+}
+
+pub struct Loop<T: Sequenceable> {
+    body: T,
+    loop_duration: f64,
+}
+
+impl<T: Sequenceable> Loop<T> {
+    pub fn new(body: T) -> Self {
+        Loop { loop_duration: body.base_duration(), body }
+    }
+
+    pub fn new_dur(body: T, duration: f64) -> Self {
+        Loop { body, loop_duration: duration }
+    }
+}
+
+impl<T: Sequenceable> Sequenceable for Loop<T> {
+    fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64, lean: f32) {
+        let mut cur_time = start_time;
+        while cur_time + self.loop_duration < duration {
+            self.body.sequence(seq, cur_time, self.loop_duration, lean);
+            cur_time += self.loop_duration;
+        }
+    }
+
+    fn base_duration(&self) -> f64 {
+        self.loop_duration
+        // self.body.base_duration()
+    }
+}
 
 /// A single note within a [Melody], containing pitch, ADSR, and volume info.
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -31,7 +97,7 @@ pub struct Note {
     /// Duration of the "key press" for the note. In a [Melody], will be scaled according to the melody's duration when output.
     time: f64,
     /// Volume of the note.
-    volume: f64,
+    volume: f32,
     /// Time in seconds from the start of "key press" to when the note reaches max volume.
     attack: f32,
     /// Time in seconds between max volume and sustain volume.
@@ -157,11 +223,14 @@ impl Melody {
     /// Melodies deeper into the tree will be higher-pitched and have shorter notes,
     /// for a more twinkly effect.
     pub fn adjust_depth(&mut self, depth: usize) {
-        self.set_octave((depth as f64 / 2.5).powf(0.5).ceil() as i8 + 1);
+        let octave = (depth as f64 / 2.5).powf(0.5).ceil() as i8 + 1;
+        self.set_octave(octave);
+        // self.note_adjust = (depth as f64 / 1.5 + 1.0).powf(0.85).ceil() as i8 * 5;
         self.map_notes(|&n| Note {
             time: n.time * lerp(0.45, 0.95, 1.0 / depth as f32) as f64,
             attack: 0.2 / (depth as f32 + 0.1),
             sustain: lerp(0.25, 0.5, 1.0 / depth as f32),
+            volume: /*0.000035*/ 0.5 * (1.0 + 0.07 * depth as f32),
             ..n
         });
     }
@@ -179,14 +248,18 @@ impl Sequenceable for Melody {
             let note = note.mul_duration(ratio);
             let hz = get_hz(note.note + self.note_adjust);
             let instr = constant(hz) >> (self.instrument.clone() * (
-                envelope(move |t| if t < note.time as f32 { 1.0 } else { 0.0 }) >> 
-                adsr_live(note.attack, note.decay, note.sustain, note.release)
+                envelope(move |t| if t < note.time as f32 { 1.0 } else { 0.0 }) >>
+                (adsr_live(note.attack, note.decay, note.sustain, note.release) * note.volume)
             )) >> shape(Clip(1.0));
             let instr = instr >> split() >> (mul(2.0_f32.powf(lean)) | (mul(2.0_f32.powf(-lean))));
             seq.push_duration(start_time + elapsed, dur, Fade::Power, 0.0, 0.0, Box::new(instr));
             elapsed += dur;
         }
         assert!(elapsed > 0.0, "Melody must cause time to pass!")
+    }
+
+    fn base_duration(&self) -> f64 {
+        self.duration()
     }
 }
 
@@ -343,7 +416,7 @@ impl SoundTree {
             SoundTree::Simul(vec, _) => {
                 let val = SIGN.fetch_add(1, Ordering::Relaxed);
                 let dir = if val % 2 == 0 { 1.0 } else { -1.0 };
-                // let base_lean = (vec.len() as f32) * dir / 2.0;
+                // let scale = vec.len();
                 let scale = (self.size() - 1) as f32;
                 let base_lean = dir * scale / 2.0;
                 // for (ii, elem) in vec.iter().enumerate() {

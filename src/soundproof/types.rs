@@ -17,21 +17,6 @@ pub trait Sequenceable {
     fn base_duration(&self) -> f64;
 }
 
-// /// An audio clip, to be stretched etc as needed
-// /// this is commented out until we decide to store additional metadata over just a wave
-// pub struct Clip {
-//     wave: Wave
-// }
-
-impl<T> Sequenceable for &T where T: Sequenceable {
-    fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64, lean: f32) {
-        (*self).sequence(seq, start_time, duration, lean);
-    }
-
-    fn base_duration(&self) -> f64 {
-        (*self).base_duration()
-    }
-}
 
 impl<T> Sequenceable for Rc<T> where T: Sequenceable {
     fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64, lean: f32) {
@@ -43,11 +28,38 @@ impl<T> Sequenceable for Rc<T> where T: Sequenceable {
     }
 }
 
+/// An audio clip, to be stretched etc as needed
+/// this is commented out until we decide to store additional metadata over just a wave
+// #[derive(Clone)]
+// pub struct WaveClip(Rc<Wave>);
+
+// impl WaveClip {
+//     pub fn from_file<P: AsRef<Path>>(path: P) -> Self {
+//         // TODO proper error handling
+//         WaveClip(Rc::new(Wave::load(path).unwrap()))
+//     }
+
+//     pub fn from_wave(wave: Wave) -> Self {
+//         WaveClip(Rc::new(wave))
+//     }
+// }
+
+// impl Sequenceable for WaveClip {
+//     fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64, lean: f32) {
+//         let scaled = retime_wave(, duration);
+//         let wave_arc = Arc::new(scaled);
+//         // TODO incorporate lean
+//         let instr = wavech(&wave_arc, 0, None)
+//             >> split()
+//             >> (mul(2.0_f32.powf(lean)) | mul(2.0_f32.powf(-lean)));
+//         seq.push_duration(start_time, duration, Fade::Smooth, 0.0, 0.0, Box::new(instr));
+//     }
+// }
+
 impl Sequenceable for Wave {
     fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64, lean: f32) {
-        let scaled = retime_wave((*self).clone(), duration);
+        let scaled = retime_wave(&self, duration);
         let wave_arc = Arc::new(scaled);
-        // TODO incorporate lean
         let instr = wavech(&wave_arc, 0, None)
             >> split()
             >> (mul(2.0_f32.powf(lean)) | mul(2.0_f32.powf(-lean)));
@@ -81,6 +93,7 @@ impl<T: Sequenceable> Sequenceable for Loop<T> {
             self.body.sequence(seq, cur_time, self.loop_duration, lean);
             cur_time += self.loop_duration;
         }
+        self.body.sequence(seq, cur_time, duration - cur_time, lean); // finish up with a little fast one why not
     }
 
     fn base_duration(&self) -> f64 {
@@ -125,11 +138,11 @@ impl Note {
 #[derive(Clone)]
 pub struct Melody {
     /// A FunDSP [AudioUnit] which is used to play the notes.
-    instrument: An<Unit<U1, U1>>,
+    pub instrument: An<Unit<U1, U1>>,
     /// [Note]s and how much time they're allowed to use.
-    notes: Vec<(Note, f64)>,
+    pub notes: Vec<(Note, f64)>,
     /// Adjustment to the pitch of all [Note]s in semitones, stored here so it can be easily tweaked.
-    note_adjust: i8,
+    pub note_adjust: i8,
 }
 
 impl Melody {

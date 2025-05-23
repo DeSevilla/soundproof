@@ -8,6 +8,61 @@ use crate::{
     types::*,
 };
 
+#[derive(Clone)]
+pub struct StratifiedInfo {
+    pub mel: Melody,
+}
+
+impl Default for StratifiedInfo {
+    fn default() -> Self {
+        Self { mel: Melody::new_even(violinish(), &[A, D, F, A]) }
+    }
+}
+
+impl StratifiedInfo {
+    /// Melodies with some hints of dissonance & more texture
+    pub fn imelody(term: &ITerm, depth: usize) -> Self {
+        let mut result = match term {
+            ITerm::Ann(_, _) => Melody::new_even(violinish(), &[A, D, F, A]),
+            ITerm::Star => Melody::new_timed(three_equivalents(wobbly_sine()) * 0.7, &[(B, 0.5), (C, 0.5), (E, 3.0)]),
+            ITerm::Pi(_, _) => Melody::new_even(sinesaw() >> split() >> fbd(0.25, -5.0), &[E, C, A, C]),
+            ITerm::Bound(_) => Melody::new_even(sine() * 2.0, &[A, E, C, B]),
+            ITerm::Free(_) => Melody::new_even(violinish() * 1.1, &[A, A, E, C]),
+            ITerm::App(_, _) => Melody::new_timed(sawfir() * 0.75, &[(B, 1.0), (A, 0.5), (E, 0.5), (C, 1.0), (B, 1.0)]),
+            ITerm::Zero => Melody::new_timed(sinesaw(), &[(E, 1.0), (F, 0.5), (E, 0.5), (C, 1.0), (A, 1.0)]),
+            ITerm::Fin(_) => Melody::new_even(violinish() * 1.1, &[A, A + 12, E, F]),
+            _ => panic!("{term} not implemented")
+        };
+        result.adjust_depth(depth);
+        StratifiedInfo {
+            mel: result
+        }
+    }
+
+    /// Melodies with some hints of dissonance
+    pub fn cmelody(term: &CTerm, depth: usize) -> Self {
+        let mut result = match term {
+            CTerm::Lam(_) => Melody::new_even(fm_basic() * 0.28, &[D, F, E, C]),
+            _ => Melody::new_even(sine(), &[G, G, G, G]),  //value will never be used, but we have to call this for ownership reasons
+        };
+        result.adjust_depth(depth);
+        StratifiedInfo {
+            mel: result
+        }
+    }
+
+    pub fn istratify(&self, term: &ITerm, depth: usize) -> SoundTree {
+        let mut local_mel = Self::imelody(term, depth);
+        local_mel.mel.instrument = self.mel.instrument.clone();
+        SoundTree::sound(local_mel.mel, term)
+    }
+
+    pub fn cstratify(&self, term: &CTerm, depth: usize) -> SoundTree {
+        let mut local_mel = Self::cmelody(term, depth);
+        local_mel.mel.instrument = self.mel.instrument.clone();
+        SoundTree::sound(local_mel.mel, term.clone())
+    }
+}
 
 #[derive(Clone)]
 pub struct ClipSelector {
@@ -41,7 +96,7 @@ impl ClipSelector {
     pub fn names_long() -> Self {
         Self {
             ann: Rc::new(Wave::load("files/typeannotation.wav").unwrap()), // type annotation
-            star: Rc::new(Wave::load("files/universetype.mp3").unwrap()),  // universe type
+            star: Rc::new(Wave::load("files/universe.mp3").unwrap()),  // universe type
             pi: Rc::new(Wave::load("files/universalquantifier.mp3").unwrap()),  // universal quantifier
             bound: Rc::new(Wave::load("files/boundvariable.mp3").unwrap()),  // bound variable
             free: Rc::new(Wave::load("files/freevariable.mp3").unwrap()),  // free variable
@@ -52,10 +107,8 @@ impl ClipSelector {
         }
     }
 
-
-
     fn imelody(&self, term: &ITerm, _depth: usize) -> Rc<Wave> {
-        let result = match term {
+        match term {
             ITerm::Ann(_, _) => Rc::clone(&self.ann),
             ITerm::Star => Rc::clone(&self.star),
             ITerm::Pi(_, _) => Rc::clone(&self.pi),
@@ -65,8 +118,7 @@ impl ClipSelector {
             ITerm::Zero => Rc::clone(&self.zero),
             ITerm::Fin(_) => Rc::clone(&self.fin),
             _ => unimplemented!()
-        };
-        result
+        }
     }
 
     fn cmelody(&self, term: &CTerm, _depth: usize) -> Rc<Wave> {

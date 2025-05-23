@@ -27,6 +27,7 @@ pub enum Structure {
     Term,
     /// Assign melodies mostly according to the types of terms
     Type,
+    Strat,
     /// Run through a series of terms designed to test the different melodies. Overrides --value.
     Test,
 }
@@ -126,21 +127,24 @@ pub enum AudioSelectorOptions {
     F,
     /// Same melodies as B and C but exclusively as sines. See [imelody_oneinstr] and [cmelody_oneinstr].
     PureSine,
-    /// Pulled from audio files
-    Concrete,
+    /// Pulled from audio files, short names
+    NamesShort,
+    NamesLong,
 }
 
 impl From<AudioSelectorOptions> for MelodySelector {
     fn from(value: AudioSelectorOptions) -> Self {
+        use AudioSelectorOptions::*;
         match value {
-            AudioSelectorOptions::A => Self::A,
-            AudioSelectorOptions::B => Self::B,
-            AudioSelectorOptions::C => Self::C,
-            AudioSelectorOptions::D => Self::D,
-            AudioSelectorOptions::E => Self::E, 
-            AudioSelectorOptions::F => Self::F,
-            AudioSelectorOptions::PureSine => Self::PureSine,
-            AudioSelectorOptions::Concrete => Self::Concrete(ClipSelector::names()),
+            A => Self::A,
+            B => Self::B,
+            C => Self::C,
+            D => Self::D,
+            E => Self::E, 
+            F => Self::F,
+            PureSine => Self::PureSine,
+            NamesShort => Self::Concrete(ClipSelector::names()),
+            NamesLong => Self::Concrete(ClipSelector::names_long())
         }
     }
 }
@@ -173,22 +177,32 @@ pub fn main() {
     let args = Args::parse();
     let term = args.value.term();
     //validation just makes sure it typechecks; we can't evaluate the paradox or it'll run forever.
-    validate(&format!("{:?}", args.value), &term, false);
+    validate(&format!("Term: {:?}", args.value), &term, false);
+    let selector = args.melody.into();
+    use std::time::Instant;
+    print!("Translating...");
+    let now = Instant::now();
     let tree = match args.structure {
-        Structure::Term => term_translate(term, args.melody.into()),
-        Structure::Type => type_translate(term, args.melody.into()),
-        Structure::Test => test_tree(args.melody.into()),
+        Structure::Term => term_translate(term, &selector),
+        Structure::Type => type_translate(term, &selector),
+        Structure::Strat => strat_translate(term),
+        Structure::Test => test_tree(&selector),
     };
+    println!("...done in {:?}", now.elapsed());
     // let txt = tree.metadata().name;
     // println!("{txt}");
     let time = args.time.unwrap_or(std::cmp::min(tree.size(), 1200) as f64);
     let mut seq = Sequencer::new(false, 2);
-    println!("Sequencing...");
+    print!("Sequencing over {time} seconds...");
+    let now = Instant::now();
     tree.generate_with(&mut seq, 0.0, time, args.scaling, 0.0);
-    
+    println!("...done in {:?}", now.elapsed());
     let mut output = unit::<U0, U2>(Box::new(seq));
-    if args.melody != AudioSelectorOptions::Concrete {
-        println!("Putting on filter!");
+    if let MelodySelector::Concrete(_) = selector {
+        save(&mut output, time);
+    }
+    else {
+        // need to add filters to output in fully-generated cases
         save(
             &mut (output >> 
                 stacki::<U2, _, _>(|_| 
@@ -198,10 +212,6 @@ pub fn main() {
                 )), 
             time
         );
-    }
-    else {
-        println!("No filter!");
-        save(&mut output, time);
     }
     println!("Done");
 }

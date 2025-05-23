@@ -1,20 +1,20 @@
 use signalsmith_stretch::Stretch;
 use fundsp::wave::Wave;
 
-pub struct Interleave {
-    wave: Wave,
+pub struct Interleave<'a> {
+    wave: &'a Wave,
     position: usize,
     channel: usize,
 }
 
-impl Interleave {
-    pub fn new(wave: Wave) -> Interleave {
+impl<'a> Interleave<'a> {
+    pub fn new(wave: &'a Wave) -> Interleave<'a> {
         // let positions = vec![0; wave.channels()];
         Interleave { wave, position: 0, channel: 0 }
     }
 }
 
-impl Iterator for Interleave {
+impl<'a> Iterator for Interleave<'a> {
     type Item = f32;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -39,20 +39,17 @@ fn deinterleave(input: impl AsRef<[f32]>, channels: usize, sample_rate: f64) -> 
     wave
 }
 
-pub fn stretch_wave(mut stretch: Stretch, wave: Wave, time: f64) -> Wave {
+pub fn stretch_wave(mut stretch: Stretch, wave: &Wave, time: f64) -> Wave {
     let channel_count = wave.channels();
     let sample_rate = wave.sample_rate();
     let mut output = vec![0.0; channel_count * (sample_rate * time).round() as usize];
 
-    // seems to pitch up regardless of parameters... what can we do?
     stretch.process(Interleave::new(wave).collect::<Vec<f32>>(), &mut output);
-    // wave.filter(0.0, &mut Net::new(0, 0));
-    // wave
     deinterleave(output, channel_count, sample_rate)
 }
 
-pub fn retime_wave(wave: Wave, time: f64) -> Wave {
-    // should we calculate block length & interval from size? how do they vary?
+pub fn retime_wave(wave: &Wave, time: f64) -> Wave {
+    // should we calculate block length, interval & transpose factor from size? how do they vary?
     let mut stretch = Stretch::new(wave.channels() as u32, 2056, 64);
     stretch.set_transpose_factor(0.5, None);
     stretch_wave(stretch, wave, time)

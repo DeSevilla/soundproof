@@ -8,21 +8,40 @@ use crate::{
     types::*,
 };
 
+pub trait Selector: Clone {
+    fn isound(&self, term: &ITerm) -> SoundTree;
+    fn csound(&self, term: &CTerm) -> SoundTree;
+    fn imerge(&self, term: &ITerm) -> Self;
+    fn cmerge(&self, term: &CTerm) -> Self;
+}
+
 #[derive(Clone)]
 pub struct StratifiedInfo {
     pub mel: Melody,
+    depth: usize,
 }
 
 impl Default for StratifiedInfo {
     fn default() -> Self {
-        Self { mel: Melody::new_even(violinish(), &[A, D, F, A]) }
+        Self { mel: Melody::new_even(violinish(), &[A, D, F, A]), depth: 0 }
     }
 }
 
-impl StratifiedInfo {
-    /// Melodies with some hints of dissonance & more texture
-    pub fn imelody(term: &ITerm, depth: usize) -> Self {
-        let mut result = match term {
+impl Selector for StratifiedInfo {
+    fn isound(&self, term: &ITerm) -> SoundTree {
+        let mut mel = self.mel.clone();
+        mel.adjust_depth(self.depth);
+        SoundTree::sound(mel, term)
+    }
+
+    fn csound(&self, term: &CTerm) -> SoundTree {
+        let mut mel = self.mel.clone();
+        mel.adjust_depth(self.depth);
+        SoundTree::sound(mel, term.clone())
+    }
+
+    fn imerge(&self, term: &ITerm) -> StratifiedInfo {
+        let mel = match term {
             ITerm::Ann(_, _) => Melody::new_even(violinish(), &[A, D, F, A]),
             ITerm::Star => Melody::new_timed(three_equivalents(wobbly_sine()) * 0.7, &[(B, 0.5), (C, 0.5), (E, 3.0)]),
             ITerm::Pi(_, _) => Melody::new_even(sinesaw() >> split() >> fbd(0.25, -5.0), &[E, C, A, C]),
@@ -33,36 +52,62 @@ impl StratifiedInfo {
             ITerm::Fin(_) => Melody::new_even(violinish() * 1.1, &[A, A + 12, E, F]),
             _ => panic!("{term} not implemented")
         };
-        result.adjust_depth(depth);
-        StratifiedInfo {
-            mel: result
-        }
+        StratifiedInfo { mel, depth: self.depth + 1 }
     }
 
-    /// Melodies with some hints of dissonance
-    pub fn cmelody(term: &CTerm, depth: usize) -> Self {
-        let mut result = match term {
+    fn cmerge(&self, term: &CTerm) -> StratifiedInfo {
+        let mel = match term {
             CTerm::Lam(_) => Melody::new_even(fm_basic() * 0.28, &[D, F, E, C]),
             _ => Melody::new_even(sine(), &[G, G, G, G]),  //value will never be used, but we have to call this for ownership reasons
         };
-        result.adjust_depth(depth);
-        StratifiedInfo {
-            mel: result
-        }
-    }
-
-    pub fn istratify(&self, term: &ITerm, depth: usize) -> SoundTree {
-        let mut local_mel = Self::imelody(term, depth);
-        local_mel.mel.instrument = self.mel.instrument.clone();
-        SoundTree::sound(local_mel.mel, term)
-    }
-
-    pub fn cstratify(&self, term: &CTerm, depth: usize) -> SoundTree {
-        let mut local_mel = Self::cmelody(term, depth);
-        local_mel.mel.instrument = self.mel.instrument.clone();
-        SoundTree::sound(local_mel.mel, term.clone())
+        StratifiedInfo { mel, depth: self.depth + 1 }
     }
 }
+
+// impl StratifiedInfo {
+//     /// Melodies with some hints of dissonance & more texture
+//     pub fn imelody(term: &ITerm, depth: usize) -> Self {
+//         let mut result = match term {
+//             ITerm::Ann(_, _) => Melody::new_even(violinish(), &[A, D, F, A]),
+//             ITerm::Star => Melody::new_timed(three_equivalents(wobbly_sine()) * 0.7, &[(B, 0.5), (C, 0.5), (E, 3.0)]),
+//             ITerm::Pi(_, _) => Melody::new_even(sinesaw() >> split() >> fbd(0.25, -5.0), &[E, C, A, C]),
+//             ITerm::Bound(_) => Melody::new_even(sine() * 2.0, &[A, E, C, B]),
+//             ITerm::Free(_) => Melody::new_even(violinish() * 1.1, &[A, A, E, C]),
+//             ITerm::App(_, _) => Melody::new_timed(sawfir() * 0.75, &[(B, 1.0), (A, 0.5), (E, 0.5), (C, 1.0), (B, 1.0)]),
+//             ITerm::Zero => Melody::new_timed(sinesaw(), &[(E, 1.0), (F, 0.5), (E, 0.5), (C, 1.0), (A, 1.0)]),
+//             ITerm::Fin(_) => Melody::new_even(violinish() * 1.1, &[A, A + 12, E, F]),
+//             _ => panic!("{term} not implemented")
+//         };
+//         result.adjust_depth(depth);
+//         StratifiedInfo {
+//             mel: result
+//         }
+//     }
+
+//     /// Melodies with some hints of dissonance
+//     pub fn cmelody(term: &CTerm, depth: usize) -> Self {
+//         let mut result = match term {
+//             CTerm::Lam(_) => Melody::new_even(fm_basic() * 0.28, &[D, F, E, C]),
+//             _ => Melody::new_even(sine(), &[G, G, G, G]),  //value will never be used, but we have to call this for ownership reasons
+//         };
+//         result.adjust_depth(depth);
+//         StratifiedInfo {
+//             mel: result
+//         }
+//     }
+
+//     pub fn istratify(&self, term: &ITerm, depth: usize) -> SoundTree {
+//         let mut local_mel = Self::imelody(term, depth);
+//         local_mel.mel.instrument = self.mel.instrument.clone();
+//         SoundTree::sound(local_mel.mel, term)
+//     }
+
+//     pub fn cstratify(&self, term: &CTerm, depth: usize) -> SoundTree {
+//         let mut local_mel = Self::cmelody(term, depth);
+//         local_mel.mel.instrument = self.mel.instrument.clone();
+//         SoundTree::sound(local_mel.mel, term.clone())
+//     }
+// }
 
 #[derive(Clone)]
 pub struct ClipSelector {
@@ -106,31 +151,43 @@ impl ClipSelector {
             lam: Rc::new(Wave::load("files/lambdaabstraction.mp3").unwrap()),  // lambda abstraction
         }
     }
+}
 
-    fn imelody(&self, term: &ITerm, _depth: usize) -> Rc<Wave> {
-        match term {
-            ITerm::Ann(_, _) => Rc::clone(&self.ann),
-            ITerm::Star => Rc::clone(&self.star),
-            ITerm::Pi(_, _) => Rc::clone(&self.pi),
-            ITerm::Bound(_) => Rc::clone(&self.bound),
-            ITerm::Free(_) => Rc::clone(&self.free),
-            ITerm::App(_, _) => Rc::clone(&self.app),
-            ITerm::Zero => Rc::clone(&self.zero),
-            ITerm::Fin(_) => Rc::clone(&self.fin),
+impl Selector for ClipSelector {
+    fn isound(&self, term: &ITerm) -> SoundTree {
+        let result = match term {
+            ITerm::Ann(_, _) => &self.ann,
+            ITerm::Star => &self.star,
+            ITerm::Pi(_, _) => &self.pi,
+            ITerm::Bound(_) => &self.bound,
+            ITerm::Free(_) => &self.free,
+            ITerm::App(_, _) => &self.app,
+            ITerm::Zero => &self.zero,
+            ITerm::Fin(_) => &self.fin,
             _ => unimplemented!()
-        }
+        };
+        SoundTree::sound(Rc::clone(result), term)
     }
 
-    fn cmelody(&self, term: &CTerm, _depth: usize) -> Rc<Wave> {
-        match term {
-            CTerm::Inf(_) => Rc::clone(&self.ann),
-            CTerm::Lam(_) => Rc::clone(&self.lam),
-        }
+    fn csound(&self, term: &CTerm) -> SoundTree {
+        let result = match term {
+            CTerm::Inf(_) => &self.ann,
+            CTerm::Lam(_) => &self.lam,
+        };
+        SoundTree::sound(Rc::clone(result), term.clone())
+    }
+
+    fn imerge(&self, _term: &ITerm) -> Self {
+        self.clone()
+    }
+
+    fn cmerge(&self, _term: &CTerm) -> Self {
+        self.clone()
     }
 }
 
 /// Determines which set of melodies to use when generating melodies for a term.
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub enum MelodySelector {
     /// First, highly arbitary melody suite. See [imelody1] and [cmelody2] (there is no cmelody1).
     A,
@@ -146,36 +203,75 @@ pub enum MelodySelector {
     F,
     /// Same melodies as B and C but exclusively as sines. See [imelody_oneinstr] and [cmelody_oneinstr].
     PureSine,
-    Concrete(ClipSelector),
+    // Concrete(ClipSelector),
 }
 
 impl MelodySelector {
     /// Get the appropriate melody for a certain type of [ITerm].
-    pub fn imelody(&self, term: &ITerm, depth: usize) -> SoundTree {
+    pub fn imelody(&self, term: &ITerm, depth: usize) -> Melody {
         match self {
-            MelodySelector::A => SoundTree::sound(imelody1(term, depth), term),
-            MelodySelector::B => SoundTree::sound(imelody2(term, depth), term),
-            MelodySelector::C => SoundTree::sound(imelody3(term, depth), term),
-            MelodySelector::D => SoundTree::sound(imelody4(term, depth), term),
-            MelodySelector::E => SoundTree::sound(imelody5(term, depth), term),
-            MelodySelector::F => SoundTree::sound(imelody6(term, depth), term),
-            MelodySelector::PureSine => SoundTree::sound(imelody_oneinstr(sine(), term, depth), term),
-            MelodySelector::Concrete(clip_selector) => SoundTree::sound(clip_selector.imelody(term, depth), term),
+            MelodySelector::A => imelody1(term, depth),
+            MelodySelector::B => imelody2(term, depth),
+            MelodySelector::C => imelody3(term, depth),
+            MelodySelector::D => imelody4(term, depth),
+            MelodySelector::E => imelody5(term, depth),
+            MelodySelector::F => imelody6(term, depth),
+            MelodySelector::PureSine => imelody_oneinstr(sine(), term, depth),
+            // MelodySelector::Concrete(clip_selector) => SoundTree::sound(clip_selector.imelody(term, depth), term),
+            // _ => unimplemented!()
         }
     }
 
     /// Get the appropriate melody for a certain type of [CTerm].
-    pub fn cmelody(&self, term: &CTerm, depth: usize) -> SoundTree {
+    pub fn cmelody(&self, term: &CTerm, depth: usize) -> Melody {
         match self {
-            MelodySelector::A => SoundTree::sound(cmelody2(term, depth), term.clone()),
-            MelodySelector::B => SoundTree::sound(cmelody2(term, depth), term.clone()),
-            MelodySelector::C => SoundTree::sound(cmelody3(term, depth), term.clone()),
-            MelodySelector::D => SoundTree::sound(cmelody4(term, depth), term.clone()),
-            MelodySelector::E => SoundTree::sound(cmelody5(term, depth), term.clone()),
-            MelodySelector::F => SoundTree::sound(cmelody6(term, depth), term.clone()),
-            MelodySelector::PureSine => SoundTree::sound(cmelody_oneinstr(sine(), term, depth), term.clone()),
-            MelodySelector::Concrete(clip_selector) => SoundTree::sound(clip_selector.cmelody(term, depth), term.clone()),
+            MelodySelector::A => cmelody2(term, depth),
+            MelodySelector::B => cmelody2(term, depth),
+            MelodySelector::C => cmelody3(term, depth),
+            MelodySelector::D => cmelody4(term, depth),
+            MelodySelector::E => cmelody5(term, depth),
+            MelodySelector::F => cmelody6(term, depth),
+            MelodySelector::PureSine => cmelody_oneinstr(sine(), term, depth),
+            // MelodySelector::Concrete(clip_selector) => SoundTree::sound(clip_selector.cmelody(term, depth), term.clone()),
+            // _ => unimplemented!()
         }
+    }
+
+    pub fn deepen(self) -> MelodySelectorFull {
+        MelodySelectorFull { mel: self, depth: 1 }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct MelodySelectorFull {
+    mel: MelodySelector,
+    depth: usize,
+}
+
+// impl From<MelodySelector> for MelodySelectorFull {
+//     fn from(value: MelodySelector) -> Self {
+//         Self {
+//             mel: value,
+//             depth: 1
+//         }
+//     }
+// }
+
+impl Selector for MelodySelectorFull {
+    fn isound(&self, term: &ITerm) -> SoundTree {
+        SoundTree::sound(self.mel.imelody(term, self.depth), term)
+    }
+
+    fn csound(&self, term: &CTerm) -> SoundTree {
+        SoundTree::sound(self.mel.cmelody(term, self.depth), term.clone())
+    }
+
+    fn imerge(&self, _term: &ITerm) -> Self {
+        MelodySelectorFull { mel: self.mel, depth: self.depth + 1 }
+    }
+
+    fn cmerge(&self, _term: &CTerm) -> Self {
+        MelodySelectorFull { mel: self.mel, depth: self.depth + 1 }
     }
 }
 

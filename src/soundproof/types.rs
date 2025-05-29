@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
@@ -5,7 +6,7 @@ use std::sync::Arc;
 use fundsp::hacker32::*;
 use crate::lambdapi::ast::CTerm;
 use crate::music::notes::*;
-use crate::music::stretch::retime_wave;
+use crate::music::stretch::{retime_pitch_wave, retime_wave};
 use crate::Scaling;
 
 /// Objects that can be used to generate audio output through a FunDSP [Sequencer].
@@ -30,35 +31,56 @@ impl<T> Sequenceable for Rc<T> where T: Sequenceable {
 
 /// An audio clip, to be stretched etc as needed
 /// this is commented out until we decide to store additional metadata over just a wave
-// #[derive(Clone)]
-// pub struct WaveClip(Rc<Wave>);
+#[derive(Clone)]
+pub struct WaveClip {
+    wave: Rc<Wave>,
+    depth: usize,
+}
 
-// impl WaveClip {
-//     pub fn from_file<P: AsRef<Path>>(path: P) -> Self {
-//         // TODO proper error handling
-//         WaveClip(Rc::new(Wave::load(path).unwrap()))
-//     }
+impl WaveClip {
+    pub fn from_file<P: AsRef<Path>>(path: P) -> Self {
+        // TODO proper error handling
+        WaveClip {
+            wave: Rc::new(Wave::load(path).unwrap()),
+            depth: 0,
+        }
+    }
 
-//     pub fn from_wave(wave: Wave) -> Self {
-//         WaveClip(Rc::new(wave))
-//     }
-// }
+    pub fn from_wave(wave: Wave) -> Self {
+        WaveClip {
+            wave: Rc::new(wave),
+            depth: 0,
+        }
+    }
 
-// impl Sequenceable for WaveClip {
-//     fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64, lean: f32) {
-//         let scaled = retime_wave(, duration);
-//         let wave_arc = Arc::new(scaled);
-//         // TODO incorporate lean
-//         let instr = wavech(&wave_arc, 0, None)
-//             >> split()
-//             >> (mul(2.0_f32.powf(lean)) | mul(2.0_f32.powf(-lean)));
-//         seq.push_duration(start_time, duration, Fade::Smooth, 0.0, 0.0, Box::new(instr));
-//     }
-// }
+    pub fn depth_factor(&self) -> f32 {
+        (self.depth as f32 / 5.0).powf(0.5)
+    }
+
+    pub fn adjust_depth(&mut self, depth: usize) {
+        self.depth = depth;
+    }
+}
+
+impl Sequenceable for WaveClip {
+    fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64, lean: f32) {
+        let scaled = retime_pitch_wave(&self.wave, duration, self.depth_factor());
+        let wave_arc = Arc::new(scaled);
+        // TODO incorporate lean
+        let instr = wavech(&wave_arc, 0, None)
+            >> split()
+            >> (mul(2.0_f32.powf(lean)) | mul(2.0_f32.powf(-lean)));
+        seq.push_duration(start_time, duration, Fade::Smooth, 0.0, 0.0, Box::new(instr));
+    }
+    
+    fn base_duration(&self) -> f64 {
+        self.wave.duration()
+    }
+}
 
 impl Sequenceable for Wave {
     fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64, lean: f32) {
-        let scaled = retime_wave(&self, duration);
+        let scaled = retime_wave(self, duration);
         let wave_arc = Arc::new(scaled);
         let instr = wavech(&wave_arc, 0, None)
             >> split()
@@ -254,6 +276,7 @@ impl Sequenceable for Melody {
         if self.duration() <= 0.0 {
             return
         }
+        // println!("lean: {lean}, {}, {}", 2.0_f32.powf(lean), 2.0_f32.powf(-lean));
         let mut elapsed = 0.0;
         let ratio = duration / self.duration();
         for (note, dur) in self.notes.iter() {
@@ -400,7 +423,7 @@ impl SoundTree {
     /// The total number of nodes in the tree.
     pub fn size(&self) -> usize {
         match self {
-            SoundTree::Simul(vec, _) => vec.iter().map(|x| x.size()).max().unwrap_or(0),
+            SoundTree::Simul(vec, _) => 1 + vec.iter().map(|x| x.size()).max().unwrap_or(0),
             SoundTree::Seq(vec, _) => vec.iter().map(|x| x.size()).sum::<usize>(),
             SoundTree::Sound(_, _) => 1,
         }
@@ -435,6 +458,7 @@ impl SoundTree {
                 // for (ii, elem) in vec.iter().enumerate() {
                 for elem in vec {
                     let local_lean = (base_lean - dir * elem.size() as f32) * 0.8 / scale; // can't divide by 0 bc if scale is 0 vec is empty
+                    // println!("local lean: {local_lean}, {base_lean}, {scale}: {}, {}", self.size(), vec.len());
                     elem.generate_with(seq, start_time, duration, scaling, lean + local_lean);
                 }
             },

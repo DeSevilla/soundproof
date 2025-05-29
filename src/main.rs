@@ -130,6 +130,8 @@ pub enum AudioSelectorOptions {
     NamesShort,
     NamesLong,
     Stratified,
+    Effector,
+    Mixed,
 }
 
 // impl From<AudioSelectorOptions> for MelodySelector {
@@ -212,6 +214,8 @@ pub fn main() {
         AudioSelectorOptions::NamesShort => structure_func(ClipSelector::names(), &args),
         AudioSelectorOptions::NamesLong => structure_func(ClipSelector::names_long(), &args),
         AudioSelectorOptions::Stratified => structure_func(StratifiedInfo::default(), &args),
+        AudioSelectorOptions::Effector => structure_func(Effector::new(), &args),
+        AudioSelectorOptions::Mixed => structure_func(MixedOutput::new(), &args),
     };
     println!("...done in {:?}", now.elapsed());
     // let txt = tree.metadata().name;

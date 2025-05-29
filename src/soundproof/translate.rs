@@ -40,6 +40,7 @@ fn itype_stratified_translate<T: Selector>(ii: usize, ctx: Context, term: &ITerm
             let tytree = ctype_stratified_translate(ii, ctx.clone(), cty, Value::Star, meta.clone())?;
             let ty = cty.clone().eval(vec![]);
             let termtree = ctype_stratified_translate(ii, ctx, ct, ty.clone(), meta)?;  // should we have the type and term at diff depths?
+            // let tree = SoundTree::simul(&[node_melody, SoundTree::seq(&[tytree, termtree])]);
             let tree = SoundTree::simul(&[node_melody, SoundTree::seq(&[termtree, tytree])]);
             Ok((ty, tree))
         }

@@ -14,7 +14,7 @@ impl<'a> Interleave<'a> {
     }
 }
 
-impl<'a> Iterator for Interleave<'a> {
+impl Iterator for Interleave<'_> {
     type Item = f32;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -50,7 +50,11 @@ pub fn stretch_wave(mut stretch: Stretch, wave: &Wave, time: f64) -> Wave {
 
 pub fn retime_wave(wave: &Wave, time: f64) -> Wave {
     // should we calculate block length, interval & transpose factor from size? how do they vary?
+    retime_pitch_wave(wave, time, 0.5) 
+}
+
+pub fn retime_pitch_wave(wave: &Wave, time: f64, pitch_factor: f32) -> Wave {
     let mut stretch = Stretch::new(wave.channels() as u32, 2056, 64);
-    stretch.set_transpose_factor(0.5, None);
+    stretch.set_transpose_factor(pitch_factor, None);
     stretch_wave(stretch, wave, time)
 }

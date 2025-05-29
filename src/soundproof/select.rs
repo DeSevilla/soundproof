@@ -15,6 +15,140 @@ pub trait Selector: Clone {
     fn cmerge(&self, term: &CTerm) -> Self;
 }
 
+pub enum Mixer {
+    Melody(Melody),
+    Clip(WaveClip),
+}
+
+#[derive(Clone)]
+pub struct MixedOutput {
+    clip1: WaveClip,
+    clip2: WaveClip,
+    depth: usize,
+}
+
+impl MixedOutput {
+    pub fn new() -> Self {
+        MixedOutput { 
+            clip1: WaveClip::from_file("files/malhombrechords.wav"), 
+            clip2: WaveClip::from_file("files/lambdaabstraction.mp3"),
+            depth: 1
+        }
+    }
+}
+
+impl Selector for MixedOutput {
+    fn isound(&self, term: &ITerm) -> SoundTree {
+        let result = match term {
+            ITerm::Ann(_, _) => Mixer::Melody(Melody::new_timed(sinesaw(), &[(E, 1.0), (F, 0.5), (E, 0.5), (C, 1.0), (A, 1.0)])),
+            ITerm::Star => Mixer::Melody(Melody::new_timed(three_equivalents(wobbly_sine()) * 0.7, &[
+                (B, 0.5), (C, 0.5), (E, 3.0)
+                // (E, 0.2), (E, 0.2), (E, 0.2), (E, 0.2), (E, 0.2),
+                // (E, 0.2), (E, 0.2), (E, 0.2), (E, 0.2), (E, 0.2),
+                // (E, 0.2), (E, 0.2), (E, 0.2), (E, 0.2), (E, 0.2)
+                ])),
+            ITerm::Pi(_, _) => Mixer::Melody(Melody::new_even(sinesaw() >> split() >> fbd(0.25, -5.0), &[E, C, A, C])),
+            // ITerm::Bound(_) => Mixer::Clip(self.clip1.clone()),
+            // ITerm::Free(_) => Mixer::Clip(self.clip1.clone()),
+            ITerm::Free(_) => Mixer::Melody(Melody::new_even(violinish() * 1.1, &[A, A, E, C])),
+            ITerm::App(_, _) => {
+                println!("yeah there's an app at depth {}", self.depth);
+                Mixer::Clip(self.clip1.clone())
+            },
+            // ITerm::App(_, _) => Mixer::Melody(Melody::new_timed(sawfir() * 0.75, &[(B, 1.0), (A, 0.5), (E, 0.5), (C, 1.0), (B, 1.0)])),
+            ITerm::Zero => Mixer::Melody(Melody::new_even(sine() * 2.0, &[A, E, C, B])),
+            ITerm::Fin(_) => Mixer::Melody(Melody::new_even(violinish() * 1.1, &[A, A + 12, E, F])),
+            _ => panic!("{term} not implemented")
+        };
+        match result {
+            Mixer::Melody(mut mel) => {
+                mel.adjust_depth(self.depth);
+                SoundTree::sound(mel, term)
+            },
+            Mixer::Clip(mut wav) => {
+                wav.adjust_depth(self.depth);
+                println!("{}", wav.depth_factor());
+                SoundTree::sound(wav, term)
+            },
+        }
+        // result.adjust_depth(depth);
+    }
+
+    fn csound(&self, term: &CTerm) -> SoundTree {
+        let result = match term {
+            CTerm::Inf(_) => Mixer::Clip(self.clip1.clone()),
+            CTerm::Lam(_) => Mixer::Clip(self.clip2.clone()),
+        };
+        match result {
+            Mixer::Melody(mut mel) => {
+                mel.adjust_depth(self.depth);
+                SoundTree::sound(mel, term.clone())
+            },
+            Mixer::Clip(mut wav) => {
+                wav.adjust_depth(self.depth);
+                SoundTree::sound(wav, term.clone())
+            },
+        }
+    }
+
+    fn imerge(&self, _term: &ITerm) -> Self {
+        Self { depth: self.depth + 1, ..self.clone() }
+    }
+
+    fn cmerge(&self, _term: &CTerm) -> Self {
+        Self { depth: self.depth + 1, ..self.clone() }
+    }
+}
+
+#[derive(Clone)]
+pub struct Effector {
+    effect: An<Unit<U1, U1>>,
+    depth: usize,
+}
+
+impl Effector {
+    pub fn new() -> Self {
+        Self { effect: unit(Box::new(pass())), depth: 0 }
+    }
+}
+
+impl Selector for Effector {
+    fn isound(&self, term: &ITerm) -> SoundTree {
+        let mut melody = MelodySelector::F.imelody(term, self.depth);
+        melody.instrument = unit(Box::new(melody.instrument >> self.effect.clone()));
+        SoundTree::sound(melody, term)
+    }
+
+    fn csound(&self, term: &CTerm) -> SoundTree {
+        let mut melody = MelodySelector::F.cmelody(term, self.depth);
+        melody.instrument = unit(Box::new(melody.instrument >> self.effect.clone()));
+        SoundTree::sound(melody, term.clone())
+    }
+
+    fn imerge(&self, term: &ITerm) -> Self {
+        let effect = match term {
+            ITerm::Ann(_, _) => unit(Box::new((pass() | (800.0 + 100.0 * sine_hz(2.0)) | constant(1.0)) >> highpass())),
+            ITerm::Star => unit(Box::new(shape(Clip(100.0)))),
+            ITerm::Pi(_, _) => unit(Box::new(split() >> fbd(0.25, -1.5))),
+            ITerm::Bound(_) => unit(Box::new(major_chord() >> join::<U3>())),
+            ITerm::Free(_) => unit(Box::new(bell_hz(200.0, 1.0, 5.0))),
+            ITerm::App(_, _) => unit(Box::new(reverb_distort())),
+            ITerm::Zero => unit(Box::new(shape(Clip(100.0)))),
+            ITerm::Fin(_) => unit(Box::new(shape(Clip(2.0)))),
+            _ => panic!("{term} not implemented")
+        };
+        Self { effect, depth: self.depth + 1 }
+    }
+
+    fn cmerge(&self, term: &CTerm) -> Self {
+        let effect = match term {
+            CTerm::Inf(_) => unit(Box::new(pass())),
+            CTerm::Lam(_) => unit(Box::new(reverb_highpass())),
+        };
+        Self { effect, depth: self.depth + 1 }
+    }
+}
+
 #[derive(Clone)]
 pub struct StratifiedInfo {
     pub mel: Melody,
@@ -63,51 +197,6 @@ impl Selector for StratifiedInfo {
         StratifiedInfo { mel, depth: self.depth + 1 }
     }
 }
-
-// impl StratifiedInfo {
-//     /// Melodies with some hints of dissonance & more texture
-//     pub fn imelody(term: &ITerm, depth: usize) -> Self {
-//         let mut result = match term {
-//             ITerm::Ann(_, _) => Melody::new_even(violinish(), &[A, D, F, A]),
-//             ITerm::Star => Melody::new_timed(three_equivalents(wobbly_sine()) * 0.7, &[(B, 0.5), (C, 0.5), (E, 3.0)]),
-//             ITerm::Pi(_, _) => Melody::new_even(sinesaw() >> split() >> fbd(0.25, -5.0), &[E, C, A, C]),
-//             ITerm::Bound(_) => Melody::new_even(sine() * 2.0, &[A, E, C, B]),
-//             ITerm::Free(_) => Melody::new_even(violinish() * 1.1, &[A, A, E, C]),
-//             ITerm::App(_, _) => Melody::new_timed(sawfir() * 0.75, &[(B, 1.0), (A, 0.5), (E, 0.5), (C, 1.0), (B, 1.0)]),
-//             ITerm::Zero => Melody::new_timed(sinesaw(), &[(E, 1.0), (F, 0.5), (E, 0.5), (C, 1.0), (A, 1.0)]),
-//             ITerm::Fin(_) => Melody::new_even(violinish() * 1.1, &[A, A + 12, E, F]),
-//             _ => panic!("{term} not implemented")
-//         };
-//         result.adjust_depth(depth);
-//         StratifiedInfo {
-//             mel: result
-//         }
-//     }
-
-//     /// Melodies with some hints of dissonance
-//     pub fn cmelody(term: &CTerm, depth: usize) -> Self {
-//         let mut result = match term {
-//             CTerm::Lam(_) => Melody::new_even(fm_basic() * 0.28, &[D, F, E, C]),
-//             _ => Melody::new_even(sine(), &[G, G, G, G]),  //value will never be used, but we have to call this for ownership reasons
-//         };
-//         result.adjust_depth(depth);
-//         StratifiedInfo {
-//             mel: result
-//         }
-//     }
-
-//     pub fn istratify(&self, term: &ITerm, depth: usize) -> SoundTree {
-//         let mut local_mel = Self::imelody(term, depth);
-//         local_mel.mel.instrument = self.mel.instrument.clone();
-//         SoundTree::sound(local_mel.mel, term)
-//     }
-
-//     pub fn cstratify(&self, term: &CTerm, depth: usize) -> SoundTree {
-//         let mut local_mel = Self::cmelody(term, depth);
-//         local_mel.mel.instrument = self.mel.instrument.clone();
-//         SoundTree::sound(local_mel.mel, term.clone())
-//     }
-// }
 
 #[derive(Clone)]
 pub struct ClipSelector {

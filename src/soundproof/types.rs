@@ -4,6 +4,8 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
 use fundsp::hacker32::*;
+use rand::seq::IndexedRandom;
+use rand::rng;
 use crate::lambdapi::ast::CTerm;
 use crate::music::notes::*;
 use crate::music::stretch::{retime_pitch_wave, retime_wave};
@@ -19,7 +21,7 @@ pub trait Sequenceable {
 }
 
 
-impl<T> Sequenceable for Rc<T> where T: Sequenceable {
+impl<T: ?Sized> Sequenceable for Rc<T> where T: Sequenceable {
     fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64, lean: f32) {
         Rc::as_ref(self).sequence(seq, start_time, duration, lean);
     }
@@ -54,7 +56,7 @@ impl WaveClip {
     }
 
     pub fn depth_factor(&self) -> f32 {
-        (self.depth as f32 / 5.0).powf(0.5)
+        (self.depth as f32 / 5.0).powf(0.5).ceil() / 2.0
     }
 
     pub fn adjust_depth(&mut self, depth: usize) {
@@ -106,16 +108,28 @@ impl<T: Sequenceable> Loop<T> {
     pub fn new_dur(body: T, duration: f64) -> Self {
         Loop { body, loop_duration: duration }
     }
+
+    pub fn set_duration(&mut self, duration: f64) {
+        self.loop_duration = duration;
+    }
+
+    pub fn loop_duration(&self) -> f64 {
+        self.loop_duration
+    }
 }
 
 impl<T: Sequenceable> Sequenceable for Loop<T> {
     fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64, lean: f32) {
-        let mut cur_time = start_time;
-        while cur_time + self.loop_duration < duration {
-            self.body.sequence(seq, cur_time, self.loop_duration, lean);
-            cur_time += self.loop_duration;
+        let mut loop_dur = self.loop_duration;
+        while loop_dur > duration * 0.25 {
+            loop_dur *= 0.5;
         }
-        self.body.sequence(seq, cur_time, duration - cur_time, lean); // finish up with a little fast one why not
+        let mut cur_time = start_time;
+        while cur_time + loop_dur < duration {
+            self.body.sequence(seq, cur_time, loop_dur, lean);
+            cur_time += loop_dur;
+        }
+        // self.body.sequence(seq, cur_time, duration - cur_time, lean); // finish up with a little fast one why not
     }
 
     fn base_duration(&self) -> f64 {
@@ -145,7 +159,7 @@ pub struct Note {
 
 impl Note {
     /// Scales the duration of the note, modifying ADSR along with it.
-    pub fn mul_duration(self, factor: f64) -> Self {
+    pub fn mul_duration(self, factor: f64) -> Note {
         Note {
             time: self.time * factor,
             attack: self.attack * factor as f32,
@@ -153,6 +167,20 @@ impl Note {
             release: self.release * factor as f32,
             ..self
         }
+    }
+
+    pub fn adjust_pitch(self, tones: i8) -> Note {
+        Note {
+            note: self.note + tones,
+            ..self
+        }
+    }
+
+    pub fn with_instrument(self, instrument: An<impl AudioNode<Inputs=U1, Outputs=U1> + 'static>) -> An<impl AudioNode<Inputs=U0, Outputs=U1>> {
+        let hz = constant(get_hz(self.note));
+        let vol_control = envelope(move |t| if t < self.time as f32 { 1.0 } else { 0.0 }) >>
+            (adsr_live(self.attack, self.decay, self.sustain, self.release) * self.volume);
+        hz >> (instrument * vol_control) >> shape(Clip(1.0))
     }
 }
 
@@ -202,7 +230,15 @@ impl Melody {
     pub fn new_timed(instrument: impl AudioUnit + 'static, notes: &[(i8, f64)]) -> Self {
         Melody {
             instrument: unit(Box::new(instrument)),
-            notes: notes.iter().map(|(x, t)| (Note { note: *x, time: 0.85 * t, volume: 1.0, attack: 0.25, decay: 0.25, sustain: 0.5, release: 0.1 }, *t)).collect(),
+            notes: notes.iter().map(|(x, t)| (Note {
+                note: *x, 
+                time: 0.85 * t,
+                volume: 1.0,
+                attack: 0.25,
+                decay: 0.25,
+                sustain: 0.5,
+                release: 0.1
+            }, *t)).collect(),
             note_adjust: 0
         }
     }
@@ -235,12 +271,18 @@ impl Melody {
 
     /// Adjust the octave of all notes.
     pub fn set_octave(&mut self, octave: i8) {
+        // self.note_adjust = 6 * octave;
         self.note_adjust = 12 * octave;
     }
 
     /// Takes a closure and applies it to each [Note] in the melody.
-    pub fn map_notes(&mut self, mut f: impl FnMut(&Note) -> Note) {
-        self.notes = self.notes.iter_mut().map(|(x, d)| (f(x), *d)).collect();
+    pub fn map_notes(&mut self, mut f: impl FnMut(&(Note, f64)) -> (Note, f64)) {
+        self.notes = self.notes.iter_mut().map(|pair| f(pair)).collect();
+    }
+
+    /// Takes a closure and applies it to each [Note] in the melody.
+    pub fn map_indexed(&mut self, mut f: impl FnMut(usize, &(Note, f64)) -> (Note, f64)) {
+        self.notes = self.notes.iter_mut().enumerate().map(|(i, pair)| f(i, pair)).collect();
     }
 
     /// Concatenate two melodies, preserving pitch.
@@ -261,19 +303,21 @@ impl Melody {
         let octave = (depth as f64 / 2.5).powf(0.5).ceil() as i8 + 1;
         self.set_octave(octave);
         // self.note_adjust = (depth as f64 / 1.5 + 1.0).powf(0.85).ceil() as i8 * 5;
-        self.map_notes(|&n| Note {
+        self.map_notes(|&(n, d)| (Note {
             time: n.time * lerp(0.45, 0.95, 1.0 / depth as f32) as f64,
             attack: 0.2 / (depth as f32 + 0.1),
             sustain: lerp(0.25, 0.5, 1.0 / depth as f32),
             volume: /*0.000035*/ 0.5 * (1.0 + 0.07 * depth as f32),
             ..n
-        });
+        }, d));
     }
 }
 
 impl Sequenceable for Melody {
     fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64, lean: f32) {
         if self.duration() <= 0.0 {
+            println!("No duration for melody! {:?}", self.notes);
+            // println!("{}", std::backtrace::Backtrace::capture());
             return
         }
         // println!("lean: {lean}, {}, {}", 2.0_f32.powf(lean), 2.0_f32.powf(-lean));
@@ -281,12 +325,8 @@ impl Sequenceable for Melody {
         let ratio = duration / self.duration();
         for (note, dur) in self.notes.iter() {
             let dur = dur * ratio;
-            let note = note.mul_duration(ratio);
-            let hz = get_hz(note.note + self.note_adjust);
-            let instr = constant(hz) >> (self.instrument.clone() * (
-                envelope(move |t| if t < note.time as f32 { 1.0 } else { 0.0 }) >>
-                (adsr_live(note.attack, note.decay, note.sustain, note.release) * note.volume)
-            )) >> shape(Clip(1.0));
+            let note = note.mul_duration(ratio).adjust_pitch(self.note_adjust);
+            let instr = note.with_instrument(self.instrument.clone());
             let instr = instr >> split() >> (mul(2.0_f32.powf(lean)) | (mul(2.0_f32.powf(-lean))));
             seq.push_duration(start_time + elapsed, dur, Fade::Power, 0.0, 0.0, Box::new(instr));
             elapsed += dur;
@@ -296,6 +336,94 @@ impl Sequenceable for Melody {
 
     fn base_duration(&self) -> f64 {
         self.duration()
+    }
+}
+
+pub struct Texture {
+    notes: Vec<Note>,
+    instrument: An<Unit<U1, U1>>,
+    time_gap: f64,
+}
+
+impl Texture {
+    pub fn new_even(notes: impl IntoIterator<Item=i8>, instrument: impl AudioUnit + 'static, time_gap: f64) -> Self {
+        let dur = (time_gap * 0.25) as f32;
+        let full_notes = notes.into_iter().map(|n| Note {
+            note: n,
+            volume: 1.0,
+            time: dur as f64,
+            attack: 0.25 * dur,
+            decay: 0.25 * dur,
+            sustain: 0.5 * dur,
+            release: 0.1 * dur
+        });
+        Self::new_notes(full_notes, instrument, time_gap)
+    }
+
+    pub fn new_notes(notes: impl IntoIterator<Item=Note>, instrument: impl AudioUnit + 'static, time_gap: f64) -> Self {
+        Texture { notes: notes.into_iter().collect(), instrument: unit::<U1, U1>(Box::new(instrument)), time_gap }
+    }
+
+    pub fn adjust_depth(&mut self, depth: usize) {
+        let octave = (depth as f64 / 2.5).powf(0.5).ceil() as i8 + 1;
+        self.notes = self.notes.iter().map(|n| Note {note: n.note + 12 * octave, ..*n}).collect()
+    }
+}
+
+impl Sequenceable for Texture {
+    fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64, lean: f32) {
+        let mut elapsed = 0.0;
+        while elapsed < duration {
+            let note = self.notes.choose(&mut rng()).unwrap();
+            // let note = self.notes[random_range(0..self.notes.len())];
+            let instr = note.with_instrument(self.instrument.clone());
+            let instr = instr >> split() >> (mul(2.0_f32.powf(lean)) | (mul(2.0_f32.powf(-lean))));
+            seq.push_duration(start_time + elapsed, note.time, Fade::Smooth, 0.0, 0.0, Box::new(instr));
+            elapsed += self.time_gap;
+        }
+    }
+
+    fn base_duration(&self) -> f64 {
+        self.time_gap
+    }
+}
+
+pub struct EffectSeq<T, X>
+    where
+        T: Sequenceable,
+        X: AudioNode<Inputs=U1, Outputs=U1>
+{
+    body: T,
+    effect: An<X>
+}
+
+impl<T, X> EffectSeq<T, X>
+    where
+        T: Sequenceable,
+        X: AudioNode<Inputs=U1, Outputs=U1>
+{
+    pub fn new(body: T, effect: An<X>) -> Self {
+        EffectSeq {
+            body,
+            effect
+        }
+    }
+}
+
+impl<T, X> Sequenceable for EffectSeq<T, X>
+    where
+        T: Sequenceable,
+        X: AudioNode<Inputs=U1, Outputs=U1> + 'static
+{
+    fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64, lean: f32) {
+        let mut new_seq = Sequencer::new(false, 2);
+        self.body.sequence(&mut new_seq, 0.0, duration, lean);
+        let effected = unit::<U0, U2>(Box::new(new_seq)) >> (self.effect.clone() | self.effect.clone());
+        seq.push_duration(start_time, duration, Fade::Power, 0.0, 0.0, Box::new(effected));
+    }
+
+    fn base_duration(&self) -> f64 {
+        self.body.base_duration()
     }
 }
 

@@ -132,6 +132,9 @@ pub enum AudioSelectorOptions {
     Stratified,
     Effector,
     Mixed,
+    Looper,
+    Rhythmizer,
+    Strat2,
 }
 
 // impl From<AudioSelectorOptions> for MelodySelector {
@@ -172,7 +175,7 @@ pub struct Args {
     #[arg(short, long, default_value="girard-reduced")]
     value: NamedTerm,
     /// Determines which set of melodies to use.
-    #[arg(short, long, default_value="f")]
+    #[arg(short, long, default_value="strat2")]
     melody: AudioSelectorOptions,
     /// How to assign sound-tree structure to a term.
     #[arg(short('S'), long, default_value="type")]
@@ -200,7 +203,7 @@ pub fn main() {
             Structure::Term => term_translate(args.value.term(), &F),
             // Structure::Type => type_translate(term, &selector),
             Structure::Type => strat_translate(args.value.term(), selector),
-            Structure::Test => test_tree(&F),
+            Structure::Test => test_tree(selector),
         }
     }
     let tree = match args.melody {
@@ -216,6 +219,9 @@ pub fn main() {
         AudioSelectorOptions::Stratified => structure_func(StratifiedInfo::default(), &args),
         AudioSelectorOptions::Effector => structure_func(Effector::new(), &args),
         AudioSelectorOptions::Mixed => structure_func(MixedOutput::new(), &args),
+        AudioSelectorOptions::Looper => structure_func(Looper::new(Rhythmizer::new()), &args),
+        AudioSelectorOptions::Rhythmizer => structure_func(Rhythmizer::new(), &args),
+        AudioSelectorOptions::Strat2 => structure_func(Stratifier2::new(), &args)
     };
     println!("...done in {:?}", now.elapsed());
     // let txt = tree.metadata().name;

@@ -26,6 +26,9 @@ pub fn term_translate(term: ITerm, mel: &MelodySelector) -> SoundTree {
     iterm_translate_full(&term, 0, mel)
 }
 
+// TODO stratified variant that includes where we at with it
+// TODO stratified variant that includes getting the term-translation of types??
+
 fn itype_stratified_translate<T: Selector>(ii: usize, ctx: Context, term: &ITerm, meta: T) -> Result<(Type, SoundTree), String> {
     // the process for defining the sounds is fairly subjective - there's no one correct answer,
     // we just want something that sounds good and represents the structure.
@@ -51,7 +54,7 @@ fn itype_stratified_translate<T: Selector>(ii: usize, ctx: Context, term: &ITerm
             let mut new_ctx = ctx.clone();
             new_ctx.push((Name::Local(ii), ty.clone()));
             let trgtree = ctype_stratified_translate(
-                ii + 1, 
+                ii + 1,
                 new_ctx, 
                 &trg.clone().subst(0, ITerm::Free(Name::Local(ii))), 
                 Value::Star, 
@@ -410,7 +413,8 @@ pub fn cterm_translate_full(term: &CTerm, depth: usize, mel: &MelodySelector) ->
     }
 }
 
-pub fn test_tree(mel: &MelodySelector) -> SoundTree {
+pub fn test_tree(mel: impl Selector) -> SoundTree {
+    let mel = mel.imerge(&ITerm::Star).imerge(&ITerm::Star);
     let test_terms = [
         ITerm::Star,
         ITerm::Ann(ITerm::Star.into(), ITerm::Star.into()),
@@ -422,9 +426,8 @@ pub fn test_tree(mel: &MelodySelector) -> SoundTree {
         ITerm::Fin(ITerm::Zero.into()),
     ];
     let mut sounds = Vec::new();
-    let depth = 2;
     for term in test_terms {
-        let onemel = SoundTree::sound(mel.imelody(&term, depth), term);
+        let onemel = mel.isound(&term);
         for _ in 0..4 {
             sounds.push(onemel.clone())
         }
@@ -435,7 +438,7 @@ pub fn test_tree(mel: &MelodySelector) -> SoundTree {
     }
     let lamstar = CTerm::Lam(Box::new(ITerm::Star.into()));
     for _ in 0..4 {
-        sounds.push(SoundTree::sound(mel.cmelody(&lamstar, depth), lamstar.clone()));
+        sounds.push(mel.csound(&lamstar));
     }
     SoundTree::seq(&sounds)
 }

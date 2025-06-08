@@ -189,13 +189,19 @@ pub fn girard() -> ITerm {
     iann(iapp(lem2(), lem3()), void())
 }
 
+pub fn reduce(term: ITerm) -> CTerm {
+    quote0(term.eval(vec![]))
+}
+
+pub fn ireduce(term: ITerm) -> Result<ITerm, String> {
+    let ty = term.infer_type(vec![])?;
+    Ok(iann(reduce(term), quote0(ty)))
+}
+
 /// Girard's Paradox, with the lemmas reduced as far as possible.
 /// See [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf) for details.
 pub fn girard_reduced() -> ITerm {
-    let vty = quote0(ipi(d(), void()).eval(vec![]));
-    let vlem2 = iann(quote0(lem2().eval(vec![])), vty);
-    let vlem3 = quote0(lem3().eval(vec![]));
-    iann(iapp(vlem2, vlem3), void())
+    iann(iapp(ireduce(lem2()).unwrap(), reduce(lem3())), void())
 }
 
 /// For all types X, a function from False to X. Ex falso sequitur quodlibet.

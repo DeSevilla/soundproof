@@ -30,7 +30,7 @@ impl Stratifier2 {
             effect: unit(Box::new(pass())),
             instrument: unit(Box::new(sine())),
             rhythm: vec![1.0 / length as f64; length],
-            depth: 0
+            depth: 1
         }
     }
 
@@ -82,12 +82,12 @@ impl Selector for Stratifier2 {
     fn imerge(&self, term: &ITerm) -> Self {
         let rhythm = match term {
             ITerm::Ann(_, _) => vec![1.0, 0.5, 1.5, 1.0],
-            ITerm::Star => vec![0.0, 0.0, 0.0, -1.0],
+            ITerm::Star => vec![0.0, 0.0, 0.0, -1.0], // can never occur as this has no children
             ITerm::Pi(_, _) => vec![0.5, 1.5, 0.5, 1.5],
-            ITerm::Bound(_) => vec![0.0, 0.0, -1.0, 0.0],
+            // ITerm::Bound(_) => vec![0.0, 0.0, -1.0, 0.0], // can never occur as this has no children
             ITerm::Free(_) => vec![3.0, 0.3, 0.3, 0.4],
             ITerm::App(_, _) => vec![2.5, 0.5, 0.5, 0.5],
-            ITerm::Zero => vec![-1.0, 0.0, 0.0, 0.0],
+            ITerm::Zero => vec![-1.0, 0.0, 0.0, 0.0], // can never occur as this has no children
             ITerm::Fin(_) => vec![0.7, 0.7, 2.1, 0.5],
             _ => unimplemented!()
         };

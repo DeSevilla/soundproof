@@ -12,7 +12,7 @@ use crate::music::stretch::{retime_pitch_wave, retime_wave};
 use crate::Scaling;
 
 /// Objects that can be used to generate audio output through a FunDSP [Sequencer].
-pub trait Sequenceable {
+pub trait SoundGenerator {
     /// Generate audio into the sequencer for a duration starting at the selected time.
     fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64, lean: f32);
 
@@ -21,7 +21,7 @@ pub trait Sequenceable {
 }
 
 
-impl<T: ?Sized> Sequenceable for Rc<T> where T: Sequenceable {
+impl<T: ?Sized> SoundGenerator for Rc<T> where T: SoundGenerator {
     fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64, lean: f32) {
         Rc::as_ref(self).sequence(seq, start_time, duration, lean);
     }
@@ -64,7 +64,7 @@ impl WaveClip {
     }
 }
 
-impl Sequenceable for WaveClip {
+impl SoundGenerator for WaveClip {
     fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64, lean: f32) {
         let scaled = retime_pitch_wave(&self.wave, duration, self.depth_factor());
         let wave_arc = Arc::new(scaled);
@@ -80,7 +80,7 @@ impl Sequenceable for WaveClip {
     }
 }
 
-impl Sequenceable for Wave {
+impl SoundGenerator for Wave {
     fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64, lean: f32) {
         let scaled = retime_wave(self, duration);
         let wave_arc = Arc::new(scaled);
@@ -95,12 +95,12 @@ impl Sequenceable for Wave {
     }
 }
 
-pub struct Loop<T: Sequenceable> {
+pub struct Loop<T: SoundGenerator> {
     body: T,
     loop_duration: f64,
 }
 
-impl<T: Sequenceable> Loop<T> {
+impl<T: SoundGenerator> Loop<T> {
     pub fn new(body: T) -> Self {
         Loop { loop_duration: body.base_duration(), body }
     }
@@ -118,7 +118,7 @@ impl<T: Sequenceable> Loop<T> {
     }
 }
 
-impl<T: Sequenceable> Sequenceable for Loop<T> {
+impl<T: SoundGenerator> SoundGenerator for Loop<T> {
     fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64, lean: f32) {
         let mut loop_dur = self.loop_duration;
         while loop_dur > duration * 0.25 {
@@ -313,7 +313,7 @@ impl Melody {
     }
 }
 
-impl Sequenceable for Melody {
+impl SoundGenerator for Melody {
     fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64, lean: f32) {
         if self.duration() <= 0.0 {
             println!("No duration for melody! {:?}", self.notes);
@@ -370,7 +370,7 @@ impl Texture {
     }
 }
 
-impl Sequenceable for Texture {
+impl SoundGenerator for Texture {
     fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64, lean: f32) {
         let mut elapsed = 0.0;
         while elapsed < duration {
@@ -390,7 +390,7 @@ impl Sequenceable for Texture {
 
 pub struct EffectSeq<T, X>
     where
-        T: Sequenceable,
+        T: SoundGenerator,
         X: AudioNode<Inputs=U1, Outputs=U1>
 {
     body: T,
@@ -399,7 +399,7 @@ pub struct EffectSeq<T, X>
 
 impl<T, X> EffectSeq<T, X>
     where
-        T: Sequenceable,
+        T: SoundGenerator,
         X: AudioNode<Inputs=U1, Outputs=U1>
 {
     pub fn new(body: T, effect: An<X>) -> Self {
@@ -410,16 +410,17 @@ impl<T, X> EffectSeq<T, X>
     }
 }
 
-impl<T, X> Sequenceable for EffectSeq<T, X>
+impl<T, X> SoundGenerator for EffectSeq<T, X>
     where
-        T: Sequenceable,
+        T: SoundGenerator,
         X: AudioNode<Inputs=U1, Outputs=U1> + 'static
 {
     fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64, lean: f32) {
         let mut new_seq = Sequencer::new(false, 2);
         self.body.sequence(&mut new_seq, 0.0, duration, lean);
         let effected = unit::<U0, U2>(Box::new(new_seq)) >> (self.effect.clone() | self.effect.clone());
-        seq.push_duration(start_time, duration, Fade::Power, 0.0, 0.0, Box::new(effected));
+        let fade_out = 1.0.min(duration * 0.2);
+        seq.push_duration(start_time, duration + fade_out, Fade::Smooth, 0.0, fade_out, Box::new(effected));
     }
 
     fn base_duration(&self) -> f64 {
@@ -437,7 +438,7 @@ pub enum SoundTree {
     /// Subtrees will play sequentially.
     Seq(Vec<SoundTree>, TreeMetadata),
     /// Plays a predefined sound-pattern.
-    Sound(Rc<dyn Sequenceable>, TreeMetadata)
+    Sound(Rc<dyn SoundGenerator>, TreeMetadata)
 }
 
 static SIGN: AtomicU32 = AtomicU32::new(0);
@@ -450,12 +451,12 @@ pub struct TreeMetadata {
 
 impl SoundTree {
     /// Constructs a SoundTree containing a single sound-pattern.
-    pub fn sound(sound: impl Sequenceable + 'static, name: impl Into<CTerm>) -> Self {
-        let term = name.into();
+    pub fn sound(sound: impl SoundGenerator + 'static, _name: impl Into<CTerm>) -> Self {
+        // let term = name.into();
         // println!("{}", term.to_string());
         Self::Sound(Rc::new(sound), TreeMetadata { 
-            name: term.to_string(),
-            // name: "".to_owned(),
+            // name: term.to_string(),
+            name: "".to_owned(),
             // lean: 0.0,
         })
     }
@@ -465,47 +466,49 @@ impl SoundTree {
         // avoids nested Seqs; this can affect duration assignments.
         // subject to change but I think I like it
         let mut result = Vec::new();
-        let mut names = "[".to_owned();
+        // let mut names = "".to_owned();
+        // let mut names = "[".to_owned();
         for val in subtrees {
             match val.clone() {
-                SoundTree::Seq(mut trees, meta) => { 
-                    names += &meta.name;
-                    names += ";";
+                SoundTree::Seq(mut trees, _meta) => { 
+                    // names += &meta.name;
+                    // names += ";";
                     result.append(&mut trees);
                 }
                 other => {
-                    names += &other.metadata().name;
-                    names += ";";
+                    // names += &other.metadata().name;
+                    // names += ";";
                     result.push(other);
                 },
             }
         }
-        names += "]";
-        Self::Seq(result, TreeMetadata { name: names })
+        // names += "]";
+        Self::Seq(result, TreeMetadata { name: "".to_owned() })
     }
 
     /// Constructs a SoundTree which plays its subtrees simultaneously.
     pub fn simul(subtrees: &[SoundTree]) -> Self {
         // avoids redundant nested Simuls; this cannot affect the resulting audio
         let mut result = Vec::new();
-        let mut names = "{".to_owned();
+        // let mut names = "".to_owned();
+        // let mut names = "{".to_owned();
         for val in subtrees {
             match val.clone() {
-                SoundTree::Simul(mut trees, meta) => {
-                    names += &meta.name;
-                    names += "||";
+                SoundTree::Simul(mut trees, _meta) => {
+                    // names += &meta.name;
+                    // names += "||";
                     result.append(&mut trees);
                     
                 }
                 other => {
-                    names += &other.metadata().name;
-                    names += "||";
+                    // names += &other.metadata().name;
+                    // names += "||";
                     result.push(other)
                 }
             }
         }
-        names += "}";
-        Self::Simul(result, TreeMetadata { name: names })
+        // names += "}";
+        Self::Simul(result, TreeMetadata { name: "".to_owned() })
     }
 
     // pub fn set_leans(&mut self, lean: f32) {
@@ -573,6 +576,9 @@ impl SoundTree {
 
     /// Generate audio into a [Sequencer] for the tree, distributing subtree durations by the selected [scaling](Scaling).
     pub fn generate_with(&self, seq: &mut Sequencer, start_time: f64, duration: f64, scaling: Scaling, lean: f32) {
+        // if duration > 10.0 {
+        //     println!("{}", self.metadata().name.len())
+        // }
         // this function is mostly like Sequenceable.sequence but carries additional info around
         // we could refactor to use the trait but then we'd have to carry scaling/lean in TreeMetadata instead
         // setup would be tricky but could allow within-tree variation.... but we're not there yet.

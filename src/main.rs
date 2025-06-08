@@ -29,6 +29,8 @@ pub enum Structure {
     Type,
     /// Run through a series of terms designed to test the different melodies. Overrides --value.
     Test,
+    /// TODO allow multiple values instead of this
+    Buildup,
 }
 
 /// Determines how time is broken down between sequential segments.
@@ -45,7 +47,7 @@ pub enum Scaling {
 
 impl Scaling {
     fn exponent() -> f64 {
-        0.85
+        0.77
     }
 
     fn child_scale(&self, child: &SoundTree) -> f64 {
@@ -75,6 +77,7 @@ impl Scaling {
 pub enum NamedTerm {
     /// The type of types.
     Star,
+    SetsOf,
     // SetsOfNat, //these two commented out are not supported by the current preliminary melody functions
     // ExFalso,
     /// The "universe" type U used to derive Girard's Paradox: `forall (X :: *) . (P(P(X)) -> X) -> P(P(X))`.
@@ -85,6 +88,9 @@ pub enum NamedTerm {
     Sigma,
     /// A term of type U.
     Omega,
+    Lem0,
+    Lem2,
+    Lem3,
     /// Girard's Paradox, full term according to the Hurkens approach.
     Girard,
     /// Girard's Paradox, reduced as far as possible without nontermination.
@@ -93,16 +99,21 @@ pub enum NamedTerm {
 
 impl NamedTerm {
     fn term(&self) -> ITerm {
+        use NamedTerm::*;
         match self {
-            NamedTerm::Star => ITerm::Star,
-            // NamedTerm::SetsOfNat => sets_of_nat(),
-            // NamedTerm::ExFalso => exfalso(),
-            NamedTerm::U => u(),
-            NamedTerm::Tau => tau(),
-            NamedTerm::Sigma => sigma(),
-            NamedTerm::Omega => omega(),
-            NamedTerm::Girard => girard(),
-            NamedTerm::GirardReduced => girard_reduced(),
+            Star => ITerm::Star,
+            SetsOf => sets_of(),
+            // SetsOfNat => sets_of_nat(),
+            // ExFalso => exfalso(),
+            U => u(),
+            Tau => tau(),
+            Sigma => sigma(),
+            Omega => omega(),
+            Lem0 => lem0(),
+            Lem2 => ireduce(lem2()).unwrap(),
+            Lem3 => ireduce(lem3()).unwrap(),
+            Girard => girard(),
+            GirardReduced => girard_reduced(),
         }
     }
 }
@@ -130,10 +141,10 @@ pub enum AudioSelectorOptions {
     NamesShort,
     NamesLong,
     Stratified,
-    Effector,
+    Effects,
     Mixed,
-    Looper,
-    Rhythmizer,
+    Loop,
+    Rhythmized,
     Strat2,
 }
 
@@ -193,46 +204,44 @@ pub fn main() {
     let term = args.value.term();
     //validation just makes sure it typechecks; we can't evaluate the paradox or it'll run forever.
     validate(&format!("Term: {:?}", args.value), &term, false);
-    // let selector = args.melody.into();
     use std::time::Instant;
-    print!("Translating...");
+    println!("Translating...");
     let now = Instant::now();
-    use MelodySelector::*;
+    // use MelodySelector::*;
     fn structure_func(selector: impl Selector, args: &Args) -> SoundTree {
         match args.structure {
-            Structure::Term => term_translate(args.value.term(), &F),
-            // Structure::Type => type_translate(term, &selector),
-            Structure::Type => strat_translate(args.value.term(), selector),
+            Structure::Term => term_translate(args.value.term(), selector),
+            Structure::Type => type_translate(args.value.term(), selector),
             Structure::Test => test_tree(selector),
+            Structure::Buildup => buildup([u(), tau(), sigma(), omega(), lem0(), ireduce(lem2()).unwrap(), ireduce(lem3()).unwrap(), girard_reduced()], selector)
         }
     }
+    use AudioSelectorOptions::*;
     let tree = match args.melody {
-        AudioSelectorOptions::A => structure_func(A.deepen(), &args),
-        AudioSelectorOptions::B => structure_func(B.deepen(), &args),
-        AudioSelectorOptions::C => structure_func(C.deepen(), &args),
-        AudioSelectorOptions::D => structure_func(D.deepen(), &args),
-        AudioSelectorOptions::E => structure_func(E.deepen(), &args),
-        AudioSelectorOptions::F => structure_func(F.deepen(), &args),
-        AudioSelectorOptions::PureSine => structure_func(PureSine.deepen(), &args),
-        AudioSelectorOptions::NamesShort => structure_func(ClipSelector::names(), &args),
-        AudioSelectorOptions::NamesLong => structure_func(ClipSelector::names_long(), &args),
-        AudioSelectorOptions::Stratified => structure_func(StratifiedInfo::default(), &args),
-        AudioSelectorOptions::Effector => structure_func(Effector::new(), &args),
-        AudioSelectorOptions::Mixed => structure_func(MixedOutput::new(), &args),
-        AudioSelectorOptions::Looper => structure_func(Looper::new(Rhythmizer::new()), &args),
-        AudioSelectorOptions::Rhythmizer => structure_func(Rhythmizer::new(), &args),
-        AudioSelectorOptions::Strat2 => structure_func(Stratifier2::new(), &args)
+        A => structure_func(MelodySelector::A.deepen(), &args),
+        B => structure_func(MelodySelector::B.deepen(), &args),
+        C => structure_func(MelodySelector::C.deepen(), &args),
+        D => structure_func(MelodySelector::D.deepen(), &args),
+        E => structure_func(MelodySelector::E.deepen(), &args),
+        F => structure_func(MelodySelector::F.deepen(), &args),
+        PureSine => structure_func(MelodySelector::PureSine.deepen(), &args),
+        NamesShort => structure_func(ClipSelector::names(), &args),
+        NamesLong => structure_func(ClipSelector::names_long(), &args),
+        Stratified => structure_func(StratifiedInfo::default(), &args),
+        Effects => structure_func(Effector::new(), &args),
+        Mixed => structure_func(MixedOutput::new(), &args),
+        Loop => structure_func(Looper::new(Rhythmizer::new()), &args),
+        Rhythmized => structure_func(Rhythmizer::new(), &args),
+        Strat2 => structure_func(Stratifier2::new(), &args)
     };
     println!("...done in {:?}", now.elapsed());
-    // let txt = tree.metadata().name;
-    // println!("{txt}");
     let time = args.time.unwrap_or(std::cmp::min(tree.size(), 10000) as f64);
-    let mut seq = Sequencer::new(false, 2);
-    print!("Sequencing over {time} seconds...");
+    let mut seq = Box::new(Sequencer::new(false, 2));
+    println!("Sequencing over {time} seconds...");
     let now = Instant::now();
     tree.generate_with(&mut seq, 0.0, time, args.scaling, 0.0);
     println!("...done in {:?}", now.elapsed());
-    let mut output = unit::<U0, U2>(Box::new(seq));
+    let mut output = unit::<U0, U2>(seq);
     match args.filters {
         FilterOptions::None => save(&mut output, time),
         FilterOptions::ClipLowpass => save(
@@ -241,9 +250,10 @@ pub fn main() {
                     shape(Adaptive::new(0.1, Tanh(0.5))) >> 
                     lowpass_hz(2500.0, 1.0) >>
                     mul(0.05)
+                    // >> mul(10.0)
                 )), 
             time
         ),
     }
-    println!("Done");
+    println!("Done.");
 }

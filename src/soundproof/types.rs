@@ -304,7 +304,8 @@ impl Melody {
         self.set_octave(octave);
         // self.note_adjust = (depth as f64 / 1.5 + 1.0).powf(0.85).ceil() as i8 * 5;
         self.map_notes(|&(n, d)| (Note {
-            time: n.time * lerp(0.45, 0.95, 1.0 / depth as f32) as f64,
+            // time: n.time * lerp(0.45, 0.95, 1.0 / depth as f32) as f64,
+            time: n.time * lerp(0.95, 0.45, 1.0 / depth as f32) as f64,
             attack: 0.2 / (depth as f32 + 0.1),
             sustain: lerp(0.25, 0.5, 1.0 / depth as f32),
             volume: /*0.000035*/ 0.5 * (1.0 + 0.07 * depth as f32),

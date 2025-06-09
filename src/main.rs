@@ -37,7 +37,7 @@ pub enum Structure {
 #[derive(PartialEq, Eq, Clone, Copy, Debug, ValueEnum)]
 pub enum Scaling {
     /// At each node, just splits time evenly among sequential children. Outer terms get much more time relative to deeper subtrees.
-    Linear,
+    Even,
     /// Splits time according to the size of the subtree, but adjusted to give a bit more weight to outer terms.
     Weight,
     // SizeAligned,  //goal here was to align to a rhythm but this has conceptual/structural issues
@@ -52,7 +52,7 @@ impl Scaling {
 
     fn child_scale(&self, child: &SoundTree) -> f64 {
         match self {
-            Scaling::Linear => 1.0,
+            Scaling::Even => 1.0,
             Scaling::Weight => child.subtree_weight(Self::exponent()),
             Scaling::Size => child.size() as f64,
         }
@@ -60,7 +60,7 @@ impl Scaling {
 
     fn parent_scale(&self, parent: &SoundTree) -> f64 {
         match self {
-            Scaling::Linear => match parent {
+            Scaling::Even => match parent {
                 SoundTree::Simul(vec, _) => vec.len() as f64,
                 SoundTree::Seq(vec, _) => vec.len() as f64,
                 SoundTree::Sound(_, _) => 1.0,
@@ -140,12 +140,12 @@ pub enum AudioSelectorOptions {
     /// Pulled from audio files, short names
     NamesShort,
     NamesLong,
-    Stratified,
+    StratInstr,
     Effects,
     Mixed,
     Loop,
     Rhythmized,
-    Strat2,
+    StratFull,
 }
 
 // impl From<AudioSelectorOptions> for MelodySelector {
@@ -227,12 +227,12 @@ pub fn main() {
         PureSine => structure_func(MelodySelector::PureSine.deepen(), &args),
         NamesShort => structure_func(ClipSelector::names(), &args),
         NamesLong => structure_func(ClipSelector::names_long(), &args),
-        Stratified => structure_func(StratifiedInfo::default(), &args),
+        StratInstr => structure_func(StratifyInstrument::default(), &args),
         Effects => structure_func(Effector::new(), &args),
         Mixed => structure_func(MixedOutput::new(), &args),
         Loop => structure_func(Looper::new(Rhythmizer::new()), &args),
         Rhythmized => structure_func(Rhythmizer::new(), &args),
-        Strat2 => structure_func(Stratifier2::new(), &args)
+        StratFull => structure_func(FullStratifier::new(), &args)
     };
     println!("...done in {:?}", now.elapsed());
     let time = args.time.unwrap_or(std::cmp::min(tree.size(), 10000) as f64);

@@ -16,14 +16,14 @@ pub trait Selector: Clone {
 }
 
 #[derive(Clone)]
-pub struct Stratifier2 {
+pub struct FullStratifier {
     instrument: An<Unit<U1, U1>>,
     effect: An<Unit<U1, U1>>,
     rhythm: Vec<f64>,
     depth: usize,
 }
 
-impl Stratifier2 {
+impl FullStratifier {
     pub fn new() -> Self {
         let length = 4;
         Self {
@@ -64,7 +64,7 @@ impl Stratifier2 {
     }
 }
 
-impl Selector for Stratifier2 {
+impl Selector for FullStratifier {
     fn isound(&self, term: &ITerm) -> SoundTree {
         let mut mel = self.imelody(term);
         mel.instrument = self.instrument.clone();
@@ -387,18 +387,18 @@ impl Selector for Effector {
 }
 
 #[derive(Clone)]
-pub struct StratifiedInfo {
+pub struct StratifyInstrument {
     pub mel: Melody,
     depth: usize,
 }
 
-impl Default for StratifiedInfo {
+impl Default for StratifyInstrument {
     fn default() -> Self {
         Self { mel: Melody::new_even(violinish(), &[A, D, F, A]), depth: 0 }
     }
 }
 
-impl Selector for StratifiedInfo {
+impl Selector for StratifyInstrument {
     fn isound(&self, term: &ITerm) -> SoundTree {
         let mut mel = self.mel.clone();
         mel.adjust_depth(self.depth);
@@ -411,7 +411,7 @@ impl Selector for StratifiedInfo {
         SoundTree::sound(mel, term.clone())
     }
 
-    fn imerge(&self, term: &ITerm) -> StratifiedInfo {
+    fn imerge(&self, term: &ITerm) -> StratifyInstrument {
         let mel = match term {
             ITerm::Ann(_, _) => Melody::new_even(violinish(), &[A, D, F, A]),
             ITerm::Star => Melody::new_timed(three_equivalents(wobbly_sine()) * 0.7, &[(B, 0.5), (C, 0.5), (E, 3.0)]),
@@ -423,15 +423,15 @@ impl Selector for StratifiedInfo {
             ITerm::Fin(_) => Melody::new_even(violinish() * 1.1, &[A, A + 12, E, F]),
             _ => panic!("{term} not implemented")
         };
-        StratifiedInfo { mel, depth: self.depth + 1 }
+        StratifyInstrument { mel, depth: self.depth + 1 }
     }
 
-    fn cmerge(&self, term: &CTerm) -> StratifiedInfo {
+    fn cmerge(&self, term: &CTerm) -> StratifyInstrument {
         let mel = match term {
             CTerm::Lam(_) => Melody::new_even(fm_basic() * 0.28, &[D, F, E, C]),
             _ => Melody::new_even(sine(), &[G, G, G, G]),  //value will never be used, but we have to call this for ownership reasons
         };
-        StratifiedInfo { mel, depth: self.depth + 1 }
+        StratifyInstrument { mel, depth: self.depth + 1 }
     }
 }
 

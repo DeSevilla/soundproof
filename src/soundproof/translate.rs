@@ -5,7 +5,7 @@ use crate::{
     ast::*,
     term::*,
     types::*,
-    select::*,
+    select::Selector,
 };
 
 /// Translates [ITerm]s into [SoundTree]s according to their type structure.
@@ -17,7 +17,7 @@ pub fn type_translate<T: Selector>(term: ITerm, meta: T) -> SoundTree {
 /// Translates [ITerm]s into [SoundTree]s according to their term structure.
 /// Subterms are converted to melodies and run along with their outer terms.
 pub fn term_translate<T: Selector>(term: ITerm, meta: T) -> SoundTree {
-    iterm_translate(&term, 0, meta)
+    iterm_translate(&term, meta)
 }
 
 pub fn buildup<T: Selector>(terms: impl IntoIterator<Item=ITerm>, meta: T) -> SoundTree {
@@ -28,11 +28,8 @@ pub fn buildup<T: Selector>(terms: impl IntoIterator<Item=ITerm>, meta: T) -> So
 fn itype_translate<T: Selector>(ii: usize, ctx: Context, term: &ITerm, meta: T) -> Result<(Type, SoundTree), String> {
     // the process for defining the sounds is fairly subjective - there's no one correct answer,
     // we just want something that sounds good and represents the structure.
-    // let node_melody = SoundTree::sound(mel.imelody(term, depth), term);
-    // let node_melody = meta.istratify(term, depth);
     let node_melody = meta.isound(term);
     let meta = meta.imerge(term);
-    // let meta = StratifiedInfo::imelody(term, depth);
     match term {
         ITerm::Ann(ct, cty) => {
             // should we modify something in this to present an annotation better? term-translate the type, maybe?
@@ -51,15 +48,15 @@ fn itype_translate<T: Selector>(ii: usize, ctx: Context, term: &ITerm, meta: T) 
             new_ctx.push((Name::Local(ii), ty.clone()));
             let trgtree = ctype_translate(
                 ii + 1,
-                new_ctx, 
+                new_ctx,
                 &trg.clone().subst(0, ITerm::Free(Name::Local(ii))), 
-                Value::Star, 
+                Value::Star,
                 meta
             )?;
             let tree = SoundTree::simul(&[node_melody, SoundTree::seq(&[srctree, trgtree])]);
             Ok((Value::Star, tree))
         },
-        ITerm::Free(name) => { 
+        ITerm::Free(name) => {
             // want to assign a melody to the name... randomization? fixed sequence? how do we associate?
             // maybe we put an environment of some sort in the Selector?
             let val = ctx.iter().find(|x| x.0 == *name).ok_or("Could not find variable".to_owned())?;
@@ -135,7 +132,7 @@ fn itype_translate<T: Selector>(ii: usize, ctx: Context, term: &ITerm, meta: T) 
             let bctree = ctype_translate(ii, ctx.clone(), base, Value::Pi(Box::new(Value::Nat), Rc::new(
                 move |k| vapp(vapp(motive_val.clone(), Value::Succ(Box::new(k.clone()))), Value::FZero(Box::new(k)))
             )), meta.clone())?;
-            let motive_val = motive_val2.clone();
+            let motive_val = motive_val2.clone(); //needed for the closures to take ownership w/o removing it from scope
             let indtree = ctype_translate(ii, ctx.clone(), ind, Value::Pi(Box::new(Value::Nat), Rc::new(
                 move |k| { 
                     let motive_val = motive_val.clone();
@@ -190,7 +187,7 @@ pub fn ctype_translate<T: Selector>(i: usize, ctx: Context, term: &CTerm, ty: Ty
 }
 
 /// Translates ITerms to SoundTrees on a pure subterm-to-subtree basis.
-pub fn iterm_translate<T: Selector>(term: &ITerm, depth: usize, meta: T) -> SoundTree {
+pub fn iterm_translate<T: Selector>(term: &ITerm, meta: T) -> SoundTree {
     let base_mel = meta.isound(term);
     let meta = meta.imerge(term);
     // let base_mel = SoundTree::sound(mel.imelody(term, depth), term.clone());
@@ -198,16 +195,16 @@ pub fn iterm_translate<T: Selector>(term: &ITerm, depth: usize, meta: T) -> Soun
         ITerm::Ann(cterm, cterm1) => SoundTree::simul(&[
             base_mel, 
             SoundTree::seq(&[
-                cterm_translate(cterm, depth + 1, meta.clone()),
-                cterm_translate(cterm1, depth + 1, meta)
+                cterm_translate(cterm, meta.clone()),
+                cterm_translate(cterm1, meta)
             ])
         ]),
         ITerm::Star => base_mel,
         ITerm::Pi(cterm, cterm1) => SoundTree::simul(&[
             base_mel, 
             SoundTree::seq(&[
-                cterm_translate(cterm, depth + 1, meta.clone()),
-                cterm_translate(cterm1, depth + 1, meta)
+                cterm_translate(cterm, meta.clone()),
+                cterm_translate(cterm1, meta)
             ])
         ]),
         ITerm::Bound(_) => base_mel,
@@ -215,47 +212,47 @@ pub fn iterm_translate<T: Selector>(term: &ITerm, depth: usize, meta: T) -> Soun
         ITerm::App(iterm, cterm) => SoundTree::simul(&[
             base_mel, 
             SoundTree::seq(&[
-                iterm_translate(iterm, depth + 1, meta.clone()), 
-                cterm_translate(cterm, depth + 1, meta)
+                iterm_translate(iterm, meta.clone()), 
+                cterm_translate(cterm, meta)
             ])
         ]),
         ITerm::Nat => base_mel,
         ITerm::Zero => base_mel,
-        ITerm::Succ(cterm) => SoundTree::simul(&[base_mel, SoundTree::seq(&[cterm_translate(cterm, depth + 1, meta)])]),
+        ITerm::Succ(cterm) => SoundTree::simul(&[base_mel, SoundTree::seq(&[cterm_translate(cterm, meta)])]),
         ITerm::NatElim(motive, base, ind, k) => SoundTree::simul(&[base_mel, SoundTree::seq(&[
-            cterm_translate(motive, depth + 1, meta.clone()),
-            cterm_translate(base, depth + 1, meta.clone()),
-            cterm_translate(ind, depth + 1, meta.clone()),
-            cterm_translate(k, depth + 1, meta),
+            cterm_translate(motive, meta.clone()),
+            cterm_translate(base, meta.clone()),
+            cterm_translate(ind, meta.clone()),
+            cterm_translate(k, meta),
         ])]),
-        ITerm::Fin(cterm) => SoundTree::simul(&[base_mel, SoundTree::seq(&[cterm_translate(cterm, depth + 1, meta)])]),
+        ITerm::Fin(cterm) => SoundTree::simul(&[base_mel, SoundTree::seq(&[cterm_translate(cterm, meta)])]),
         ITerm::FinElim(motive, base, ind, n, f) => SoundTree::simul(&[base_mel, SoundTree::seq(&[
-            cterm_translate(motive, depth + 1, meta.clone()),
-            cterm_translate(base, depth + 1, meta.clone()),
-            cterm_translate(ind, depth + 1, meta.clone()),
-            cterm_translate(n, depth + 1, meta.clone()),
-            cterm_translate(f, depth + 1, meta),
+            cterm_translate(motive, meta.clone()),
+            cterm_translate(base, meta.clone()),
+            cterm_translate(ind, meta.clone()),
+            cterm_translate(n, meta.clone()),
+            cterm_translate(f, meta),
         ])]),
-        ITerm::FZero(cterm) => SoundTree::simul(&[base_mel, SoundTree::seq(&[cterm_translate(cterm, depth + 1, meta)])]),
+        ITerm::FZero(cterm) => SoundTree::simul(&[base_mel, SoundTree::seq(&[cterm_translate(cterm, meta)])]),
         ITerm::FSucc(cterm, cterm1) => SoundTree::simul(&[
             base_mel, SoundTree::seq(&[
-                cterm_translate(cterm, depth + 1, meta.clone()), 
-                cterm_translate(cterm1, depth + 1, meta)
+                cterm_translate(cterm, meta.clone()), 
+                cterm_translate(cterm1, meta)
             ])
         ]),
     }
 }
 
 /// Translates CTerms to SoundTrees on a pure subterm-to-subtree basis.
-pub fn cterm_translate<T: Selector>(term: &CTerm, depth: usize, meta: T) -> SoundTree {
+pub fn cterm_translate<T: Selector>(term: &CTerm, meta: T) -> SoundTree {
     // let melody = SoundTree::sound(mel.cmelody(term, depth), term.clone());
     
     match term {
-        CTerm::Inf(iterm) => iterm_translate(iterm, depth, meta),
+        CTerm::Inf(iterm) => iterm_translate(iterm, meta),
         CTerm::Lam(cterm) => {
             let melody = meta.csound(term);
             let meta = meta.cmerge(term);
-            SoundTree::simul(&[melody, SoundTree::seq(&[cterm_translate(cterm, depth + 1, meta)])])
+            SoundTree::simul(&[melody, SoundTree::seq(&[cterm_translate(cterm, meta)])])
         },
     }
 }

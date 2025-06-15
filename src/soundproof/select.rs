@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use piet_common::Color;
 use fundsp::hacker32::*;
 use crate::{
     ast::*,
@@ -8,115 +9,230 @@ use crate::{
     types::*,
 };
 
+const ORANGE: Color = Color::rgb8(0xFF, 0x88, 0x23);
+
 pub trait Selector: Clone {
     fn isound(&self, term: &ITerm) -> SoundTree;
     fn csound(&self, term: &CTerm) -> SoundTree;
     fn imerge(&self, term: &ITerm) -> Self;
     fn cmerge(&self, term: &CTerm) -> Self;
+    fn imeta(&self, term: &ITerm) -> TreeMetadata {
+        let color = match term {
+            ITerm::Ann(_, _) => Color::RED,
+            ITerm::Star => Color::PURPLE,
+            ITerm::Pi(_, _) => Color::BLUE,
+            ITerm::App(_, _) => ORANGE,
+            ITerm::Bound(_) => Color::grey(0.5),
+            ITerm::Free(_) => Color::GREEN,
+            ITerm::Zero => Color::TEAL,
+            ITerm::Fin(_) => Color::LIME,
+            _ => unimplemented!()
+        };
+        TreeMetadata { name: term.to_string(), color }
+    }
+    fn cmeta(&self, term: &CTerm) -> TreeMetadata {
+        match term {
+            CTerm::Inf(it) => self.imeta(it),
+            CTerm::Lam(_) => TreeMetadata { name: term.to_string(), color: Color::YELLOW }
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct Plain {
+    depth: usize,
+}
+
+impl Plain {
+    pub fn new() -> Self {
+        Plain { depth: 0 }
+    }
+
+    pub fn pitch_factor(&self) -> usize {
+        (self.depth as f64 * 2.5).floor() as usize + 18
+    }
+}
+
+impl Selector for Plain {
+    fn isound(&self, term: &ITerm) -> SoundTree {
+        SoundTree::sound(Melody::new_even(sine(), &[self.pitch_factor().try_into().unwrap()]), self.imeta(term))
+    }
+
+    fn csound(&self, term: &CTerm) -> SoundTree {
+        SoundTree::sound(Melody::new_even(sine(), &[self.pitch_factor().try_into().unwrap()]), self.cmeta(term))
+    }
+
+    fn imerge(&self, _term: &ITerm) -> Self {
+        Plain {
+            depth: self.depth + 1
+        }
+    }
+
+    fn cmerge(&self, _term: &CTerm) -> Self {
+        Plain {
+            depth: self.depth + 1
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum Term {
+    I(ITerm),
+    C(CTerm),
 }
 
 #[derive(Clone)]
 pub struct FullStratifier {
-    instrument: An<Unit<U1, U1>>,
-    effect: An<Unit<U1, U1>>,
-    rhythm: Vec<f64>,
+    // instrument: An<Unit<U1, U1>>,
+    // effect: An<Unit<U1, U1>>,
+    // rhythm: Vec<f64>,
+    parent: Term,
     depth: usize,
 }
 
+const FS_MEL_SIZE: usize = 4;
+
 impl FullStratifier {
     pub fn new() -> Self {
-        let length = 4;
         Self {
-            effect: unit(Box::new(pass())),
-            instrument: unit(Box::new(sine())),
-            rhythm: vec![1.0 / length as f64; length],
+            parent: Term::I(ITerm::Star),
             depth: 1
         }
     }
 
-    pub fn imelody(&self, term: &ITerm) -> Melody {
+    pub fn inotes(&self, term: &ITerm) -> [i32; FS_MEL_SIZE] {
+        match term {
+            ITerm::Ann(_, _) => [A, D, F, A],
+            ITerm::Star => [B, C, E, E],
+            ITerm::Pi(_, _) => [E, C, A, C],
+            ITerm::Bound(_) => [A, E, C, B],
+            ITerm::Free(_) => [A, A, E, C],
+            ITerm::App(_, _) => [B, A, C, B],
+            ITerm::Zero => [E, F, C, A],
+            ITerm::Fin(_) => [A, A + 12, E, F],
+            _ => unimplemented!()
+        }
+    }
+
+    pub fn cnotes(&self, term: &CTerm) -> [i32; FS_MEL_SIZE] {
+        match term {
+            CTerm::Lam(_) => [D, F, E, C],
+            _ => unimplemented!()
+        }
+    }
+
+    pub fn irhythm(&self, term: &ITerm) -> [f64; FS_MEL_SIZE] {
+        match term {
+            ITerm::Ann(_, _) => [1.0, 0.5, 1.5, 1.0],
+            ITerm::Star => [1.0, 1.0, 1.0, 1.0], // can never occur as this has no children
+            ITerm::Pi(_, _) => [0.5, 1.5, 0.5, 1.5],
+            // ITerm::Bound(_) => [0.0, 0.0, -1.0, 0.0], // can never occur as this has no children
+            ITerm::Free(_) => [3.0, 0.3, 0.3, 0.4],
+            ITerm::App(_, _) => [2.5, 0.5, 0.5, 0.5],
+            ITerm::Zero => [-1.0, 0.0, 0.0, 0.0], // can never occur as this has no children
+            ITerm::Fin(_) => [0.7, 0.7, 2.1, 0.5],
+            _ => unimplemented!()
+        }
+    }
+
+    pub fn crhythm(&self, term: &CTerm) -> [f64; FS_MEL_SIZE] {
+        match term {
+            CTerm::Lam(_) => [1.5, 0.5, 1., 0.5],
+            _ => unimplemented!()
+        }
+    }
+
+    pub fn ieffect(&self, term: &ITerm) -> An<Unit<U1, U1>> {
+        match term {
+            ITerm::Ann(_, _) => unit(Box::new((pass() | (800.0 + 100.0 * sine_hz(2.0)) | constant(1.0)) >> highpass())),
+            ITerm::Star => unit(Box::new(pass())), // has no children, only appears as default parent
+            ITerm::Pi(_, _) => unit(Box::new(split() >> fbd(0.25, -1.5))),
+            ITerm::Bound(_) => unit(Box::new(major_chord() >> join::<U3>())),
+            ITerm::Free(_) => unit(Box::new(bell_hz(200.0, 1.0, 5.0))),
+            ITerm::App(_, _) => unit(Box::new(reverb_distort())),
+            ITerm::Zero => unit(Box::new(shape(Clip(100.0)))),  // will never appear as it has no children
+            ITerm::Fin(_) => unit(Box::new(shape(Clip(2.0)))),
+            _ => unimplemented!()
+        }
+    }
+
+    pub fn ceffect(&self, term: &CTerm) -> An<Unit<U1, U1>> {
+        match term {
+            CTerm::Lam(_) => unit(Box::new(reverb_highpass())),
+            _ => unimplemented!()
+        }
+    }
+
+    pub fn imelody(&self, term: &ITerm, notes: [i32; FS_MEL_SIZE]) -> Melody {
         let mut mel = match term {
-            ITerm::Ann(_, _) => Melody::new_even(violinish(), &[A, D, F, A]),
-            ITerm::Star => Melody::new_even(three_equivalents(wobbly_sine()) * 0.7, &[B, C, E, E]),
-            ITerm::Pi(_, _) => Melody::new_even(sinesaw() >> split() >> fbd(0.25, -5.0), &[E, C, A, C]),
-            ITerm::Bound(_) => Melody::new_even(sine() * 2.0, &[A, E, C, B]),
-            ITerm::Free(_) => Melody::new_even(violinish() * 1.1, &[A, A, E, C]),
-            ITerm::App(_, _) => Melody::new_even(sawfir() * 0.75, &[B, A, C, B]),
-            ITerm::Zero => Melody::new_even(sinesaw(), &[E, F, C, A]),
-            ITerm::Fin(_) => Melody::new_even(violinish() * 1.1, &[A, A + 12, E, F]),
-            _ => panic!("{term} not implemented")
+            ITerm::Ann(_, _) => Melody::new_even(violinish(), &notes),
+            ITerm::Star => Melody::new_even(three_equivalents(wobbly_sine()) * 0.7, &notes),
+            ITerm::Pi(_, _) => Melody::new_even(sinesaw() >> split() >> fbd(0.25, -5.0), &notes),
+            ITerm::Bound(_) => Melody::new_even(sine() * 2.0, &notes),
+            ITerm::Free(_) => Melody::new_even(violinish() * 1.1, &notes),
+            ITerm::App(_, _) => Melody::new_even(sawfir() * 0.75, &notes),
+            ITerm::Zero => Melody::new_even(sinesaw(), &notes),
+            ITerm::Fin(_) => Melody::new_even(violinish() * 1.1, &notes),
+            _ => unimplemented!()
         };
-        // let rhythm = self.rhythm.clone();
-        mel.map_indexed(|i, (n, _d)| (*n, self.rhythm[i]));
+        let rhythm = self.irhythm(term);
+        mel.map_indexed(|i, (n, _d)| (*n, rhythm[i]));
         mel.adjust_depth(self.depth);
         mel
     }
 
-    pub fn cmelody(&self, term: &CTerm) -> Melody {
+    pub fn cmelody(&self, term: &CTerm, notes: [i32; FS_MEL_SIZE]) -> Melody {
         let mut mel = match term {
-            CTerm::Lam(_) => Melody::new_even(fm_basic() * 0.28, &[D, F, E, C]),
+            CTerm::Lam(_) => Melody::new_even(fm_basic() * 0.28, &notes),
             _ => unimplemented!()
-            // _ => Melody::new_even(sine(), &[G, G, G, G]),  //value will never be used, but we have to call this for ownership reasons
         };
-        mel.map_indexed(|i, (n, _d)| (*n, self.rhythm[i]));
+        let rhythm = self.crhythm(term);
+        mel.map_indexed(|i, (n, _d)| (*n, rhythm[i]));
         mel.adjust_depth(self.depth);
         mel
+    }
+
+    pub fn effect_seq(&self, notes: [i32; FS_MEL_SIZE]) -> EffectSeq<Melody, Unit<U1, U1>> {
+        match &self.parent {
+            Term::I(parent) => {
+                let mel = self.imelody(parent, notes);
+                let effect = self.ieffect(parent);
+                EffectSeq::new(mel, effect)
+            },
+            Term::C(parent) => {
+                let mel = self.cmelody(parent, notes);
+                let effect = self.ceffect(parent);
+                EffectSeq::new(mel, effect)
+            }
+        }
     }
 }
 
 impl Selector for FullStratifier {
     fn isound(&self, term: &ITerm) -> SoundTree {
-        let mut mel = self.imelody(term);
-        mel.instrument = self.instrument.clone();
-        let eff = EffectSeq::new(mel, self.effect.clone());
-        SoundTree::sound(eff, term)
+        let notes = self.inotes(term);
+        let eff = self.effect_seq(notes);
+        SoundTree::sound(eff, self.imeta(term))
     }
 
     fn csound(&self, term: &CTerm) -> SoundTree {
-        let mut mel = self.cmelody(term);
-        mel.instrument = self.instrument.clone();
-        let eff = EffectSeq::new(mel, self.effect.clone());
-        SoundTree::sound(eff, term.clone())
+        let notes = self.cnotes(term);
+        let eff = self.effect_seq(notes);
+        SoundTree::sound(eff, self.cmeta(term))
     }
 
     fn imerge(&self, term: &ITerm) -> Self {
-        let rhythm = match term {
-            ITerm::Ann(_, _) => vec![1.0, 0.5, 1.5, 1.0],
-            ITerm::Star => vec![0.0, 0.0, 0.0, -1.0], // can never occur as this has no children
-            ITerm::Pi(_, _) => vec![0.5, 1.5, 0.5, 1.5],
-            // ITerm::Bound(_) => vec![0.0, 0.0, -1.0, 0.0], // can never occur as this has no children
-            ITerm::Free(_) => vec![3.0, 0.3, 0.3, 0.4],
-            ITerm::App(_, _) => vec![2.5, 0.5, 0.5, 0.5],
-            ITerm::Zero => vec![-1.0, 0.0, 0.0, 0.0], // can never occur as this has no children
-            ITerm::Fin(_) => vec![0.7, 0.7, 2.1, 0.5],
-            _ => unimplemented!()
-        };
-        let effect = match term {
-            ITerm::Ann(_, _) => unit(Box::new((pass() | (800.0 + 100.0 * sine_hz(2.0)) | constant(1.0)) >> highpass())),
-            ITerm::Star => unit(Box::new(shape(Clip(100.0)))),
-            ITerm::Pi(_, _) => unit(Box::new(split() >> fbd(0.25, -1.5))),
-            ITerm::Bound(_) => unit(Box::new(major_chord() >> join::<U3>())),
-            ITerm::Free(_) => unit(Box::new(bell_hz(200.0, 1.0, 5.0))),
-            ITerm::App(_, _) => unit(Box::new(reverb_distort())),
-            ITerm::Zero => unit(Box::new(shape(Clip(100.0)))),
-            ITerm::Fin(_) => unit(Box::new(shape(Clip(2.0)))),
-            _ => panic!("{term} not implemented")
-        };
-        let instrument = self.imelody(term).instrument;
-        Self { instrument, effect, rhythm: rhythm, depth: self.depth + 1 }
+        Self {
+            parent: Term::I(term.clone()),
+            depth: self.depth + 1
+        }
     }
 
     fn cmerge(&self, term: &CTerm) -> Self {
-        let rhythm = match term {
-            CTerm::Inf(_) => panic!("inf merge???"),
-            CTerm::Lam(_) => vec![1.5, 0.5, 1., 0.5],
-        };
-        let effect = match term {
-            CTerm::Inf(_) => unit(Box::new(pass())),
-            CTerm::Lam(_) => unit(Box::new(reverb_highpass())),
-        };
-        let instrument = self.cmelody(term).instrument;
-        Self { instrument, effect, rhythm: rhythm, depth: self.depth + 1 }
+        Self {
+            parent: Term::C(term.clone()),
+            depth: self.depth + 1
+        }
     }
 }
 
@@ -168,12 +284,12 @@ impl Rhythmizer {
 impl Selector for Rhythmizer {
     fn isound(&self, term: &ITerm) -> SoundTree {
         let mel = self.imelody(term);
-        SoundTree::sound(mel, term)
+        SoundTree::sound(mel, self.imeta(term))
     }
 
     fn csound(&self, term: &CTerm) -> SoundTree {
         let mel = self.cmelody(term);
-        SoundTree::sound(mel, term.clone())
+        SoundTree::sound(mel, self.cmeta(term))
     }
 
     fn imerge(&self, term: &ITerm) -> Self {
@@ -223,7 +339,7 @@ impl<T: Selector> Selector for Looper<T> {
         };
         let mut lp = Loop::new(base_mel);
         lp.set_duration(lp.loop_duration() * 8.0 * 0.5_f64.powi(self.depth.div_ceil(4) as i32));
-        SoundTree::sound(lp, term)
+        SoundTree::sound(lp, self.imeta(term))
     }
 
     fn csound(&self, term: &CTerm) -> SoundTree {
@@ -233,7 +349,7 @@ impl<T: Selector> Selector for Looper<T> {
         };
         let mut lp = Loop::new(base_mel);
         lp.set_duration(lp.loop_duration() * 32.0 * 0.5_f64.powi(self.depth.div_ceil(4) as i32));
-        SoundTree::sound(lp, term.clone())
+        SoundTree::sound(lp, self.cmeta(term))
     }
 
     fn imerge(&self, term: &ITerm) -> Self {
@@ -261,7 +377,7 @@ pub struct MixedOutput {
 impl MixedOutput {
     pub fn new() -> Self {
         MixedOutput { 
-            clip1: WaveClip::from_file("files/malhombrechords.wav"), 
+            clip1: WaveClip::from_file("files/universalquantifier.mp3"), 
             clip2: WaveClip::from_file("files/boundvariable.mp3"),
             depth: 1
         }
@@ -291,15 +407,15 @@ impl Selector for MixedOutput {
         match result {
             Mixer::Melody(mut mel) => {
                 mel.adjust_depth(self.depth);
-                SoundTree::sound(mel, term)
+                SoundTree::sound(mel, self.imeta(term))
             },
             Mixer::Clip(mut wav) => {
                 wav.adjust_depth(self.depth);
-                SoundTree::sound(wav, term)
+                SoundTree::sound(wav, self.imeta(term))
             },
             Mixer::Texture(mut tex) => {
                 tex.adjust_depth(self.depth);
-                SoundTree::sound(tex, term)
+                SoundTree::sound(tex, self.imeta(term))
             }
         }
         // result.adjust_depth(depth);
@@ -313,15 +429,15 @@ impl Selector for MixedOutput {
         match result {
             Mixer::Melody(mut mel) => {
                 mel.adjust_depth(self.depth);
-                SoundTree::sound(mel, term.clone())
+                SoundTree::sound(mel, self.cmeta(term))
             },
             Mixer::Clip(mut wav) => {
                 wav.adjust_depth(self.depth);
-                SoundTree::sound(wav, term.clone())
+                SoundTree::sound(wav, self.cmeta(term))
             },
             Mixer::Texture(mut tex) => {
                 tex.adjust_depth(self.depth);
-                SoundTree::sound(tex, term.clone())
+                SoundTree::sound(tex, self.cmeta(term))
             }
         }
     }
@@ -352,14 +468,14 @@ impl Selector for Effector {
         let melody = MelodySelector::F.imelody(term, self.depth);
         let eff = EffectSeq::new(melody, self.effect.clone());
         // melody.instrument = unit(Box::new(melody.instrument >> self.effect.clone()));
-        SoundTree::sound(eff, term)
+        SoundTree::sound(eff, self.imeta(term))
     }
 
     fn csound(&self, term: &CTerm) -> SoundTree {
         let melody = MelodySelector::F.cmelody(term, self.depth);
         let eff = EffectSeq::new(melody, self.effect.clone());
         // melody.instrument = unit(Box::new(melody.instrument >> self.effect.clone()));
-        SoundTree::sound(eff, term.clone())
+        SoundTree::sound(eff, self.cmeta(term))
     }
 
     fn imerge(&self, term: &ITerm) -> Self {
@@ -402,13 +518,13 @@ impl Selector for StratifyInstrument {
     fn isound(&self, term: &ITerm) -> SoundTree {
         let mut mel = self.mel.clone();
         mel.adjust_depth(self.depth);
-        SoundTree::sound(mel, term)
+        SoundTree::sound(mel, self.imeta(term))
     }
 
     fn csound(&self, term: &CTerm) -> SoundTree {
         let mut mel = self.mel.clone();
         mel.adjust_depth(self.depth);
-        SoundTree::sound(mel, term.clone())
+        SoundTree::sound(mel, self.cmeta(term))
     }
 
     fn imerge(&self, term: &ITerm) -> StratifyInstrument {
@@ -459,14 +575,13 @@ impl ClipSelector {
             app: Rc::new(Wave::load("files/application.mp3").unwrap()),  // function application
             zero: Rc::new(Wave::load("files/zero.mp3").unwrap()),  // natural number zero
             fin: Rc::new(Wave::load("files/finite.mp3").unwrap()),  // finite type
-            // lam: Rc::new(Wave::load("files/malhombrechords.wav").unwrap()),  // lambda abstraction
             lam: Rc::new(Wave::load("files/lambdaabstraction.mp3").unwrap()),  // lambda abstraction
         }
     }
 
     pub fn names_long() -> Self {
         Self {
-            ann: Rc::new(Wave::load("files/typeannotation.wav").unwrap()), // type annotation
+            ann: Rc::new(Wave::load("files/annotation.mp3").unwrap()), // type annotation
             star: Rc::new(Wave::load("files/universe.mp3").unwrap()),  // universe type
             pi: Rc::new(Wave::load("files/universalquantifier.mp3").unwrap()),  // universal quantifier
             bound: Rc::new(Wave::load("files/boundvariable.mp3").unwrap()),  // bound variable
@@ -492,7 +607,7 @@ impl Selector for ClipSelector {
             ITerm::Fin(_) => &self.fin,
             _ => unimplemented!()
         };
-        SoundTree::sound(Rc::clone(result), term)
+        SoundTree::sound(Rc::clone(result), self.imeta(term))
     }
 
     fn csound(&self, term: &CTerm) -> SoundTree {
@@ -500,7 +615,7 @@ impl Selector for ClipSelector {
             CTerm::Inf(_) => &self.ann,
             CTerm::Lam(_) => &self.lam,
         };
-        SoundTree::sound(Rc::clone(result), term.clone())
+        SoundTree::sound(Rc::clone(result), self.cmeta(term))
     }
 
     fn imerge(&self, _term: &ITerm) -> Self {
@@ -585,11 +700,11 @@ pub struct MelodySelectorFull {
 
 impl Selector for MelodySelectorFull {
     fn isound(&self, term: &ITerm) -> SoundTree {
-        SoundTree::sound(self.mel.imelody(term, self.depth), term)
+        SoundTree::sound(self.mel.imelody(term, self.depth), self.imeta(term))
     }
 
     fn csound(&self, term: &CTerm) -> SoundTree {
-        SoundTree::sound(self.mel.cmelody(term, self.depth), term.clone())
+        SoundTree::sound(self.mel.cmelody(term, self.depth), self.cmeta(term))
     }
 
     fn imerge(&self, _term: &ITerm) -> Self {

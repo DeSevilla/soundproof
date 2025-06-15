@@ -1,11 +1,11 @@
 // #![allow(unused)]
 use std::rc::Rc;
 
+use fundsp::hacker32::sine;
+use piet_common::Color;
+
 use crate::{
-    ast::*,
-    term::*,
-    types::*,
-    select::Selector,
+    ast::*, music::notes::G, select::Selector, term::*, types::*
 };
 
 /// Translates [ITerm]s into [SoundTree]s according to their type structure.
@@ -21,8 +21,10 @@ pub fn term_translate<T: Selector>(term: ITerm, meta: T) -> SoundTree {
 }
 
 pub fn buildup<T: Selector>(terms: impl IntoIterator<Item=ITerm>, meta: T) -> SoundTree {
-    let subtrees = terms.into_iter().map(|t| type_translate(t, meta.clone())).collect();
-    SoundTree::Seq(subtrees, TreeMetadata { name: "".to_owned() })
+    // let middle = SoundTree::Sound(Rc::new(Melody::new_even(sine(), &[])), TreeMetadata { name: "".to_owned() });
+    let sep = SoundTree::sound(Melody::new_even(sine(), &[G]), meta.imeta(&ITerm::Star));
+    let subtrees = terms.into_iter().map(|t| type_translate(t, meta.clone())).flat_map(|t| [t, sep.clone()]).collect();
+    SoundTree::Seq(subtrees, TreeMetadata { name: "".to_owned(), color: Color::MAROON })
 }
 
 fn itype_translate<T: Selector>(ii: usize, ctx: Context, term: &ITerm, meta: T) -> Result<(Type, SoundTree), String> {
@@ -36,8 +38,8 @@ fn itype_translate<T: Selector>(ii: usize, ctx: Context, term: &ITerm, meta: T) 
             let tytree = ctype_translate(ii, ctx.clone(), cty, Value::Star, meta.clone())?;
             let ty = cty.clone().eval(vec![]);
             let termtree = ctype_translate(ii, ctx, ct, ty.clone(), meta)?;  // should we have the type and term at diff depths?
-            // let tree = SoundTree::simul(&[node_melody, SoundTree::seq(&[tytree, termtree])]);
-            let tree = SoundTree::simul(&[node_melody, SoundTree::seq(&[termtree, tytree])]);
+            let tree = SoundTree::simul(&[node_melody, SoundTree::seq(&[tytree, termtree])]);
+            // let tree = SoundTree::simul(&[node_melody, tytree, termtree]);
             Ok((ty, tree))
         }
         ITerm::Star => Ok((Value::Star, node_melody)),
@@ -61,7 +63,7 @@ fn itype_translate<T: Selector>(ii: usize, ctx: Context, term: &ITerm, meta: T) 
             // maybe we put an environment of some sort in the Selector?
             let val = ctx.iter().find(|x| x.0 == *name).ok_or("Could not find variable".to_owned())?;
             let ty = ctype_translate(ii, ctx.clone(), &quote0(val.1.clone()), Value::Star, meta)?;
-            let tree = ty;
+            let tree = SoundTree::simul(&[node_melody, ty]);
             Ok((val.1.clone(), tree))
         },
         ITerm::App(f, x) => {
@@ -257,23 +259,25 @@ pub fn cterm_translate<T: Selector>(term: &CTerm, meta: T) -> SoundTree {
     }
 }
 
-pub fn test_tree(mel: impl Selector) -> SoundTree {
-    let mel = mel.imerge(&ITerm::Star).imerge(&ITerm::Star);
+pub fn test_tree(meta: impl Selector) -> SoundTree {
+    let meta = meta.imerge(&ITerm::Star);
     let test_terms = [
         ITerm::Star,
         ITerm::Ann(ITerm::Star.into(), ITerm::Star.into()),
         ITerm::Pi(ITerm::Star.into(), ITerm::Star.into()),
-        ITerm::Bound(0),
+        // ITerm::Bound(0),
         ITerm::Free(Name::Local(0)),
         ITerm::App(Box::new(ITerm::Star), ITerm::Star.into()),
         ITerm::Zero,
         ITerm::Fin(ITerm::Zero.into()),
     ];
+    let parent_indices = [1, 2, 4, 6];
     let mut sounds = Vec::new();
-    for term in test_terms {
-        let onemel = mel.isound(&term);
-        for _ in 0..4 {
-            sounds.push(onemel.clone())
+    for term in &test_terms {
+        // let onemel = meta.isound(&term);
+        for parent_idx in parent_indices {
+            let localmeta = meta.imerge(&test_terms[parent_idx]);
+            sounds.push(localmeta.isound(term))
         }
         // sounds.push(onemel.clone());
         // sounds.push(onemel.clone());
@@ -281,8 +285,9 @@ pub fn test_tree(mel: impl Selector) -> SoundTree {
         // sounds.push(onemel)
     }
     let lamstar = CTerm::Lam(Box::new(ITerm::Star.into()));
-    for _ in 0..4 {
-        sounds.push(mel.csound(&lamstar));
+    for parent_idx in parent_indices {
+        let localmeta = meta.imerge(&test_terms[parent_idx]);
+        sounds.push(localmeta.csound(&lamstar));
     }
     SoundTree::seq(&sounds)
 }

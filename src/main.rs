@@ -10,6 +10,7 @@ use types::*;
 use translate::*;
 use ast::*;
 
+
 /// The "proof" side. Implementation of a simple dependently-typed lambda calculus, 
 /// translated from Löh, McBride, and Swierstra's [LambdaPi](https://www.andres-loeh.de/LambdaPi/LambdaPi.pdf)
 /// and in particular [Ilya Klyuchnikov's implementation](https://github.com/ilya-klyuchnikov/lambdapi/).
@@ -19,6 +20,8 @@ pub mod lambdapi;
 pub mod music;
 /// Translation from LambdaPi to music.
 pub mod soundproof;
+
+pub mod draw;
 
 /// Modes for structuring the translation from LambdaPi term to SoundTree.
 #[derive(PartialEq, Eq, Clone, Copy, Debug, ValueEnum)]
@@ -47,7 +50,7 @@ pub enum Scaling {
 
 impl Scaling {
     fn exponent() -> f64 {
-        0.77
+        0.87
     }
 
     fn child_scale(&self, child: &SoundTree) -> f64 {
@@ -105,9 +108,9 @@ impl NamedTerm {
             SetsOf => sets_of(),
             // SetsOfNat => sets_of_nat(),
             // ExFalso => exfalso(),
-            U => u(),
-            Tau => tau(),
-            Sigma => sigma(),
+            U => ireduce(u()).unwrap(),
+            Tau => ireduce(tau()).unwrap(),
+            Sigma => ireduce(sigma()).unwrap(),
             Omega => omega(),
             Lem0 => lem0(),
             Lem2 => ireduce(lem2()).unwrap(),
@@ -146,29 +149,13 @@ pub enum AudioSelectorOptions {
     Loop,
     Rhythmized,
     StratFull,
+    Bare,
 }
-
-// impl From<AudioSelectorOptions> for MelodySelector {
-//     fn from(value: AudioSelectorOptions) -> Self {
-//         use AudioSelectorOptions::*;
-//         match value {
-//             A => Self::A,
-//             B => Self::B,
-//             C => Self::C,
-//             D => Self::D,
-//             E => Self::E, 
-//             F => Self::F,
-//             PureSine => Self::PureSine,
-//             // NamesShort => Self::Concrete(ClipSelector::names()),
-//             // NamesLong => Self::Concrete(ClipSelector::names_long())
-//             _ => unimplemented!()
-//         }
-//     }
-// }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, ValueEnum)]
 pub enum FilterOptions {
     ClipLowpass,
+    Quiet,
     None,
 }
 
@@ -213,7 +200,7 @@ pub fn main() {
             Structure::Term => term_translate(args.value.term(), selector),
             Structure::Type => type_translate(args.value.term(), selector),
             Structure::Test => test_tree(selector),
-            Structure::Buildup => buildup([u(), tau(), sigma(), omega(), lem0(), ireduce(lem2()).unwrap(), ireduce(lem3()).unwrap(), girard_reduced()], selector)
+            Structure::Buildup => buildup([sets_of(), u(), tau(), sigma(), omega()], selector),//, lem0(), ireduce(lem2()).unwrap(), ireduce(lem3()).unwrap(), girard_reduced()], selector)
         }
     }
     use AudioSelectorOptions::*;
@@ -232,28 +219,32 @@ pub fn main() {
         Mixed => structure_func(MixedOutput::new(), &args),
         Loop => structure_func(Looper::new(Rhythmizer::new()), &args),
         Rhythmized => structure_func(Rhythmizer::new(), &args),
-        StratFull => structure_func(FullStratifier::new(), &args)
+        StratFull => structure_func(FullStratifier::new(), &args),
+        Bare => structure_func(Plain::new(), &args),
     };
     println!("...done in {:?}", now.elapsed());
+    draw::draw(&tree, args.scaling, format!("output/{:?}-viz.png", args.value));
+    draw::draw(&tree, args.scaling, "output/temp-image.png");
     let time = args.time.unwrap_or(std::cmp::min(tree.size(), 10000) as f64);
     let mut seq = Box::new(Sequencer::new(false, 2));
     println!("Sequencing over {time} seconds...");
     let now = Instant::now();
     tree.generate_with(&mut seq, 0.0, time, args.scaling, 0.0);
     println!("...done in {:?}", now.elapsed());
-    let mut output = unit::<U0, U2>(seq);
+    let output: &mut Sequencer = &mut seq;
     match args.filters {
-        FilterOptions::None => save(&mut output, time),
+        FilterOptions::None => save(output, time),
         FilterOptions::ClipLowpass => save(
-            &mut (output >> 
-                stacki::<U2, _, _>(|_| 
+            &mut (unit::<U0, U2>(seq) >>
+                stacki::<U2, _, _>(|_|
                     shape(Adaptive::new(0.1, Tanh(0.5))) >> 
                     lowpass_hz(2500.0, 1.0) >>
                     mul(0.05)
                     // >> mul(10.0)
-                )), 
+                )),
             time
         ),
+        FilterOptions::Quiet => save(&mut (unit::<U0, U2>(seq) >> (mul(0.05) | mul(0.05))), time),
     }
     println!("Done.");
 }

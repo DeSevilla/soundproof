@@ -109,11 +109,11 @@ impl From<ITerm> for CTerm {
     }
 }
 
-impl From<&ITerm> for CTerm {
-    fn from(value: &ITerm) -> Self {
-        value.clone().into()
-    }
-}
+// impl From<&ITerm> for CTerm {
+//     fn from(value: &ITerm) -> Self {
+//         value.clone().into()
+//     }
+// }
 
 impl TryFrom<CTerm> for ITerm {
     type Error = String;
@@ -126,10 +126,10 @@ impl TryFrom<CTerm> for ITerm {
     }
 }
 
-impl TryFrom<&CTerm> for ITerm {
-    type Error = String;
+// impl TryFrom<&CTerm> for ITerm {
+//     type Error = String;
 
-    fn try_from(value: &CTerm) -> Result<Self, Self::Error> {
-        value.clone().try_into()
-    }
-}
+//     fn try_from(value: &CTerm) -> Result<Self, Self::Error> {
+//         value.clone().try_into()
+//     }
+// }

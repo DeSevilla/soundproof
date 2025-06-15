@@ -4,7 +4,7 @@ use crate::music::notes::note_hz;
 // various envelopes for synths, most of which aren't currently used
 // we keep them around for tinkering
 
-pub fn major_chord_notes(notes: Vec<i8>, octave: i8, increment: f32, instrument: An<impl AudioNode<Inputs=U1, Outputs=U1>>) ->
+pub fn major_chord_notes(notes: Vec<i32>, octave: i32, increment: f32, instrument: An<impl AudioNode<Inputs=U1, Outputs=U1>>) ->
         An<impl AudioNode<Inputs=U0, Outputs=U1>> {
     let notes2 = notes.iter().map(|x| x + 4).collect();
     let notes3 = notes.iter().map(|x| x + 7).collect();
@@ -14,7 +14,7 @@ pub fn major_chord_notes(notes: Vec<i8>, octave: i8, increment: f32, instrument:
     (env1 | env2 | env3) >> ((instrument.clone() + instrument.clone() + instrument.clone()) * 0.5) >> shape_fn(tanh)
 }
 
-pub fn double_envelope(notes: Vec<i8>, octave: i8, increment: f32) -> An<impl AudioNode<Inputs=U0, Outputs=U1>> {
+pub fn double_envelope(notes: Vec<i32>, octave: i32, increment: f32) -> An<impl AudioNode<Inputs=U0, Outputs=U1>> {
     let (v1, v2) = notes.split_at(notes.len() / 2);
     println!("{v1:?} {v2:?}");
     (notes_envelope(v1.to_vec(), octave, increment) | notes_envelope(v2.to_vec(), octave, increment)) >> join()
@@ -86,7 +86,7 @@ pub fn octarp(length: f32, time: f32) -> An<impl AudioNode<Inputs=U0, Outputs=U1
     })
 }
 
-pub fn notes_envelope(notes: Vec<i8>, octave: i8, increment: f32) -> An<impl AudioNode<Inputs=U0, Outputs=U1>> {
+pub fn notes_envelope(notes: Vec<i32>, octave: i32, increment: f32) -> An<impl AudioNode<Inputs=U0, Outputs=U1>> {
     let invinc = 1.0 / increment;
     envelope(move |t| {
         let i = (t * invinc).floor() as usize % notes.len();
@@ -94,7 +94,7 @@ pub fn notes_envelope(notes: Vec<i8>, octave: i8, increment: f32) -> An<impl Aud
     })
 }
 
-pub fn delay_envelope(notes: Vec<i8>, octave: i8, increment: f32) -> An<impl AudioNode<Inputs=U0, Outputs=U1>> {
+pub fn delay_envelope(notes: Vec<i32>, octave: i32, increment: f32) -> An<impl AudioNode<Inputs=U0, Outputs=U1>> {
     let invinc = 1.0 / increment;
     envelope(move |t| {
         let i = (t * invinc).floor() as usize % notes.len();

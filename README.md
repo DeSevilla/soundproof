@@ -3,7 +3,7 @@ It is currently in a very preliminary stage and has a limited selection of terms
 [FunDSP](https://github.com/SamiPerttu/fundsp). The mathematical proofs are constructed in a
 custom Rust implementation of [LambdaPi](https://www.andres-loeh.de/LambdaPi/) (originally in Haskell);
 [Ilya Klyuchnikov's version](https://github.com/ilya-klyuchnikov/lambdapi) was a particular model.
-Artistic influences include Iannis Xenakis, Henry Flynt, Catherine Hennix, Drexciya, Perturbator, Sun Ra, and Odz Manouk.
+Artistic influences include Iannis Xenakis, Catherine Hennix, Henry Flynt, Drexciya, Perturbator, Sun Ra, Karlheinz Stockhausen, and Odz Manouk.
 
 Example of the output can be found on SoundCloud [here (type-structured)](https://soundcloud.com/user-619734785/system-output-v13)
 and [here (term-structured)](https://soundcloud.com/user-619734785/system-output-v12).

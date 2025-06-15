@@ -4,9 +4,9 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
 use fundsp::hacker32::*;
+use piet_common::Color;
 use rand::seq::IndexedRandom;
 use rand::rng;
-use crate::lambdapi::ast::CTerm;
 use crate::music::notes::*;
 use crate::music::stretch::{retime_pitch_wave, retime_wave};
 use crate::Scaling;
@@ -142,7 +142,7 @@ impl<T: SoundGenerator> SoundGenerator for Loop<T> {
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Note {
     /// Pitch of the note as an integer in 12-tone equal temperament. See [get_hz] for the translation to frequency.
-    note: i8,
+    note: i32,
     /// Duration of the "key press" for the note. In a [Melody], will be scaled according to the melody's duration when output.
     time: f64,
     /// Volume of the note.
@@ -169,7 +169,7 @@ impl Note {
         }
     }
 
-    pub fn adjust_pitch(self, tones: i8) -> Note {
+    pub fn adjust_pitch(self, tones: i32) -> Note {
         Note {
             note: self.note + tones,
             ..self
@@ -192,7 +192,7 @@ pub struct Melody {
     /// [Note]s and how much time they're allowed to use.
     pub notes: Vec<(Note, f64)>,
     /// Adjustment to the pitch of all [Note]s in semitones, stored here so it can be easily tweaked.
-    pub note_adjust: i8,
+    pub note_adjust: i32,
 }
 
 impl Melody {
@@ -206,18 +206,15 @@ impl Melody {
     /// 
     /// let mel = Melody::new_even(sine(), &[A, D, F, A]);
     /// ```
-    pub fn new_even(instrument: impl AudioUnit + 'static, notes: &[i8]) -> Self {
-        if notes.len() < 3 {
-            println!("wtf is with the notes even: {:?}", notes);
-        }
+    pub fn new_even(instrument: impl AudioUnit + 'static, notes: &[i32]) -> Self {
         Melody {
             instrument: unit(Box::new(instrument)),
-            notes: notes.iter().map(|x| (Note { note: *x, time: 0.75, volume: 1.0, attack: 0.25, decay: 0.25, sustain: 0.5, release: 0.1 }, 1.0)).collect(),
+            notes: notes.iter().map(|x| (Note { note: *x, time: 0.85, volume: 1.0, attack: 0.25, decay: 0.25, sustain: 0.5, release: 0.1 }, 1.0)).collect(),
             note_adjust: 0
         }
     }
 
-    /// Create a melody from a sequence of notes as integers in 12-tone equal temperament, with specified durations.
+    /// Create a melody from a sequence of notes as integers in a 12-tone scale, with specified durations.
     /// See [get_hz] for the relationship between these integers and frequencies.
     /// 
     /// # Examples:
@@ -227,7 +224,7 @@ impl Melody {
     /// 
     /// let mel = Melody::new_timed(sine(), &[(B, 0.5), (C, 0.5), (E, 3.0)])
     /// ```
-    pub fn new_timed(instrument: impl AudioUnit + 'static, notes: &[(i8, f64)]) -> Self {
+    pub fn new_timed(instrument: impl AudioUnit + 'static, notes: &[(i32, f64)]) -> Self {
         Melody {
             instrument: unit(Box::new(instrument)),
             notes: notes.iter().map(|(x, t)| (Note {
@@ -270,7 +267,7 @@ impl Melody {
     }
 
     /// Adjust the octave of all notes.
-    pub fn set_octave(&mut self, octave: i8) {
+    pub fn set_octave(&mut self, octave: i32) {
         // self.note_adjust = 6 * octave;
         self.note_adjust = 12 * octave;
     }
@@ -300,7 +297,7 @@ impl Melody {
     /// Melodies deeper into the tree will be higher-pitched and have shorter notes,
     /// for a more twinkly effect.
     pub fn adjust_depth(&mut self, depth: usize) {
-        let octave = (depth as f64 / 2.5).powf(0.5).ceil() as i8 + 1;
+        let octave = (depth as f64 / 2.5).powf(0.5).ceil() as i32 + 1;
         self.set_octave(octave);
         // self.note_adjust = (depth as f64 / 1.5 + 1.0).powf(0.85).ceil() as i8 * 5;
         self.map_notes(|&(n, d)| (Note {
@@ -347,7 +344,7 @@ pub struct Texture {
 }
 
 impl Texture {
-    pub fn new_even(notes: impl IntoIterator<Item=i8>, instrument: impl AudioUnit + 'static, time_gap: f64) -> Self {
+    pub fn new_even(notes: impl IntoIterator<Item=i32>, instrument: impl AudioUnit + 'static, time_gap: f64) -> Self {
         let dur = (time_gap * 0.25) as f32;
         let full_notes = notes.into_iter().map(|n| Note {
             note: n,
@@ -366,7 +363,7 @@ impl Texture {
     }
 
     pub fn adjust_depth(&mut self, depth: usize) {
-        let octave = (depth as f64 / 2.5).powf(0.5).ceil() as i8 + 1;
+        let octave = (depth as f64 / 2.5).powf(0.5).ceil() as i32 + 1;
         self.notes = self.notes.iter().map(|n| Note {note: n.note + 12 * octave, ..*n}).collect()
     }
 }
@@ -444,22 +441,57 @@ pub enum SoundTree {
 
 static SIGN: AtomicU32 = AtomicU32::new(0);
 
+// pub enum Tag {
+//     Ann,
+//     Star,
+//     Pi,
+//     App,
+//     Bound,
+//     Free,
+//     Zero,
+//     Fin,
+//     Lam,
+// }
+
+// impl CTerm {
+//     pub fn tag(&self) -> Tag {
+//         match self {
+//             CTerm::Inf(iterm) => iterm.tag(),
+//             CTerm::Lam(_) => Tag::Lam,
+//         }
+//     }
+// }
+
+// impl ITerm {
+//     pub fn tag(&self) -> Tag {
+//         use Tag::*;
+//         match self {
+//             ITerm::Ann(_, _) => Ann,
+//             ITerm::Star => Star,
+//             ITerm::Pi(_, _) => Pi,
+//             ITerm::Bound(_) => Bound,
+//             ITerm::Free(_) => Free,
+//             ITerm::App(_, _) => App,
+//             ITerm::Zero => Zero,
+//             ITerm::Fin(_) => Fin,
+//             _ => unimplemented!()
+//         }
+//     }
+// }
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct TreeMetadata {
     pub name: String,
+    pub color: Color,
     // pub lean: f32,
 }
 
+
+
 impl SoundTree {
     /// Constructs a SoundTree containing a single sound-pattern.
-    pub fn sound(sound: impl SoundGenerator + 'static, _name: impl Into<CTerm>) -> Self {
-        // let term = name.into();
-        // println!("{}", term.to_string());
-        Self::Sound(Rc::new(sound), TreeMetadata { 
-            // name: term.to_string(),
-            name: "".to_owned(),
-            // lean: 0.0,
-        })
+    pub fn sound(sound: impl SoundGenerator + 'static, meta: TreeMetadata) -> Self {
+        Self::Sound(Rc::new(sound), meta)
     }
 
     /// Constructs a SoundTree which plays its subtrees one after another.
@@ -483,15 +515,19 @@ impl SoundTree {
                 },
             }
         }
+        if result.len() == 1 {
+            result.pop().unwrap()
+        }
+        else {
+            Self::Seq(result, TreeMetadata { name: "".to_owned(), color: Color::MAROON })
+        }
         // names += "]";
-        Self::Seq(result, TreeMetadata { name: "".to_owned() })
     }
 
     /// Constructs a SoundTree which plays its subtrees simultaneously.
     pub fn simul(subtrees: &[SoundTree]) -> Self {
         // avoids redundant nested Simuls; this cannot affect the resulting audio
         let mut result = Vec::new();
-        // let mut names = "".to_owned();
         // let mut names = "{".to_owned();
         for val in subtrees {
             match val.clone() {
@@ -509,32 +545,13 @@ impl SoundTree {
             }
         }
         // names += "}";
-        Self::Simul(result, TreeMetadata { name: "".to_owned() })
+        if result.len() == 1 {
+            result.pop().unwrap()
+        }
+        else {
+            Self::Simul(result, TreeMetadata { name: "".to_owned(), color: Color::MAROON })
+        }
     }
-
-    // pub fn set_leans(&mut self, lean: f32) {
-    //     match self {
-    //         SoundTree::Simul(subtrees, meta) => {
-    //             let val = SIGN.fetch_add(1, Ordering::Relaxed);
-    //             let dir = if val % 2 == 0 { 1.0 } else { -1.0 };
-    //             // print!("{}", if dir > 0.0 { "l" } else { "r" });
-    //             meta.lean = lean;
-    //             let base_lean = (subtrees.len() as f32) * dir / 2.0;  // could also be based on size
-    //             for (ii, tree) in subtrees.iter_mut().enumerate() {
-    //                 tree.set_leans(lean + (base_lean + ii as f32) * 0.8_f32);
-    //             }
-    //         },
-    //         SoundTree::Seq(subtrees, meta) => {
-    //             meta.lean = lean;
-    //             for tree in subtrees {
-    //                 tree.set_leans(lean);
-    //             }
-    //         },
-    //         SoundTree::Sound(_, meta) => {
-    //             meta.lean = lean;
-    //         },
-    //     }
-    // }
 
     pub fn metadata(&self) -> &TreeMetadata {
         match self {
@@ -564,7 +581,7 @@ impl SoundTree {
     /// The weight of the tree for duration scaling.
     pub fn weight(&self, exp: f64) -> f64 {
         match self {
-            SoundTree::Simul(vec, _) => vec.iter().map(|x| x.subtree_weight(exp)).reduce(f64::max).unwrap_or(0.0),
+            SoundTree::Simul(vec, _) => 1.0 + vec.iter().map(|x| x.subtree_weight(exp)).reduce(f64::max).unwrap_or(0.0),
             SoundTree::Seq(vec, _) => vec.iter().map(|x| x.subtree_weight(exp)).sum::<f64>(),
             SoundTree::Sound(_, _) => 1.0,
         }
@@ -577,6 +594,9 @@ impl SoundTree {
 
     /// Generate audio into a [Sequencer] for the tree, distributing subtree durations by the selected [scaling](Scaling).
     pub fn generate_with(&self, seq: &mut Sequencer, start_time: f64, duration: f64, scaling: Scaling, lean: f32) {
+        if duration <= 0.0 {
+            println!("Warning! No duration from start time {start_time}");
+        }
         // if duration > 10.0 {
         //     println!("{}", self.metadata().name.len())
         // }

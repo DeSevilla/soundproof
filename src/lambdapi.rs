@@ -241,7 +241,7 @@ pub fn validate(name: &str, term: &ITerm, eval: bool) {
         let typ1 = quote0(typ);
         println!("\t{term} :::: {typ1}");
         println!("Passed type checks!");
-        if qval == term.into() {
+        if qval == term.clone().into() {
             println!("Is preserved by quote-eval")
         }
         else {

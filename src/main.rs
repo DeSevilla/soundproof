@@ -96,8 +96,6 @@ pub enum NamedTerm {
     Lem3,
     /// Girard's Paradox, full term according to the Hurkens approach.
     Girard,
-    /// Girard's Paradox, reduced as far as possible without nontermination.
-    GirardReduced
 }
 
 impl NamedTerm {
@@ -108,15 +106,14 @@ impl NamedTerm {
             SetsOf => sets_of(),
             // SetsOfNat => sets_of_nat(),
             // ExFalso => exfalso(),
-            U => ireduce(u()).unwrap(),
-            Tau => ireduce(tau()).unwrap(),
-            Sigma => ireduce(sigma()).unwrap(),
+            U => u(),
+            Tau => tau(),
+            Sigma => sigma(),
             Omega => omega(),
             Lem0 => lem0(),
-            Lem2 => ireduce(lem2()).unwrap(),
-            Lem3 => ireduce(lem3()).unwrap(),
+            Lem2 => lem2(),
+            Lem3 => lem3(),
             Girard => girard(),
-            GirardReduced => girard_reduced(),
         }
     }
 }
@@ -170,8 +167,10 @@ pub struct Args {
     #[arg(short, long)]
     time: Option<f64>,
     /// Predefined terms of the dependently typed lambda calculus.
-    #[arg(short, long, default_value="girard-reduced")]
+    #[arg(short, long, default_value="girard")]
     value: NamedTerm,
+    #[arg(short, long, action)]
+    reduce: bool,
     /// Determines which set of melodies to use.
     #[arg(short, long, default_value="strat2")]
     melody: AudioSelectorOptions,
@@ -183,22 +182,34 @@ pub struct Args {
     filters: FilterOptions,
 }
 
+impl Args {
+    pub fn term(&self) -> ITerm {
+        if self.reduce {
+            match self.value {
+                NamedTerm::Girard => girard_reduced(),
+                name => ireduce(name.term()).unwrap()
+            }
+        } else {
+            self.value.term()
+        }
+    }
+}
+
 pub fn main() {
     // let wave = Wave::load("output/malhombrechords.wav").unwrap();
     // let wave = retime_wave(wave, 6.0);
     // wave.save_wav32("output/malhombreslow.wav").unwrap();
     let args = Args::parse();
-    let term = args.value.term();
     //validation just makes sure it typechecks; we can't evaluate the paradox or it'll run forever.
-    validate(&format!("Term: {:?}", args.value), &term, false);
+    validate(&format!("Term: {:?}", args.value), &args.term(), false);
     use std::time::Instant;
     println!("Translating...");
     let now = Instant::now();
     // use MelodySelector::*;
     fn structure_func(selector: impl Selector, args: &Args) -> SoundTree {
         match args.structure {
-            Structure::Term => term_translate(args.value.term(), selector),
-            Structure::Type => type_translate(args.value.term(), selector),
+            Structure::Term => term_translate(args.term(), selector),
+            Structure::Type => type_translate(args.term(), selector),
             Structure::Test => test_tree(selector),
             Structure::Buildup => buildup([sets_of(), u(), tau(), sigma(), omega()], selector),//, lem0(), ireduce(lem2()).unwrap(), ireduce(lem3()).unwrap(), girard_reduced()], selector)
         }
@@ -223,7 +234,7 @@ pub fn main() {
         Bare => structure_func(Plain::new(), &args),
     };
     println!("...done in {:?}", now.elapsed());
-    draw::draw(&tree, args.scaling, format!("output/{:?}-viz.png", args.value));
+    draw::draw(&tree, args.scaling, format!("output/{:?}{}-viz.png", args.value, if args.reduce { "-reduced" } else { "" }));
     draw::draw(&tree, args.scaling, "output/temp-image.png");
     let time = args.time.unwrap_or(std::cmp::min(tree.size(), 10000) as f64);
     let mut seq = Box::new(Sequencer::new(false, 2));

@@ -38,8 +38,9 @@ fn itype_translate<T: Selector>(ii: usize, ctx: Context, term: &ITerm, meta: T) 
             let tytree = ctype_translate(ii, ctx.clone(), cty, Value::Star, meta.clone())?;
             let ty = cty.clone().eval(vec![]);
             let termtree = ctype_translate(ii, ctx, ct, ty.clone(), meta)?;  // should we have the type and term at diff depths?
-            let tree = SoundTree::simul(&[node_melody, SoundTree::seq(&[tytree, termtree])]);
-            // let tree = SoundTree::simul(&[node_melody, tytree, termtree]);
+            let tree = SoundTree::simul(&[node_melody, SoundTree::seq(&[termtree, tytree])]);
+            // let tree = SoundTree::simul(&[node_melody, SoundTree::seq(&[tytree, termtree])]);    //alt 1: swap term/ty
+            // let tree = SoundTree::simul(&[node_melody, tytree, termtree]);                       //alt 2: flatten
             Ok((ty, tree))
         }
         ITerm::Star => Ok((Value::Star, node_melody)),

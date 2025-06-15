@@ -6,10 +6,10 @@ use piet_common::kurbo::{Rect};
 use crate::soundproof::types::SoundTree;
 use crate::Scaling;
 
-const WIDTH: usize = 1920 * 2;
-const HEIGHT: usize = 1080 * 2;
-const DPI: f64 = 96. * 2.0;
-const DEPTH_HEIGHT: f64 = 0.16;
+const WIDTH: usize = 1920 * 4;
+const HEIGHT: usize = 1080 * 4;
+const DPI: f64 = 96. * 4.0;
+const DEPTH_HEIGHT: f64 = 0.25;
 const MIN_SIZE: f64 = 1.0 / DPI;
 
 pub fn draw(tree: &SoundTree, scaling: Scaling, path: impl AsRef<Path>) {
@@ -42,7 +42,7 @@ fn drawtree(tree: &SoundTree, ctx: &mut impl RenderContext, start_time: f64, dur
         },
         SoundTree::Sound(_, meta) => {
             if duration * WIDTH as f64 / DPI < MIN_SIZE * 0.25 {
-                println!("Too short: {duration} {:?}", meta.color);
+                // println!("Too short: {duration} {:?}", meta.color);
                 return;
             }
             let rect = Rect::new(

@@ -10,6 +10,9 @@ use crate::{
 };
 
 const ORANGE: Color = Color::rgb8(0xFF, 0x88, 0x23);
+const PINK: Color = Color::rgb8(0xF8, 0x18, 0x94);
+const TURQUOISE: Color = Color::rgb8(0x00, 0xDD, 0xD0);
+const VIOLET: Color = Color::rgb8(0x90, 0x00, 0x90);
 
 pub trait Selector: Clone {
     fn isound(&self, term: &ITerm) -> SoundTree;
@@ -19,13 +22,13 @@ pub trait Selector: Clone {
     fn imeta(&self, term: &ITerm) -> TreeMetadata {
         let color = match term {
             ITerm::Ann(_, _) => Color::RED,
-            ITerm::Star => Color::PURPLE,
+            ITerm::Star => VIOLET,
             ITerm::Pi(_, _) => Color::BLUE,
             ITerm::App(_, _) => ORANGE,
             ITerm::Bound(_) => Color::grey(0.5),
             ITerm::Free(_) => Color::GREEN,
-            ITerm::Zero => Color::TEAL,
-            ITerm::Fin(_) => Color::LIME,
+            ITerm::Zero => PINK,
+            ITerm::Fin(_) => TURQUOISE,
             _ => unimplemented!()
         };
         TreeMetadata { name: term.to_string(), color }

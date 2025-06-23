@@ -1,3 +1,5 @@
+use std::fs;
+
 // #![allow(unused)]
 use fundsp::hacker32::*;
 
@@ -171,6 +173,10 @@ pub struct Args {
     value: NamedTerm,
     #[arg(short, long, action)]
     reduce: bool,
+    #[arg(short, long, action)]
+    draw_only: bool,
+    #[arg(short, long, action)]
+    noanimate: bool,
     /// Determines which set of melodies to use.
     #[arg(short, long, default_value="strat2")]
     melody: AudioSelectorOptions,
@@ -234,10 +240,26 @@ pub fn main() {
         Bare => structure_func(Plain::new(), &args),
     };
     println!("...done in {:?}", now.elapsed());
-    draw::draw(&tree, args.scaling, format!("output/{:?}{}-viz.png", args.value, if args.reduce { "-reduced" } else { "" }));
+    println!("Drawing...");
+    let now = Instant::now();
+    draw::draw(&tree, args.scaling, format!("output/images/{:?}{}-viz.png", args.value, if args.reduce { "-reduced" } else { "" }));
+    println!("One image: {:?}", now.elapsed());
     draw::draw(&tree, args.scaling, "output/temp-image.png");
-    let time = args.time.unwrap_or(std::cmp::min(tree.size(), 10000) as f64);
+    let frames_path = "output/images/frames";
+    fs::remove_dir_all(frames_path).unwrap();
+    fs::create_dir(frames_path).unwrap();
+    let time = args.time.unwrap_or(tree.size() as f64);
+    if !args.noanimate {
+        let frames = (30.0 * time).floor() as usize;
+        println!("Drawing {frames} frames...");
+        draw::draw_anim(&tree, args.scaling, frames_path, frames);
+        println!("All frames: {:?}", now.elapsed());
+    }
+    if args.draw_only {
+        return;
+    }
     let mut seq = Box::new(Sequencer::new(false, 2));
+    // let backend = seq.backend();
     println!("Sequencing over {time} seconds...");
     let now = Instant::now();
     tree.generate_with(&mut seq, 0.0, time, args.scaling, 0.0);

@@ -133,3 +133,42 @@ impl TryFrom<CTerm> for ITerm {
 //         value.clone().try_into()
 //     }
 // }
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Tag {
+    Annotation,
+    Type,
+    Pi,
+    Application,
+    BoundVar,
+    FreeVar,
+    Zero,
+    Finite,
+    Lambda,
+}
+
+impl CTerm {
+    pub fn tag(&self) -> Tag {
+        match self {
+            CTerm::Inf(iterm) => iterm.tag(),
+            CTerm::Lam(_) => Tag::Lambda,
+        }
+    }
+}
+
+impl ITerm {
+    pub fn tag(&self) -> Tag {
+        use Tag::*;
+        match self {
+            ITerm::Ann(_, _) => Annotation,
+            ITerm::Star => Type,
+            ITerm::Pi(_, _) => Pi,
+            ITerm::Bound(_) => BoundVar,
+            ITerm::Free(_) => FreeVar,
+            ITerm::App(_, _) => Application,
+            ITerm::Zero => Zero,
+            ITerm::Fin(_) => Finite,
+            _ => unimplemented!()
+        }
+    }
+}

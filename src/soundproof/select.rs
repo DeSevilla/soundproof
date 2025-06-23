@@ -9,7 +9,11 @@ use crate::{
     types::*,
 };
 
-const ORANGE: Color = Color::rgb8(0xFF, 0x88, 0x23);
+const ORANGE: Color = Color::rgb8(0xCE, 0x5D, 0x00);
+const PALEORANGE: Color = Color::rgb8(0xf5, 0xc1, 0x4b);
+const LAVENDER: Color = Color::rgb8(0x96, 0x7e, 0xf7);
+const DEEPBLUE: Color = Color::rgb8(0x27, 0x3a, 0x8c);
+const DEEPPURPLE: Color = Color::rgb8(0x4D, 0x01, 0x86);
 const PINK: Color = Color::rgb8(0xF8, 0x18, 0x94);
 const TURQUOISE: Color = Color::rgb8(0x00, 0xDD, 0xD0);
 const VIOLET: Color = Color::rgb8(0x90, 0x00, 0x90);
@@ -21,22 +25,27 @@ pub trait Selector: Clone {
     fn cmerge(&self, term: &CTerm) -> Self;
     fn imeta(&self, term: &ITerm) -> TreeMetadata {
         let color = match term {
-            ITerm::Ann(_, _) => Color::RED,
-            ITerm::Star => VIOLET,
-            ITerm::Pi(_, _) => Color::BLUE,
-            ITerm::App(_, _) => ORANGE,
+            // ITerm::Ann(_, _) => Color::RED,
+            ITerm::Ann(_, _) => Color::FUCHSIA,
+            ITerm::Star => PALEORANGE,
+            // ITerm::Pi(_, _) => Color::BLUE,
+            ITerm::Pi(_, _) => LAVENDER,
+            // ITerm::App(_, _) => ORANGE,
+            ITerm::App(_, _) => DEEPBLUE,
             ITerm::Bound(_) => Color::grey(0.5),
+            ITerm::Free(Name::Local(i)) => Color::rgb8(0x00, 0x28 + 0x12 * (*i as u8), 0x00),
             ITerm::Free(_) => Color::GREEN,
             ITerm::Zero => PINK,
             ITerm::Fin(_) => TURQUOISE,
             _ => unimplemented!()
         };
-        TreeMetadata { name: term.to_string(), color }
+        TreeMetadata { name: term.to_string(), base_color: color, alt_color: color, max_depth: 0 }
     }
     fn cmeta(&self, term: &CTerm) -> TreeMetadata {
         match term {
             CTerm::Inf(it) => self.imeta(it),
-            CTerm::Lam(_) => TreeMetadata { name: term.to_string(), color: Color::YELLOW }
+            // CTerm::Lam(_) => TreeMetadata { name: term.to_string(), color: Color::YELLOW }
+            CTerm::Lam(_) => TreeMetadata { name: term.to_string(), base_color: DEEPPURPLE, alt_color: VIOLET, max_depth: 0 }
         }
     }
 }
@@ -151,10 +160,11 @@ impl FullStratifier {
             ITerm::Star => unit(Box::new(pass())), // has no children, only appears as default parent
             ITerm::Pi(_, _) => unit(Box::new(split() >> fbd(0.25, -1.5))),
             ITerm::Bound(_) => unit(Box::new(major_chord() >> join::<U3>())),
-            ITerm::Free(_) => unit(Box::new(bell_hz(200.0, 1.0, 5.0))),
+            ITerm::Free(Name::Local(i)) => unit(Box::new(shape(Clip(1.0 + 0.5 * (*i as f32))))),
+            ITerm::Free(_) => unit(Box::new(shape(Clip(0.75)))),
             ITerm::App(_, _) => unit(Box::new(reverb_distort())),
             ITerm::Zero => unit(Box::new(shape(Clip(100.0)))),  // will never appear as it has no children
-            ITerm::Fin(_) => unit(Box::new(shape(Clip(2.0)))),
+            ITerm::Fin(_) => unit(Box::new(bell_hz(200.0, 1.0, 5.0))),
             _ => unimplemented!()
         }
     }
@@ -168,12 +178,12 @@ impl FullStratifier {
 
     pub fn imelody(&self, term: &ITerm, notes: [i32; FS_MEL_SIZE]) -> Melody {
         let mut mel = match term {
-            ITerm::Ann(_, _) => Melody::new_even(violinish(), &notes),
-            ITerm::Star => Melody::new_even(three_equivalents(wobbly_sine()) * 0.7, &notes),
+            ITerm::Ann(_, _) => Melody::new_even(sawfir() * 0.75, &notes),
+            ITerm::Star => Melody::new_even(violinish(), &notes),
             ITerm::Pi(_, _) => Melody::new_even(sinesaw() >> split() >> fbd(0.25, -5.0), &notes),
             ITerm::Bound(_) => Melody::new_even(sine() * 2.0, &notes),
             ITerm::Free(_) => Melody::new_even(violinish() * 1.1, &notes),
-            ITerm::App(_, _) => Melody::new_even(sawfir() * 0.75, &notes),
+            ITerm::App(_, _) => Melody::new_even(three_equivalents(wobbly_sine()) * 0.7, &notes),
             ITerm::Zero => Melody::new_even(sinesaw(), &notes),
             ITerm::Fin(_) => Melody::new_even(violinish() * 1.1, &notes),
             _ => unimplemented!()
@@ -195,17 +205,17 @@ impl FullStratifier {
         mel
     }
 
-    pub fn effect_seq(&self, notes: [i32; FS_MEL_SIZE]) -> EffectSeq<Melody, Unit<U1, U1>> {
+    pub fn with_effect(&self, notes: [i32; FS_MEL_SIZE]) -> EffectMel<Unit<U1, U1>> {
         match &self.parent {
             Term::I(parent) => {
                 let mel = self.imelody(parent, notes);
                 let effect = self.ieffect(parent);
-                EffectSeq::new(mel, effect)
+                EffectMel::new(mel, effect)
             },
             Term::C(parent) => {
                 let mel = self.cmelody(parent, notes);
                 let effect = self.ceffect(parent);
-                EffectSeq::new(mel, effect)
+                EffectMel::new(mel, effect)
             }
         }
     }
@@ -214,13 +224,13 @@ impl FullStratifier {
 impl Selector for FullStratifier {
     fn isound(&self, term: &ITerm) -> SoundTree {
         let notes = self.inotes(term);
-        let eff = self.effect_seq(notes);
+        let eff = self.with_effect(notes);
         SoundTree::sound(eff, self.imeta(term))
     }
 
     fn csound(&self, term: &CTerm) -> SoundTree {
         let notes = self.cnotes(term);
-        let eff = self.effect_seq(notes);
+        let eff = self.with_effect(notes);
         SoundTree::sound(eff, self.cmeta(term))
     }
 
@@ -235,6 +245,55 @@ impl Selector for FullStratifier {
         Self {
             parent: Term::C(term.clone()),
             depth: self.depth + 1
+        }
+    }
+
+    fn imeta(&self, term: &ITerm) -> TreeMetadata {
+        const PURPLES: (Color, Color) = (Color::rgb8(0x59, 0x08, 0x7E), Color::rgb8(0xAE, 0x69, 0xE2));
+        const ORANGES: (Color, Color) = (ORANGE, PALEORANGE);
+        const YELLOWS: (Color, Color) = (Color::rgb8(0xC1, 0xA1, 0x00), Color::rgb8(0xE3, 0xFA, 0x5F));
+        const PINKS: (Color, Color) = (Color::rgb8(0xB2, 0x00, 0x74), Color::rgb8(0xFA, 0x75, 0x9E));
+        const GREENS: (Color, Color) = (Color::rgb8(0x00, 0x96, 0x44), Color::rgb8(0x8E, 0xFC, 0x62)); 
+        let (alt_color, base_color) = match term {
+            // ITerm::Ann(_, _) => Color::rgb8(0x86, 0xD8, 0x4B),
+            // ITerm::Ann(_, _) => Color::GREEN,
+            // ITerm::Ann(_, _) => Color::rgb8(0xBA, 0x7F, 0x3E),
+            ITerm::Ann(_, _) => PINKS,
+            // ITerm::Star => Color::rgb8(0x4D, 0x91, 0xEF),
+            ITerm::Star => ORANGES,
+            // ITerm::Pi(_, _) => Color::rgb8(0x2E, 0x6F, 0x94),
+            // ITerm::Pi(_, _) => Color::rgb8(0xC5, 0xFF, 0x00),
+            // ITerm::Pi(_, _) => Color::rgb8(0xA3, 0xF0, 0x95),
+            // ITerm::Pi(_, _) => (Color::rgb8(0x6C, 0x04, 0x1C), Color::RED),
+            ITerm::Pi(_, _) => PURPLES,
+            ITerm::Bound(_) => (Color::GRAY, Color::GRAY),
+            // ITerm::Free(_) => Color::rgb8(0x5E, 0xB4, 0x97),
+            // ITerm::Free(_) => Color::rgb8(0x4A, 0xE4, 0x87),
+            // ITerm::Free(_) => Color::rgb8(0x6C, 0x04, 0x1C),
+            ITerm::Free(_) => YELLOWS,
+            // ITerm::App(_, _) => Color::rgb8(0x8C, 0x3E, 0x64),
+            ITerm::App(_, _) => GREENS,
+            // ITerm::App(_, _) => Color::rgb8(0xE6, 0xDB, 0x61),
+            ITerm::Zero => (DEEPPURPLE, Color::PURPLE),
+            ITerm::Fin(_) => (Color::TEAL, Color::rgb8(0x43, 0xA6, 0xB5)),
+            _ => unimplemented!()
+        };
+        TreeMetadata { name: format!("{:?}", term.tag()), base_color, alt_color, max_depth: self.depth }
+    }
+
+    fn cmeta(&self, term: &CTerm) -> TreeMetadata {
+        const BLUES: (Color, Color) = (Color::rgb8(0x00, 0x73, 0x96), Color::rgb8(0x40, 0xF2, 0xE9));
+        match term {
+            CTerm::Inf(iterm) => self.imeta(iterm),
+            // CTerm::Lam(_) => TreeMetadata { name: term.to_string(), color: Color::rgb8(0x52, 0x1D, 0x67) },
+            // CTerm::Lam(_) => TreeMetadata { name: format!("{:?}", term.tag()), color: Color::TEAL },
+            // CTerm::Lam(_) => TreeMetadata { name: format!("{:?}", term.tag()), color: Color::rgb8(0x18, 0x4D, 0x02) },
+            CTerm::Lam(_) => TreeMetadata { 
+                name: format!("{:?}", term.tag()), 
+                base_color: BLUES.1, 
+                alt_color: BLUES.0,
+                max_depth: self.depth
+            },
         }
     }
 }

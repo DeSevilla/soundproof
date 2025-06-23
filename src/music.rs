@@ -11,7 +11,7 @@ pub mod notes;
 /// Code for stretching audio clips. May be revised as needed
 pub mod stretch;
 
-const SAMPLE_RATE: f32 = 44100.0;
+pub const SAMPLE_RATE: f32 = 44100.0;
 
 /// Render and save a spectrograph for a WAV file.
 pub fn make_spectrograph(input_wav: &Path, output_png: &Path) {

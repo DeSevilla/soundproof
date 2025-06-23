@@ -2,6 +2,7 @@ use std::path::Path;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+use std::usize;
 
 use fundsp::hacker32::*;
 use piet_common::Color;
@@ -305,7 +306,7 @@ impl Melody {
             // time: n.time * lerp(0.95, 0.45, 1.0 / depth as f32) as f64,
             attack: 0.2 / (depth as f32 + 0.1),
             sustain: lerp(0.25, 0.5, 1.0 / depth as f32),
-            volume: /*0.000035*/ 0.5 * (1.0 + 0.07 * depth as f32),
+            volume: /*0.000035*/ 0.6 * (1.0 + 0.02 * depth as f32),
             ..n
         }, d));
     }
@@ -386,6 +387,43 @@ impl SoundGenerator for Texture {
     }
 }
 
+pub struct EffectMel<X: AudioNode<Inputs=U1, Outputs=U1> + 'static> {
+    body: Melody,
+    effect: An<X>
+}
+
+impl<X: AudioNode<Inputs=U1, Outputs=U1> + 'static> EffectMel<X> {
+    pub fn new(body: Melody, effect: An<X>) -> Self {
+        EffectMel { body, effect }
+    }
+}
+
+impl<X: AudioNode<Inputs=U1, Outputs=U1> + 'static> SoundGenerator for EffectMel<X> {
+    fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64, lean: f32) {
+        if self.body.duration() <= 0.0 {
+            println!("No duration for melody! {:?}", self.body.notes);
+            // println!("{}", std::backtrace::Backtrace::capture());
+            return
+        }
+        let mut elapsed = 0.0;
+        let ratio = duration / self.body.duration();
+        for (note, dur) in self.body.notes.iter() {
+            let dur = dur * ratio;
+            let note = note.mul_duration(ratio).adjust_pitch(self.body.note_adjust);
+            let instr = note.with_instrument(self.body.instrument.clone());
+            let instr = instr >> split() >> (mul(2.0_f32.powf(lean)) | (mul(2.0_f32.powf(-lean))));
+            let instr = instr >> (self.effect.clone() | self.effect.clone());
+            seq.push_duration(start_time + elapsed, dur, Fade::Power, 0.0, 0.0, Box::new(instr));
+            elapsed += dur;
+        }
+        assert!(elapsed > 0.0, "Melody must cause time to pass!")
+    }
+
+    fn base_duration(&self) -> f64 {
+        self.body.base_duration()
+    }
+}
+
 pub struct EffectSeq<T, X>
     where
         T: SoundGenerator,
@@ -414,6 +452,7 @@ impl<T, X> SoundGenerator for EffectSeq<T, X>
         X: AudioNode<Inputs=U1, Outputs=U1> + 'static
 {
     fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64, lean: f32) {
+        // self.body.sequence(seq, start_time, duration, lean);
         let mut new_seq = Sequencer::new(false, 2);
         self.body.sequence(&mut new_seq, 0.0, duration, lean);
         let effected = unit::<U0, U2>(Box::new(new_seq)) >> (self.effect.clone() | self.effect.clone());
@@ -441,48 +480,12 @@ pub enum SoundTree {
 
 static SIGN: AtomicU32 = AtomicU32::new(0);
 
-// pub enum Tag {
-//     Ann,
-//     Star,
-//     Pi,
-//     App,
-//     Bound,
-//     Free,
-//     Zero,
-//     Fin,
-//     Lam,
-// }
-
-// impl CTerm {
-//     pub fn tag(&self) -> Tag {
-//         match self {
-//             CTerm::Inf(iterm) => iterm.tag(),
-//             CTerm::Lam(_) => Tag::Lam,
-//         }
-//     }
-// }
-
-// impl ITerm {
-//     pub fn tag(&self) -> Tag {
-//         use Tag::*;
-//         match self {
-//             ITerm::Ann(_, _) => Ann,
-//             ITerm::Star => Star,
-//             ITerm::Pi(_, _) => Pi,
-//             ITerm::Bound(_) => Bound,
-//             ITerm::Free(_) => Free,
-//             ITerm::App(_, _) => App,
-//             ITerm::Zero => Zero,
-//             ITerm::Fin(_) => Fin,
-//             _ => unimplemented!()
-//         }
-//     }
-// }
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct TreeMetadata {
     pub name: String,
-    pub color: Color,
+    pub base_color: Color,
+    pub alt_color: Color,
+    pub max_depth: usize,
     // pub lean: f32,
 }
 
@@ -495,22 +498,29 @@ impl SoundTree {
     }
 
     /// Constructs a SoundTree which plays its subtrees one after another.
-    pub fn seq(subtrees: &[SoundTree]) -> Self {
+    pub fn seq(subtrees: impl IntoIterator<Item=SoundTree>) -> Self {
         // avoids nested Seqs; this can affect duration assignments.
         // subject to change but I think I like it
         let mut result = Vec::new();
         // let mut names = "".to_owned();
         // let mut names = "[".to_owned();
+        let mut max_depth = 0;
         for val in subtrees {
             match val.clone() {
-                SoundTree::Seq(mut trees, _meta) => { 
+                SoundTree::Seq(mut trees, meta) => { 
                     // names += &meta.name;
                     // names += ";";
+                    if meta.max_depth > max_depth {
+                        max_depth = meta.max_depth
+                    }
                     result.append(&mut trees);
                 }
                 other => {
                     // names += &other.metadata().name;
                     // names += ";";
+                    if other.metadata().max_depth > max_depth {
+                        max_depth = other.metadata().max_depth
+                    }
                     result.push(other);
                 },
             }
@@ -519,27 +529,34 @@ impl SoundTree {
             result.pop().unwrap()
         }
         else {
-            Self::Seq(result, TreeMetadata { name: "".to_owned(), color: Color::MAROON })
+            Self::Seq(result, TreeMetadata { name: "".to_owned(), base_color: Color::MAROON, alt_color: Color::MAROON, max_depth })
         }
         // names += "]";
     }
 
     /// Constructs a SoundTree which plays its subtrees simultaneously.
-    pub fn simul(subtrees: &[SoundTree]) -> Self {
+    pub fn simul(subtrees: impl IntoIterator<Item=SoundTree>) -> Self {
         // avoids redundant nested Simuls; this cannot affect the resulting audio
         let mut result = Vec::new();
         // let mut names = "{".to_owned();
+        let mut max_depth = 0;
         for val in subtrees {
             match val.clone() {
-                SoundTree::Simul(mut trees, _meta) => {
+                SoundTree::Simul(mut trees, meta) => {
                     // names += &meta.name;
                     // names += "||";
+                    if meta.max_depth > max_depth {
+                        max_depth = meta.max_depth
+                    }
                     result.append(&mut trees);
                     
                 }
                 other => {
                     // names += &other.metadata().name;
                     // names += "||";
+                    if other.metadata().max_depth > max_depth {
+                        max_depth = other.metadata().max_depth
+                    }
                     result.push(other)
                 }
             }
@@ -549,7 +566,7 @@ impl SoundTree {
             result.pop().unwrap()
         }
         else {
-            Self::Simul(result, TreeMetadata { name: "".to_owned(), color: Color::MAROON })
+            Self::Simul(result, TreeMetadata { name: "".to_owned(), base_color: Color::MAROON, alt_color: Color::MAROON, max_depth })
         }
     }
 
@@ -578,6 +595,18 @@ impl SoundTree {
         }
     }
 
+    // pub fn max_depth(&self) -> usize {
+    //     match self {
+    //         SoundTree::Simul(vec, _) => {
+    //             let result = 1 + vec.iter().map(|x| x.max_depth()).max().unwrap_or(0);
+    //             println!("{}{result} ({})", vec!["\t"; 5 - result].join(""), vec.len());
+    //             result
+    //         },
+    //         SoundTree::Seq(vec, _) => vec.iter().map(|x| x.max_depth()).max().unwrap_or(0),
+    //         SoundTree::Sound(_, _) => 1,
+    //     }
+    // }
+
     /// The weight of the tree for duration scaling.
     pub fn weight(&self, exp: f64) -> f64 {
         match self {
@@ -594,8 +623,9 @@ impl SoundTree {
 
     /// Generate audio into a [Sequencer] for the tree, distributing subtree durations by the selected [scaling](Scaling).
     pub fn generate_with(&self, seq: &mut Sequencer, start_time: f64, duration: f64, scaling: Scaling, lean: f32) {
-        if duration <= 0.0 {
-            println!("Warning! No duration from start time {start_time}");
+        if duration <= 2.0 / crate::music::SAMPLE_RATE as f64 {
+            // println!("Warning! No duration from start time {start_time}");
+            return;
         }
         // if duration > 10.0 {
         //     println!("{}", self.metadata().name.len())

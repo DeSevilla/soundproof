@@ -245,11 +245,11 @@ pub fn main() {
     draw::draw(&tree, args.scaling, format!("output/images/{:?}{}-viz.png", args.value, if args.reduce { "-reduced" } else { "" }));
     println!("One image: {:?}", now.elapsed());
     draw::draw(&tree, args.scaling, "output/temp-image.png");
-    let frames_path = "output/images/frames";
-    fs::remove_dir_all(frames_path).unwrap();
-    fs::create_dir(frames_path).unwrap();
     let time = args.time.unwrap_or(tree.size() as f64);
     if !args.noanimate {
+        let frames_path = "output/images/frames";
+        fs::remove_dir_all(frames_path).unwrap();
+        fs::create_dir(frames_path).unwrap();
         let frames = (30.0 * time).floor() as usize;
         println!("Drawing {frames} frames...");
         draw::draw_anim(&tree, args.scaling, frames_path, frames);
@@ -272,7 +272,7 @@ pub fn main() {
                 stacki::<U2, _, _>(|_|
                     shape(Adaptive::new(0.1, Tanh(0.5))) >> 
                     lowpass_hz(2500.0, 1.0) >>
-                    mul(0.05)
+                    mul(0.1)
                     // >> mul(10.0)
                 )),
             time

@@ -5,7 +5,7 @@ use piet_common::{Color, Device, DwriteFactory, FontFamily, PietText, PietTextLa
 use piet_common::kurbo::{Circle, Line, Rect};
 
 use crate::soundproof::types::SoundTree;
-use crate::Scaling;
+use crate::DivisionMethod;
 
 const WIDTH_PX: usize = 1920;
 const HEIGHT_PX: usize = 1080;
@@ -13,7 +13,7 @@ const DPI: f64 = 96.;
 const WIDTH_IN: f64 = WIDTH_PX as f64 / DPI;
 const HEIGHT_IN: f64 = HEIGHT_PX as f64 / DPI;
 
-pub fn draw(tree: &SoundTree, scaling: Scaling, path: impl AsRef<Path>) {
+pub fn draw(tree: &SoundTree, scaling: DivisionMethod, path: impl AsRef<Path>) {
     let mut device = Device::new().unwrap();
     let mut bitmap = device.bitmap_target(WIDTH_PX, HEIGHT_PX, DPI).unwrap();
     let mut rc = bitmap.render_context();
@@ -27,7 +27,7 @@ pub fn draw(tree: &SoundTree, scaling: Scaling, path: impl AsRef<Path>) {
     bitmap.save_to_file(path).expect("should save file successfully");
 }
 
-pub fn draw_anim(tree: &SoundTree, scaling: Scaling, path: impl AsRef<Path>, frames: usize) {
+pub fn draw_anim(tree: &SoundTree, scaling: DivisionMethod, path: impl AsRef<Path>, frames: usize) {
     let mut device = Device::new().unwrap();
     let mut elapsed = 0.0;
     let frame_time = 1.0 / frames as f64;
@@ -63,12 +63,12 @@ struct FixedDrawArgs {
     depth_height: f64,
     text_bar: f64,
     current: Option<f64>,
-    scaling: Scaling,
+    scaling: DivisionMethod,
 }
 
 impl FixedDrawArgs {
-    pub fn new(max_depth: usize, current: Option<f64>, scaling: Scaling) -> Self {
-        let depth_height = HEIGHT_IN * 0.9 / max_depth as f64;
+    pub fn new(max_depth: usize, current: Option<f64>, scaling: DivisionMethod) -> Self {
+        let depth_height = if max_depth != 0 { HEIGHT_IN * 0.9 / max_depth as f64 } else { 0.2 };
         let text_bar = depth_height * 4.0;
         Self {
             max_depth,

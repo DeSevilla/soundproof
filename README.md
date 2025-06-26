@@ -59,19 +59,17 @@ on optimizations that are not enabled in debug mode. It will not run in any reas
 otherwise.
 
 ```
-A system which converts dependently-typed lambda calculus into music, with a focus on Girard's Paradox. Generates audio, a spectrograph, an image representation of the "sound tree" structure, and animation frames matching the visualization with the sound.
-
 Usage: soundproof.exe [OPTIONS]
 
 Options:
-  -s, --scaling <SCALING>      Determines how time is broken down between sequential segments [default: weight] [possible values: even, weight, size]
+  -d, --division <DIVISION>    Determines how time is broken down between sequential segments [default: weight] [possible values: even, weight, size]
   -t, --time <TIME>            In seconds. If unset, scales with size of tree
   -v, --value <VALUE>          Predefined terms of the dependently typed lambda calculus [default: girard] [possible values: star, sets-of, u, tau, sigma, omega, lem0, lem2, lem3, girard]
-  -e, --eval                   When set, evaluate the term as far as possible before being presented
-  -d, --draw-only              When set, only generate visualization (including animation frames), not music
+  -r, --reduce                 When set, normalize the term as far as possible before being presented
+  -D, --draw-only              When set, only generate visualization (including animation frames), not music
   -n, --noanimate              When set, do not generate animation frames
-  -m, --melody <MELODY>        Determines which set of melodies to use [default: strat-full] [possible values: strat-full, a, b, c, d, e, f, pure-sine, names-short, names-long, strat-instr, effects, mixed, loop, rhythmized, bare]
-  -S, --structure <STRUCTURE>  How to assign sound-tree structure to a term [default: type] [possible values: term, type, test]
+  -m, --melody <MELODY>        Determines which audio selector to use, determining melodies, rhythm, timbre, and so on [default: full-stratifier] [possible values: full-stratified, a, b, c, d, e, f, pure-sine, names-short, names-long, strat-instr, effects, mixed, loop, rhythmized, bare]   
+  -s, --structure <STRUCTURE>  How to assign sound-tree structure to a term [default: type] [possible values: term, type, test]
   -f, --filters <FILTERS>      Additional filters added after audio generation [default: clip-lowpass] [possible values: clip-lowpass, quiet, none]
   -h, --help                   Print help (see more with '--help')
   -V, --version                Print version

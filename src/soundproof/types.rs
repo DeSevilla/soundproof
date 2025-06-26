@@ -10,7 +10,7 @@ use rand::seq::IndexedRandom;
 use rand::rng;
 use crate::music::notes::*;
 use crate::music::stretch::{retime_pitch_wave, retime_wave};
-use crate::Scaling;
+use crate::DivisionMethod;
 
 /// Objects that can be used to generate audio output through a FunDSP [Sequencer].
 pub trait SoundGenerator {
@@ -424,6 +424,9 @@ impl<X: AudioNode<Inputs=U1, Outputs=U1> + 'static> SoundGenerator for EffectMel
     }
 }
 
+/// Applies an audio effect to any Sequenceable.
+/// Unfortunately, given the genericity of Sequenceables this drastically harms performance.
+/// [EffectMel] is a performant version when the Sequenceable is a Melody specifically.
 pub struct EffectSeq<T, X>
     where
         T: SoundGenerator,
@@ -622,7 +625,7 @@ impl SoundTree {
     }
 
     /// Generate audio into a [Sequencer] for the tree, distributing subtree durations by the selected [scaling](Scaling).
-    pub fn generate_with(&self, seq: &mut Sequencer, start_time: f64, duration: f64, scaling: Scaling, lean: f32) {
+    pub fn generate_with(&self, seq: &mut Sequencer, start_time: f64, duration: f64, scaling: DivisionMethod, lean: f32) {
         if duration <= 2.0 / crate::music::SAMPLE_RATE as f64 {
             // println!("Warning! No duration from start time {start_time}");
             return;

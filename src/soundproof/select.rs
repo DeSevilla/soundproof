@@ -528,14 +528,14 @@ impl Effector {
 impl Selector for Effector {
     fn isound(&self, term: &ITerm) -> SoundTree {
         let melody = MelodySelector::F.imelody(term, self.depth);
-        let eff = EffectSeq::new(melody, self.effect.clone());
+        let eff = EffectMel::new(melody, self.effect.clone());
         // melody.instrument = unit(Box::new(melody.instrument >> self.effect.clone()));
         SoundTree::sound(eff, self.imeta(term))
     }
 
     fn csound(&self, term: &CTerm) -> SoundTree {
         let melody = MelodySelector::F.cmelody(term, self.depth);
-        let eff = EffectSeq::new(melody, self.effect.clone());
+        let eff = EffectMel::new(melody, self.effect.clone());
         // melody.instrument = unit(Box::new(melody.instrument >> self.effect.clone()));
         SoundTree::sound(eff, self.cmeta(term))
     }
@@ -812,6 +812,7 @@ pub fn imelody2(term: &ITerm, depth: usize) -> Melody {
         ITerm::Star => Melody::new_even(wobbly_sine(), &[G, E, C, B]),
         ITerm::Pi(_, _) => Melody::new_even(sinesaw(), &[E, C, G, E]),
         ITerm::Bound(n) => Melody::new_even(sinesaw() >> split() >> fbd(*n as f32 / 10.0, -5.0), &[E, E, C, B]),
+        ITerm::Free(_) => Melody::new_even(karplus(), &[E, G, A, B]),
         ITerm::App(_, _) => Melody::new_even(pink_sine(), &[B, C, G, E]),
         ITerm::Zero => Melody::new_even(fm_basic(), &[B, C, E, G]),
         ITerm::Fin(_) => Melody::new_even(violinish(), &[E, B, G, C]),

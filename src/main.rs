@@ -40,7 +40,7 @@ pub enum Structure {
 
 /// Determines how time is broken down between sequential segments.
 #[derive(PartialEq, Eq, Clone, Copy, Debug, ValueEnum)]
-pub enum Scaling {
+pub enum DivisionMethod {
     /// At each node, just splits time evenly among sequential children. Outer terms get much more time relative to deeper subtrees.
     Even,
     /// Splits time according to the size of the subtree, but adjusted to give a bit more weight to outer terms.
@@ -50,28 +50,28 @@ pub enum Scaling {
     Size,
 }
 
-impl Scaling {
+impl DivisionMethod {
     fn exponent() -> f64 {
         0.87
     }
 
     fn child_scale(&self, child: &SoundTree) -> f64 {
         match self {
-            Scaling::Even => 1.0,
-            Scaling::Weight => child.subtree_weight(Self::exponent()),
-            Scaling::Size => child.size() as f64,
+            DivisionMethod::Even => 1.0,
+            DivisionMethod::Weight => child.subtree_weight(Self::exponent()),
+            DivisionMethod::Size => child.size() as f64,
         }
     }
 
     fn parent_scale(&self, parent: &SoundTree) -> f64 {
         match self {
-            Scaling::Even => match parent {
+            DivisionMethod::Even => match parent {
                 SoundTree::Simul(vec, _) => vec.len() as f64,
                 SoundTree::Seq(vec, _) => vec.len() as f64,
                 SoundTree::Sound(_, _) => 1.0,
             },
-            Scaling::Weight => parent.weight(Self::exponent()),
-            Scaling::Size => parent.size() as f64,
+            DivisionMethod::Weight => parent.weight(Self::exponent()),
+            DivisionMethod::Size => parent.size() as f64,
         }
     }
 }
@@ -129,7 +129,7 @@ impl NamedTerm {
 #[derive(PartialEq, Eq, Clone, Copy, Debug, ValueEnum)]
 pub enum AudioSelectorOptions {
     /// Canonical selector: melody is determined by node; instrument, rhythm, and effect are determined by parent node.
-    StratFull,
+    FullStratified,
      /// First, highly arbitary melody suite.
     A,
     /// Melodies based on B, C, E, and G with arbitrarily-chosen instruments.
@@ -181,27 +181,27 @@ pub enum FilterOptions {
 pub struct Args {
     /// Determines how time is broken down between sequential segments.
     #[arg(short, long, default_value="weight")]
-    scaling: Scaling,
+    division: DivisionMethod,
     /// In seconds. If unset, scales with size of tree.
     #[arg(short, long)]
     time: Option<f64>,
     /// Predefined terms of the dependently typed lambda calculus.
     #[arg(short, long, default_value="girard")]
     value: NamedTerm,
-    /// When set, evaluate the term as far as possible before being presented.
+    /// When set, normalize the term as far as possible before being presented.
     #[arg(short, long, action)]
-    eval: bool,
+    reduce: bool,
     /// When set, only generate visualization (including animation frames), not music.
-    #[arg(short, long, action)]
+    #[arg(short('D'), long, action)]
     draw_only: bool,
     /// When set, do not generate animation frames.
     #[arg(short, long, action)]
     noanimate: bool,
-    /// Determines which set of melodies to use.
-    #[arg(short, long, default_value="strat-full")]
+    /// Determines which audio selector to use, determining melodies, rhythm, timbre, and so on.
+    #[arg(short, long, default_value="full-stratifier")]
     melody: AudioSelectorOptions,
     /// How to assign sound-tree structure to a term.
-    #[arg(short('S'), long, default_value="type")]
+    #[arg(short, long, default_value="type")]
     structure: Structure,
     /// Additional filters added after audio generation.
     #[arg(short, long, default_value="clip-lowpass")]
@@ -210,7 +210,7 @@ pub struct Args {
 
 impl Args {
     pub fn term(&self) -> ITerm {
-        if self.eval {
+        if self.reduce {
             match self.value {
                 NamedTerm::Girard => girard_reduced(),
                 name => ireduce(name.term()).unwrap()
@@ -256,15 +256,15 @@ pub fn main() {
         Mixed => structure_func(MixedOutput::new(), &args),
         Loop => structure_func(Looper::new(Rhythmizer::new()), &args),
         Rhythmized => structure_func(Rhythmizer::new(), &args),
-        StratFull => structure_func(FullStratifier::new(), &args),
+        FullStratified => structure_func(FullStratifier::new(), &args),
         Bare => structure_func(Plain::new(), &args),
     };
     println!("...done in {:?}", now.elapsed());
     println!("Drawing...");
     let now = Instant::now();
-    draw::draw(&tree, args.scaling, format!("output/images/{:?}{}-viz.png", args.value, if args.eval { "-reduced" } else { "" }));
+    draw::draw(&tree, args.division, format!("output/images/{:?}{}-viz.png", args.value, if args.reduce { "-reduced" } else { "" }));
     println!("One image: {:?}", now.elapsed());
-    draw::draw(&tree, args.scaling, "output/visualization.png");
+    draw::draw(&tree, args.division, "output/visualization.png");
     let time = args.time.unwrap_or(tree.size() as f64);
     if !args.noanimate {
         let frames_path = "output/images/frames";
@@ -272,7 +272,7 @@ pub fn main() {
         fs::create_dir(frames_path).unwrap();
         let frames = (30.0 * time).floor() as usize;
         println!("Drawing {frames} frames...");
-        draw::draw_anim(&tree, args.scaling, frames_path, frames);
+        draw::draw_anim(&tree, args.division, frames_path, frames);
         println!("All frames: {:?}", now.elapsed());
     }
     if args.draw_only {
@@ -282,7 +282,7 @@ pub fn main() {
     // let backend = seq.backend();
     println!("Sequencing over {time} seconds...");
     let now = Instant::now();
-    tree.generate_with(&mut seq, 0.0, time, args.scaling, 0.0);
+    tree.generate_with(&mut seq, 0.0, time, args.division, 0.0);
     println!("...done in {:?}", now.elapsed());
     let output: &mut Sequencer = &mut seq;
     match args.filters {

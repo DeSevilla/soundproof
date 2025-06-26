@@ -195,7 +195,11 @@ pub fn reduce(term: ITerm) -> CTerm {
 
 pub fn ireduce(term: ITerm) -> Result<ITerm, String> {
     let ty = term.infer_type(vec![])?;
-    Ok(iann(reduce(term), quote0(ty)))
+    let reduced = reduce(term);
+    match reduced {
+        CTerm::Inf(it) => Ok(*it),
+        CTerm::Lam(_) => Ok(iann(reduced, quote0(ty)))
+    }
 }
 
 /// Girard's Paradox, with the lemmas reduced as far as possible.

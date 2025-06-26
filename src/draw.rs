@@ -22,7 +22,6 @@ pub fn draw(tree: &SoundTree, scaling: Scaling, path: impl AsRef<Path>) {
     rc.fill(rect, &Color::BLACK);
     let args = FixedDrawArgs::new(tree.metadata().max_depth, None, scaling);
     drawtree(&tree, &mut rc, args, 0.0, 1.0, 0);
-    // drawtree(&tree, &mut rc, tree.metadata().max_depth, None, 0.0, 1.0, scaling, 0);
     rc.finish().unwrap();
     std::mem::drop(rc);
     bitmap.save_to_file(path).expect("should save file successfully");
@@ -49,8 +48,8 @@ pub fn draw_anim(tree: &SoundTree, scaling: Scaling, path: impl AsRef<Path>, fra
         drawtree(&tree, &mut rc, args, 0.0, 1.0, 0);
         rc.finish().unwrap();
         std::mem::drop(rc);
-        // let b = bitmap.to_image_buf(Rgb);
-        bitmap.save_to_file(path.as_ref().join(format!("{:05}.png", ii))).expect("should save file successfully");
+        let digits = frames.ilog10() as usize + 1;
+        bitmap.save_to_file(path.as_ref().join(format!("{:0digits$}.png", ii))).expect("should save file successfully");
         if ii % log_margin == 0 {
             println!("Completed {ii}/{frames} frames in {:?}", Instant::now() - start);
         }
@@ -100,7 +99,6 @@ fn drawtree(
             for child in vec {
                 let ratio = args.scaling.child_scale(child) / args.scaling.parent_scale(tree);
                 let new_time = duration * ratio;
-                // drawtree(child, ctx, max_depth, current, start_time + time_elapsed, new_time, scaling, depth);
                 drawtree(child, ctx, args, start_time + time_elapsed, new_time, depth);
                 time_elapsed += new_time;
             }
@@ -111,8 +109,6 @@ fn drawtree(
                 return;
             }
 
-            // let depth_height = HEIGHT_IN * 0.9 / args.max_depth as f64;
-            // let text_bar = depth_height * 4.0;
 
             let bottom = HEIGHT_IN - depth as f64 * args.depth_height;  // height is negative
             let top = bottom - args.depth_height;

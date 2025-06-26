@@ -3,7 +3,8 @@ It is currently in a very preliminary stage and has a limited selection of terms
 [FunDSP](https://github.com/SamiPerttu/fundsp). The mathematical proofs are constructed in a
 custom Rust implementation of [LambdaPi](https://www.andres-loeh.de/LambdaPi/) (originally in Haskell);
 [Ilya Klyuchnikov's version](https://github.com/ilya-klyuchnikov/lambdapi) was a particular model.
-Artistic influences include Iannis Xenakis, Catherine Hennix, Henry Flynt, Drexciya, Perturbator, Sun Ra, Karlheinz Stockhausen, and Odz Manouk.
+Artistic influences include Iannis Xenakis, Catherine Hennix, Henry Flynt, Drexciya, Perturbator, Sun Ra, 
+Karlheinz Stockhausen, and Odz Manouk.
 
 <!-- Examples of the output can be found on SoundCloud [here (type-structured)](https://soundcloud.com/user-619734785/system-output-v13)
 and [here (term-structured)](https://soundcloud.com/user-619734785/system-output-v12). -->
@@ -41,74 +42,37 @@ to play their translations in sequential order (potentially increased in pitch, 
 The type-structured translation is more complicated, using the types of the terms and having more
 variation in the precise interpretation of different sorts of term/type, but follows a similar approach.
 
+Along with the audio, it generates a visualization of the "sound tree" structure, 
+which is saved at `output/visualization.png` and in `output/images/`. By default, it also
+generates animation frames matched to the duration of the music at 30FPS; this can take
+quite a long time, so the `--noanimate` option skips the process. Frames are not
+automatically put together into a video; FFMPEG can handle this process.
+
 Various desirable features of LambdaPi (equality types, a parser, etc.) have been left out for now,
 as they're not necessary for the paradox or for the musical side of the problem.
 I would like to add a small-step evaluator and incorporate the (unlimited)
 evaluation process of the non-normalizing term for Girard's Paradox, but there are some structural and
-conceptual obstacles before this can be done. I'm also experimenting with the musical side of things,
-which I'd like to structure in a more interesting way.
+conceptual obstacles before this can be done. I'm also experimenting with the musical side of things.
 
 Soundproof should always be compiled with `--release`, as the synth portions using FunDSP depend highly
 on optimizations that are not enabled in debug mode. It will not run in any reasonable time
 otherwise.
 
 ```
+A system which converts dependently-typed lambda calculus into music, with a focus on Girard's Paradox. Generates audio, a spectrograph, an image representation of the "sound tree" structure, and animation frames matching the visualization with the sound.
+
 Usage: soundproof.exe [OPTIONS]
 
 Options:
-  -s, --scaling <SCALING>
-          Determines how time is broken down between sequential segments
-
-          [default: weight]
-
-          Possible values:
-          - linear: At each node, just splits time evenly among sequential children. Outer terms get much more time relative to deeper subtrees
-          - weight: Splits time according to the size of the subtree, but adjusted to give a bit more weight to outer terms
-          - size:   Splits time according to the size of the subtree in terms of pure number of nodes, no increased weight of outer terms
-
-  -t, --time <TIME>
-          In seconds. If unset, scales with size of tree
-
-  -v, --value <VALUE>
-          Predefined terms of the dependently typed lambda calculus
-
-          [default: girard-reduced]
-
-          Possible values:
-          - star:           The type of types
-          - u:              The "universe" type U used to derive Girard's Paradox: `forall (X :: *) . (P(P(X)) -> X) -> P(P(X))`
-          - tau:            A term of type P(P(U)) -> U
-          - sigma:          A term of type U -> P(P(U))
-          - omega:          A term of type U
-          - girard:         Girard's Paradox, full term according to the Hurkens approach
-          - girard-reduced: Girard's Paradox, reduced as far as possible without nontermination
-
-  -m, --melody <MELODY>
-          Determines which set of melodies to use
-
-          [default: e]
-
-          Possible values:
-          - a:         First, highly arbitary melody suite. See [imelody1] and [cmelody2] (there is no cmelody1)
-          - b:         Melodies based on B, C, E, and G with arbitrarily-chosen instruments. See [imelody2] and [cmelody2]
-          - c:         More intentionally-chosen melodies with still-arbitrary instruments. See [imelody3] and [cmelody3]
-          - d:         Same melodies as C but with cleaner-sounding instruments. See [imelody4] and [cmelody4]
-          - e:         Melody suite with some hints of dissonance. See [imelody5] and [cmelody5]
-          - pure-sine: Same melodies as B and C but exclusively as sines. See [imelody_oneinstr] and [cmelody_oneinstr]
-
-  -S, --structure <STRUCTURE>
-          How to assign sound-tree structure to a term
-
-          [default: type]
-
-          Possible values:
-          - term: Assign melodies according to the structure of terms themselves
-          - type: Assign melodies mostly according to the types of terms
-          - test: Run through a series of terms designed to test the different melodies. Overrides --value
-
-  -h, --help
-          Print help (see a summary with '-h')
-
-  -V, --version
-          Print version
+  -s, --scaling <SCALING>      Determines how time is broken down between sequential segments [default: weight] [possible values: even, weight, size]
+  -t, --time <TIME>            In seconds. If unset, scales with size of tree
+  -v, --value <VALUE>          Predefined terms of the dependently typed lambda calculus [default: girard] [possible values: star, sets-of, u, tau, sigma, omega, lem0, lem2, lem3, girard]
+  -e, --eval                   When set, evaluate the term as far as possible before being presented
+  -d, --draw-only              When set, only generate visualization (including animation frames), not music
+  -n, --noanimate              When set, do not generate animation frames
+  -m, --melody <MELODY>        Determines which set of melodies to use [default: strat-full] [possible values: strat-full, a, b, c, d, e, f, pure-sine, names-short, names-long, strat-instr, effects, mixed, loop, rhythmized, bare]
+  -S, --structure <STRUCTURE>  How to assign sound-tree structure to a term [default: type] [possible values: term, type, test]
+  -f, --filters <FILTERS>      Additional filters added after audio generation [default: clip-lowpass] [possible values: clip-lowpass, quiet, none]
+  -h, --help                   Print help (see more with '--help')
+  -V, --version                Print version
 ```

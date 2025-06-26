@@ -106,7 +106,7 @@ pub fn preomega() -> ITerm {
     )
 }
 
-/// An element of U -- [tau] of the set of inductive subsets of U.
+/// An element of U -- [tau] of the set of all inductive subsets of U.
 /// See [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf) for details.
 pub fn omega() -> ITerm {
     iann(iapp(tau(), preomega()), u())
@@ -139,7 +139,7 @@ pub fn sigma_omega() -> ITerm {
     iapp(sigma(), omega())
 }
 
-/// The proposition that any subset of U which is in [sigma]\([omega]\) contains [tau]\([sigma]\([omega])).
+/// The proposition that [tau]\([sigma]\([omega])) is a predecessor of [omega].
 /// See [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf) for details.
 pub fn d() -> ITerm {
     ipi(
@@ -151,7 +151,7 @@ pub fn d() -> ITerm {
     )
 }
 
-/// A proof that proposition [D](d) is false.
+/// A proof that [tau]\([sigma]\([omega])) is not a predecessor of [omega].
 /// See [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf) for details.
 pub fn lem2() -> ITerm {
     iann(
@@ -170,7 +170,7 @@ pub fn lem2() -> ITerm {
     )
 }
 
-/// A proof of proposition [D](d).
+/// A proof that [tau]\([sigma]\([omega])) is a predecessor of [omega].
 /// See [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf) for details.
 pub fn lem3() -> ITerm {
     iann(

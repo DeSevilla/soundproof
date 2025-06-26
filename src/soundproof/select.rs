@@ -702,7 +702,7 @@ pub enum MelodySelector {
     D,
     /// Melody suite with some hints of dissonance. See [imelody5] and [cmelody5].
     E,
-    /// Like E, but switched around and more textured
+    /// Like E, but switched around and more textured. See [imelody6] and [cmelody6].
     F,
     /// Same melodies as B and C but exclusively as sines. See [imelody_oneinstr] and [cmelody_oneinstr].
     PureSine,

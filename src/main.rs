@@ -32,10 +32,10 @@ pub enum Structure {
     Term,
     /// Assign melodies mostly according to the types of terms
     Type,
-    /// Run through a series of terms designed to test the different melodies. Overrides --value.
+    /// Run through a series of terms designed to test the different melodies. Overrides `--value`.
     Test,
-    /// TODO allow multiple values instead of this
-    Buildup,
+    // TODO allow multiple values instead of this
+    // Buildup,
 }
 
 /// Determines how time is broken down between sequential segments.
@@ -91,10 +91,13 @@ pub enum NamedTerm {
     Tau,
     /// A term of type U -> P(P(U)).
     Sigma,
-    /// A term of type U.
+    /// A term of type U, tau of the set of 'inductive' elements of U.
     Omega,
+    /// A proof that Omega is well-founded.
     Lem0,
+    /// A proof that tau(sigma(Omega)) is not a predecessor of Omega.
     Lem2,
+    /// A proof that tau(sigma(Omega)) is a predecessor of Omega.
     Lem3,
     /// Girard's Paradox, full term according to the Hurkens approach.
     Girard,
@@ -125,40 +128,54 @@ impl NamedTerm {
 /// Command-line options to determine which set of melodies to use when generating melodies for a term.
 #[derive(PartialEq, Eq, Clone, Copy, Debug, ValueEnum)]
 pub enum AudioSelectorOptions {
-     /// First, highly arbitary melody suite. See [imelody1] and [cmelody2] (there is no cmelody1).
-    A,
-    /// Melodies based on B, C, E, and G with arbitrarily-chosen instruments. See [imelody2] and [cmelody2].
-    B,
-    /// More intentionally-chosen melodies with still-arbitrary instruments. See [imelody3] and [cmelody3].
-    C,
-    /// Same melodies as C but with cleaner-sounding instruments. See [imelody4] and [cmelody4].
-    D,
-    /// Melody suite with some hints of dissonance. See [imelody5] and [cmelody5].
-    E,
-    /// Like E, but switched around and more textured
-    F,
-    /// Same melodies as B and C but exclusively as sines. See [imelody_oneinstr] and [cmelody_oneinstr].
-    PureSine,
-    /// Pulled from audio files, short names
-    NamesShort,
-    NamesLong,
-    StratInstr,
-    Effects,
-    Mixed,
-    Loop,
-    Rhythmized,
+    /// Canonical selector: melody is determined by node; instrument, rhythm, and effect are determined by parent node.
     StratFull,
+     /// First, highly arbitary melody suite.
+    A,
+    /// Melodies based on B, C, E, and G with arbitrarily-chosen instruments.
+    B,
+    /// More intentionally-chosen melodies with still-arbitrary instruments.
+    C,
+    /// Same melodies as C but with cleaner-sounding instruments.
+    D,
+    /// Melody suite with some hints of dissonance.
+    E,
+    /// Like E, but switched around and more textured. See
+    F,
+    /// Same melodies as B and C but exclusively as sines.
+    PureSine,
+    /// Pulled from audio files, short names of the AST variants
+    NamesShort,
+    /// Pulled from audio files, extended names of the AST variants
+    NamesLong,
+    /// Melody is determined by node, instrument by parent node.
+    StratInstr,
+    /// Melody & instrument determined by node, an additional effect is determined by parent node.
+    Effects,
+    /// A mix of melodies, concrete audio clips, and a stochastic texture
+    Mixed,
+    /// Melodies loop instead of being stretched out over the duration.
+    Loop,
+    /// Melody & instrument are determined by node, rhythm is determined by parent node. 
+    Rhythmized,
+    /// Just plays sine tones, no melody.
     Bare,
 }
 
+/// Additional filters added after audio generation.
 #[derive(PartialEq, Eq, Clone, Copy, Debug, ValueEnum)]
 pub enum FilterOptions {
+    /// Clip amplitude and put it through a low-pass filter.
     ClipLowpass,
+    /// Reduce volume significantly.
     Quiet,
+    /// No additional filter.
     None,
 }
 
 /// A system which converts dependently-typed lambda calculus into music, with a focus on Girard's Paradox.
+/// Generates audio, a spectrograph, an image representation of the "sound tree" structure, and
+/// animation frames matching the visualization with the sound.
 #[derive(Parser, Debug)]
 #[command(version, about, long_about=None)]
 pub struct Args {
@@ -171,26 +188,29 @@ pub struct Args {
     /// Predefined terms of the dependently typed lambda calculus.
     #[arg(short, long, default_value="girard")]
     value: NamedTerm,
+    /// When set, evaluate the term as far as possible before being presented.
     #[arg(short, long, action)]
-    reduce: bool,
+    eval: bool,
+    /// When set, only generate visualization (including animation frames), not music.
     #[arg(short, long, action)]
     draw_only: bool,
+    /// When set, do not generate animation frames.
     #[arg(short, long, action)]
     noanimate: bool,
     /// Determines which set of melodies to use.
-    #[arg(short, long, default_value="strat2")]
+    #[arg(short, long, default_value="strat-full")]
     melody: AudioSelectorOptions,
     /// How to assign sound-tree structure to a term.
     #[arg(short('S'), long, default_value="type")]
     structure: Structure,
-    /// Filters to apply to output
+    /// Additional filters added after audio generation.
     #[arg(short, long, default_value="clip-lowpass")]
     filters: FilterOptions,
 }
 
 impl Args {
     pub fn term(&self) -> ITerm {
-        if self.reduce {
+        if self.eval {
             match self.value {
                 NamedTerm::Girard => girard_reduced(),
                 name => ireduce(name.term()).unwrap()
@@ -217,7 +237,7 @@ pub fn main() {
             Structure::Term => term_translate(args.term(), selector),
             Structure::Type => type_translate(args.term(), selector),
             Structure::Test => test_tree(selector),
-            Structure::Buildup => buildup([sets_of(), u(), tau(), sigma(), omega()], selector),//, lem0(), ireduce(lem2()).unwrap(), ireduce(lem3()).unwrap(), girard_reduced()], selector)
+            // Structure::Buildup => buildup([sets_of(), u(), tau(), sigma(), omega()], selector),//, lem0(), ireduce(lem2()).unwrap(), ireduce(lem3()).unwrap(), girard_reduced()], selector)
         }
     }
     use AudioSelectorOptions::*;
@@ -242,9 +262,9 @@ pub fn main() {
     println!("...done in {:?}", now.elapsed());
     println!("Drawing...");
     let now = Instant::now();
-    draw::draw(&tree, args.scaling, format!("output/images/{:?}{}-viz.png", args.value, if args.reduce { "-reduced" } else { "" }));
+    draw::draw(&tree, args.scaling, format!("output/images/{:?}{}-viz.png", args.value, if args.eval { "-reduced" } else { "" }));
     println!("One image: {:?}", now.elapsed());
-    draw::draw(&tree, args.scaling, "output/temp-image.png");
+    draw::draw(&tree, args.scaling, "output/visualization.png");
     let time = args.time.unwrap_or(tree.size() as f64);
     if !args.noanimate {
         let frames_path = "output/images/frames";

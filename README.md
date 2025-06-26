@@ -58,6 +58,10 @@ Soundproof should always be compiled with `--release`, as the synth portions usi
 on optimizations that are not enabled in debug mode. It will not run in any reasonable time
 otherwise.
 
+NOTE: The audio selectors `names-short`, `names-long`, and `mixed` pull from audio files in the `files` folder, 
+which have not been included in Git. Their source in `select.rs` contains the relevant file names if you
+wish to put in local replacements. 
+
 ```
 Usage: soundproof.exe [OPTIONS]
 

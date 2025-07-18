@@ -136,7 +136,6 @@ fn drawtree(
             }
             else {
                 ctx.fill(rect, &meta.base_color);
-                
             };
             let border_width = ((right - left).min(args.depth_height) * 0.5).min(0.1);
             if border_width > 1.0 / DPI {

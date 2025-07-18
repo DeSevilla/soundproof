@@ -122,7 +122,13 @@ impl FullStratifier {
             ITerm::App(_, _) => [B, A, C, B],
             ITerm::Zero => [E, F, C, A],
             ITerm::Fin(_) => [A, A + 12, E, F],
-            _ => unimplemented!()
+            // ITerm::Nat => todo!(),
+            // ITerm::Succ(cterm) => todo!(),
+            // ITerm::NatElim(cterm, cterm1, cterm2, cterm3) => todo!(),
+            // ITerm::FZero(cterm) => todo!(),
+            // ITerm::FSucc(cterm, cterm1) => todo!(),
+            // ITerm::FinElim(cterm, cterm1, cterm2, cterm3, cterm4) => todo!(),
+            _ => todo!(),
         }
     }
 
@@ -136,14 +142,20 @@ impl FullStratifier {
     pub fn irhythm(&self, term: &ITerm) -> [f64; FS_MEL_SIZE] {
         match term {
             ITerm::Ann(_, _) => [1.0, 0.5, 1.5, 1.0],
-            ITerm::Star => [1.0, 1.0, 1.0, 1.0], // can never occur as this has no children
-            ITerm::Pi(_, _) => [0.5, 1.5, 0.5, 1.5],
-            // ITerm::Bound(_) => [0.0, 0.0, -1.0, 0.0], // can never occur as this has no children
+            ITerm::Star => [1.0, 1.0, 1.0, 1.0],
+                        ITerm::Pi(_, _) => [0.5, 1.5, 0.5, 1.5],
             ITerm::Free(_) => [3.0, 0.3, 0.3, 0.4],
             ITerm::App(_, _) => [2.5, 0.5, 0.5, 0.5],
-            ITerm::Zero => [-1.0, 0.0, 0.0, 0.0], // can never occur as this has no children
+            ITerm::Zero => [-1.0, 0.0, 0.0, 0.0],
             ITerm::Fin(_) => [0.7, 0.7, 2.1, 0.5],
-            _ => unimplemented!()
+            // ITerm::Bound(_) => todo!(),
+            // ITerm::Nat => todo!(),
+            // ITerm::Succ(cterm) => todo!(),
+            // ITerm::NatElim(cterm, cterm1, cterm2, cterm3) => todo!(),
+            // ITerm::FZero(cterm) => todo!(),
+            // ITerm::FSucc(cterm, cterm1) => todo!(),
+            // ITerm::FinElim(cterm, cterm1, cterm2, cterm3, cterm4) => todo!(),
+            _ => todo!(),
         }
     }
 
@@ -157,15 +169,21 @@ impl FullStratifier {
     pub fn ieffect(&self, term: &ITerm) -> An<Unit<U1, U1>> {
         match term {
             ITerm::Ann(_, _) => unit(Box::new((pass() | (800.0 + 100.0 * sine_hz(2.0)) | constant(1.0)) >> highpass())),
-            ITerm::Star => unit(Box::new(pass())), // has no children, only appears as default parent
-            ITerm::Pi(_, _) => unit(Box::new(split() >> fbd(0.25, -1.5))),
+            ITerm::Star => unit(Box::new(pass())),
+            ITerm::Pi(_, _) => unit(Box::new(split() >> fbd(0.25, -3.5))),
             ITerm::Bound(_) => unit(Box::new(major_chord() >> join::<U3>())),
             ITerm::Free(Name::Local(i)) => unit(Box::new(shape(Clip(1.0 + 0.5 * (*i as f32))))),
             ITerm::Free(_) => unit(Box::new(shape(Clip(0.75)))),
             ITerm::App(_, _) => unit(Box::new(reverb_distort())),
-            ITerm::Zero => unit(Box::new(shape(Clip(100.0)))),  // will never appear as it has no children
+            ITerm::Zero => unit(Box::new(shape(Clip(100.0)))),
             ITerm::Fin(_) => unit(Box::new(bell_hz(200.0, 1.0, 5.0))),
-            _ => unimplemented!()
+            // ITerm::Nat => todo!(),
+            // ITerm::Succ(cterm) => todo!(),
+            // ITerm::NatElim(cterm, cterm1, cterm2, cterm3) => todo!(),
+            // ITerm::FZero(cterm) => todo!(),
+            // ITerm::FSucc(cterm, cterm1) => todo!(),
+            // ITerm::FinElim(cterm, cterm1, cterm2, cterm3, cterm4) => todo!(),
+            _ => todo!(),
         }
     }
 
@@ -180,7 +198,7 @@ impl FullStratifier {
         let mut mel = match term {
             ITerm::Ann(_, _) => Melody::new_even(sawfir() * 0.75, &notes),
             ITerm::Star => Melody::new_even(violinish(), &notes),
-            ITerm::Pi(_, _) => Melody::new_even(sinesaw() >> split() >> fbd(0.25, -5.0), &notes),
+            ITerm::Pi(_, _) => Melody::new_even(sinesaw() >> split() >> fbd(0.2, -5.0), &notes),
             ITerm::Bound(_) => Melody::new_even(sine() * 2.0, &notes),
             ITerm::Free(_) => Melody::new_even(violinish() * 1.1, &notes),
             ITerm::App(_, _) => Melody::new_even(three_equivalents(wobbly_sine()) * 0.7, &notes),
@@ -274,9 +292,12 @@ impl Selector for FullStratifier {
             // ITerm::App(_, _) => Color::rgb8(0x8C, 0x3E, 0x64),
             ITerm::App(_, _) => GREENS,
             // ITerm::App(_, _) => Color::rgb8(0xE6, 0xDB, 0x61),
-            ITerm::Zero => (DEEPPURPLE, Color::PURPLE),
-            ITerm::Fin(_) => (Color::TEAL, Color::rgb8(0x43, 0xA6, 0xB5)),
-            _ => unimplemented!()
+            // ITerm::Zero => (DEEPPURPLE, Color::PURPLE),
+            ITerm::Zero => (Color::grey(0.373), Color::grey(0.5)),
+            // ITerm::Fin(_) => (Color::TEAL, Color::rgb8(0x43, 0xA6, 0xB5)),
+            ITerm::Fin(_) => (Color::RED, Color::MAROON),
+            // _ => unimplemented!()
+            _ => (Color::BLACK, Color::BLACK)
         };
         TreeMetadata { name: format!("{:?}", term.tag()), base_color, alt_color, max_depth: self.depth }
     }
@@ -289,7 +310,7 @@ impl Selector for FullStratifier {
             // CTerm::Lam(_) => TreeMetadata { name: format!("{:?}", term.tag()), color: Color::TEAL },
             // CTerm::Lam(_) => TreeMetadata { name: format!("{:?}", term.tag()), color: Color::rgb8(0x18, 0x4D, 0x02) },
             CTerm::Lam(_) => TreeMetadata { 
-                name: format!("{:?}", term.tag()), 
+                name: format!("{:?}", term.tag()),
                 base_color: BLUES.1, 
                 alt_color: BLUES.0,
                 max_depth: self.depth

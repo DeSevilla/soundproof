@@ -121,6 +121,13 @@ impl NamedTerm {
             Girard => girard(),
         }
     }
+
+    fn term_reduced(&self) -> ITerm {
+        match self {
+            NamedTerm::Girard => girard_reduced(),
+            _ => ireduce(self.term()).unwrap()  // can't fail because it's a named term
+        }
+    }
 }
 
 
@@ -179,42 +186,47 @@ pub enum FilterOptions {
 #[derive(Parser, Debug)]
 #[command(version, about, long_about=None)]
 pub struct Args {
-    /// Determines how time is broken down between sequential segments.
-    #[arg(short, long, default_value="weight")]
-    division: DivisionMethod,
-    /// In seconds. If unset, scales with size of tree.
-    #[arg(short, long)]
-    time: Option<f64>,
     /// Predefined terms of the dependently typed lambda calculus.
     #[arg(short, long, default_value="girard")]
     value: NamedTerm,
     /// When set, normalize the term as far as possible before being presented.
     #[arg(short, long, action)]
     reduce: bool,
-    /// When set, only generate visualization (including animation frames), not music.
-    #[arg(short('D'), long, action)]
-    draw_only: bool,
-    /// When set, do not generate animation frames.
-    #[arg(short, long, action)]
-    noanimate: bool,
+    /// In seconds. If unset, scales with size of tree.
+    #[arg(short, long)]
+    time: Option<f64>,
+    /// Determines how time is broken down between sequential segments.
+    #[arg(short, long, default_value="weight")]
+    division: DivisionMethod,
     /// Determines which audio selector to use, determining melodies, rhythm, timbre, and so on.
-    #[arg(short, long, default_value="full-stratifier")]
-    melody: AudioSelectorOptions,
+    #[arg(short, long, default_value="full-stratified")]
+    content: AudioSelectorOptions,
     /// How to assign sound-tree structure to a term.
     #[arg(short, long, default_value="type")]
     structure: Structure,
     /// Additional filters added after audio generation.
     #[arg(short, long, default_value="clip-lowpass")]
     filters: FilterOptions,
+    /// When set, only generate visualization (potentially including animation frames), not music.
+    #[arg(short('D'), long, action)]
+    draw_only: bool,
+    /// When set, generate animation frames.
+    #[arg(short, long, action)]
+    animate: bool,
+    /// Name of the output file
+    #[arg(short, long, default_value="output.wav")]
+    output: String
 }
 
 impl Args {
     pub fn term(&self) -> ITerm {
         if self.reduce {
-            match self.value {
-                NamedTerm::Girard => girard_reduced(),
-                name => ireduce(name.term()).unwrap()
-            }
+            self.value.term_reduced()
+            // for value in self.values {
+            // match self.value {
+            //     NamedTerm::Girard => girard_reduced(),
+            //     name => ireduce(name.term()).unwrap()
+            // }
         } else {
             self.value.term()
         }
@@ -241,7 +253,7 @@ pub fn main() {
         }
     }
     use AudioSelectorOptions::*;
-    let tree = match args.melody {
+    let tree = match args.content {
         A => structure_func(MelodySelector::A.deepen(), &args),
         B => structure_func(MelodySelector::B.deepen(), &args),
         C => structure_func(MelodySelector::C.deepen(), &args),
@@ -266,7 +278,7 @@ pub fn main() {
     println!("One image: {:?}", now.elapsed());
     draw::draw(&tree, args.division, "output/visualization.png");
     let time = args.time.unwrap_or(tree.size() as f64);
-    if !args.noanimate {
+    if args.animate {
         let frames_path = "output/images/frames";
         fs::remove_dir_all(frames_path).unwrap();
         fs::create_dir(frames_path).unwrap();

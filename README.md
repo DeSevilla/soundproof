@@ -39,14 +39,14 @@ each sort of term/type a little fragment of melody. Then, for a particular term/
 translate, we give it a duration. We play the melody for the root of the tree over the whole
 duration, and then along with the root's melody we split up that duration and give it to the subtrees
 to play their translations in sequential order (potentially increased in pitch, etc. for distinction).
-The type-structured translation is more complicated, using the types of the terms and having more
-variation in the precise interpretation of different sorts of term/type, but follows a similar approach.
+The type-structured translation is more complicated, following the call tree of the typechecker,
+which includes all the term structure but additionally includes type structure for variables and lambdas.
 
 Along with the audio, it generates a visualization of the "sound tree" structure, 
-which is saved at `output/visualization.png` and in `output/images/`. By default, it also
+which is saved at `output/visualization.png` and in `output/images/`. With the `--animate` flag, it also
 generates animation frames matched to the duration of the music at 30FPS; this can take
-quite a long time, so the `--noanimate` option skips the process. Frames are not
-automatically put together into a video; FFMPEG can handle this process.
+quite a long time. Frames are not automatically put together into a video, but the file names are chosen 
+to make it easy for FFMPEG to handle this process.
 
 Various desirable features of LambdaPi (equality types, a parser, etc.) have been left out for now,
 as they're not necessary for the paradox or for the musical side of the problem.
@@ -59,8 +59,8 @@ on optimizations that are not enabled in debug mode. It will not run in any reas
 otherwise.
 
 NOTE: The audio selectors `names-short`, `names-long`, and `mixed` pull from audio files in the `files` folder, 
-which have not been included in Git. Their source in `select.rs` contains the relevant file names if you
-wish to put in local replacements. 
+which have not been included in Git for multiple reasons. The selectors' source in `select.rs` contains the 
+relevant file names if you want to put in local replacements. 
 
 ```
 Usage: soundproof.exe [OPTIONS]

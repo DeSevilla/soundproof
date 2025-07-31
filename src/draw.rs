@@ -1,7 +1,9 @@
 use std::path::Path;
-use std::time::Instant;
+use std::thread::sleep;
+use std::time::{Duration, Instant};
 
-use piet_common::{Color, Device, DwriteFactory, FontFamily, PietText, PietTextLayout, RenderContext, Text, TextLayoutBuilder};
+use minifb::{Window, WindowOptions};
+use piet_common::{Color, Device, DwriteFactory, FontFamily, ImageFormat, PietText, PietTextLayout, RenderContext, Text, TextLayoutBuilder};
 use piet_common::kurbo::{Circle, Line, Rect};
 
 use crate::soundproof::types::SoundTree;
@@ -21,39 +23,83 @@ pub fn draw(tree: &SoundTree, scaling: DivisionMethod, path: impl AsRef<Path>) {
     // rc.fill(rect, &Color::rgb8(0xCE, 0xCE, 0xCE));
     rc.fill(rect, &Color::BLACK);
     let args = FixedDrawArgs::new(tree.metadata().max_depth, None, scaling);
-    drawtree(&tree, &mut rc, args, 0.0, 1.0, 0);
+    drawtree(tree, &mut rc, args, 0.0, 1.0, 0);
     rc.finish().unwrap();
     std::mem::drop(rc);
     bitmap.save_to_file(path).expect("should save file successfully");
 }
 
-pub fn draw_anim(tree: &SoundTree, scaling: DivisionMethod, path: impl AsRef<Path>, frames: usize) {
+// struct AnimationFrames<'a> {
+//     tree: &'a SoundTree,
+//     scaling: DivisionMethod,
+//     current: usize,
+//     max: usize,
+// }
+
+// impl<'a> SoundTree {
+//     pub fn animation_frames(&'a self) -> AnimationFrames<'a> {
+//         let mut device = Device::new().unwrap();
+//     }
+// }
+
+// impl<'a> Iterator for AnimationFrames<'a> {
+//     type Item = BitmapTarget<'a>;
+    
+//     fn next(&mut self) -> Option<Self::Item> {
+//         todo!()
+//     }
+    
+// }
+
+pub fn draw_anim(tree: &SoundTree, scaling: DivisionMethod, duration: f64, fps: usize) {
     let mut device = Device::new().unwrap();
-    let mut elapsed = 0.0;
-    let frame_time = 1.0 / frames as f64;
-    let log_margin = frames / 10;
-    let start = Instant::now();
+    let mut window_options = WindowOptions::default();
+    window_options.borderless = true;
+    let mut window = Window::new("Hi", WIDTH_PX, HEIGHT_PX, window_options).unwrap();
+    // let mut elapsed = 0.0;
+    let frame_time = Duration::new(0, (1e9 / fps as f64) as u32);
+    let frames = (duration * fps as f64).ceil() as usize;
+    // let log_margin = frames / 10;
+    // let start = Instant::now();
     for ii in 0..frames {
+        let frame_start = Instant::now();
+        let fraction = ii as f64 / frames as f64;
+        if !window.is_open() {
+            println!("Window closed; quitting");
+            break;
+        }
         let mut bitmap = device.bitmap_target(WIDTH_PX, HEIGHT_PX, DPI).unwrap();
         let mut rc = bitmap.render_context();
         let rect = Rect::new(0.0, 0.0, WIDTH_IN, HEIGHT_IN);
         rc.fill(rect, &Color::BLACK);
-        let args = FixedDrawArgs::new(tree.metadata().max_depth, Some(elapsed), scaling);
-        let cursor_loc = ((WIDTH_IN - args.text_bar) * elapsed, HEIGHT_IN * 0.05);
+        let args = FixedDrawArgs::new(tree.metadata().max_depth, Some(fraction), scaling);
+        let cursor_loc = ((WIDTH_IN - args.text_bar) * fraction, HEIGHT_IN * 0.05);
         let dot = Circle::new(cursor_loc, 0.05);
         rc.fill(dot, &Color::WHITE);
         rc.stroke(dot, &Color::BLUE, 0.03);
         let line = Line::new(cursor_loc, (cursor_loc.0, HEIGHT_IN));
         rc.stroke(line, &Color::GRAY, 0.01);
-        drawtree(&tree, &mut rc, args, 0.0, 1.0, 0);
+        drawtree(tree, &mut rc, args, 0.0, 1.0, 0);
         rc.finish().unwrap();
         std::mem::drop(rc);
-        let digits = frames.ilog10() as usize + 1;
-        bitmap.save_to_file(path.as_ref().join(format!("{:0digits$}.png", ii))).expect("should save file successfully");
-        if ii % log_margin == 0 {
-            println!("Completed {ii}/{frames} frames in {:?}", Instant::now() - start);
+        let a = bitmap.to_image_buf(ImageFormat::RgbaPremul).unwrap();
+        let buf: Vec<u32> = a.raw_pixels()
+            .chunks_exact(4)
+            .map(|s| s.try_into().unwrap())
+            .map(|[r, g, b, _a]: [u8; 4]| ((r as u32) << 16) | ((g as u32) << 8) | b as u32)
+            .collect();
+        window.update_with_buffer(&buf, WIDTH_PX, HEIGHT_PX).unwrap();
+        // let digits = frames.ilog10() as usize + 1;
+        // bitmap.save_to_file(path.as_ref().join(format!("{:0digits$}.png", ii))).expect("should save file successfully");
+        // if ii % log_margin == 0 {
+        //     println!("Completed {ii}/{frames} frames in {:?}", Instant::now() - start);
+        // }
+        // elapsed += frame_time;
+        let frame_end = Instant::now();
+        let render_dur = frame_end - frame_start;
+        if render_dur < frame_time {
+            sleep(frame_time - render_dur)
         }
-        elapsed += frame_time;
     }
 }
 
@@ -85,26 +131,26 @@ fn drawtree(
     ctx: &mut impl RenderContext<TextLayout = PietTextLayout>,
     args: FixedDrawArgs,
     start_time: f64,
-    duration: f64,
+    fraction: f64,
     depth: usize
 ) {
     match tree {
         SoundTree::Simul(vec, _) => {
             for (ii, elem) in vec.iter().enumerate() {
-                drawtree(elem, ctx, args, start_time, duration, depth + ii);
+                drawtree(elem, ctx, args, start_time, fraction, depth + ii);
             }
         },
         SoundTree::Seq(vec, _) => {
             let mut time_elapsed = 0.0;
             for child in vec {
                 let ratio = args.scaling.child_scale(child) / args.scaling.parent_scale(tree);
-                let new_time = duration * ratio;
+                let new_time = fraction * ratio;
                 drawtree(child, ctx, args, start_time + time_elapsed, new_time, depth);
                 time_elapsed += new_time;
             }
         },
         SoundTree::Sound(_, meta) => {
-            if duration * WIDTH_IN <  0.1 / DPI {
+            if fraction * WIDTH_IN <  0.1 / DPI {
                 // println!("Too short: {duration} {:?}", meta.color);
                 return;
             }
@@ -115,7 +161,7 @@ fn drawtree(
 
             let main_width = WIDTH_IN - if args.current.is_some() { args.text_bar } else { 0.0 };
             let left = start_time * main_width;
-            let right = left + duration * main_width;
+            let right = left + fraction * main_width;
 
             let rect = Rect::new(
                 left,
@@ -123,7 +169,7 @@ fn drawtree(
                 right,
                 top,
             );
-            if args.current.map_or(false, |t| start_time <= t && t <= start_time + duration) {
+            if args.current.is_some_and(|t| start_time <= t && t <= start_time + fraction) {
                 let mut text_manager = PietText::new_with_shared_fonts(DwriteFactory::new().unwrap(), None);
                 let text = meta.name.to_owned();
                 let text_layout = text_manager.new_text_layout(text)

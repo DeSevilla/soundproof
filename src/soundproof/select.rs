@@ -87,6 +87,10 @@ impl Selector for Plain {
     }
 }
 
+pub struct AsyncStratifier {
+
+}
+
 #[derive(Clone, Debug, PartialEq)]
 enum Term {
     I(ITerm),
@@ -143,8 +147,8 @@ impl FullStratifier {
         match term {
             ITerm::Ann(_, _) => [1.0, 0.5, 1.5, 1.0],
             ITerm::Star => [1.0, 1.0, 1.0, 1.0],
-                        ITerm::Pi(_, _) => [0.5, 1.5, 0.5, 1.5],
-            ITerm::Free(_) => [3.0, 0.3, 0.3, 0.4],
+            ITerm::Pi(_, _) => [0.5, 1.5, 0.5, 1.5],
+            ITerm::Free(_) => [1.5, 0.5, 1.0, 1.0],
             ITerm::App(_, _) => [2.5, 0.5, 0.5, 0.5],
             ITerm::Zero => [-1.0, 0.0, 0.0, 0.0],
             ITerm::Fin(_) => [0.7, 0.7, 2.1, 0.5],
@@ -218,7 +222,8 @@ impl FullStratifier {
             _ => unimplemented!()
         };
         let rhythm = self.crhythm(term);
-        mel.map_indexed(|i, (n, _d)| (*n, rhythm[i]));
+        mel.adjust_timings(&rhythm).unwrap();
+        // mel.map_indexed(|i, (n, _d)| (*n, rhythm[i]));
         mel.adjust_depth(self.depth);
         mel
     }
@@ -299,7 +304,13 @@ impl Selector for FullStratifier {
             // _ => unimplemented!()
             _ => (Color::BLACK, Color::BLACK)
         };
-        TreeMetadata { name: format!("{:?}", term.tag()), base_color, alt_color, max_depth: self.depth }
+        TreeMetadata {
+            name: format!("{:?}", term.tag()),
+            // parent: format!("{:?}", term.tag()),
+            base_color,
+            alt_color,
+            max_depth: self.depth
+        }
     }
 
     fn cmeta(&self, term: &CTerm) -> TreeMetadata {
@@ -309,7 +320,7 @@ impl Selector for FullStratifier {
             // CTerm::Lam(_) => TreeMetadata { name: term.to_string(), color: Color::rgb8(0x52, 0x1D, 0x67) },
             // CTerm::Lam(_) => TreeMetadata { name: format!("{:?}", term.tag()), color: Color::TEAL },
             // CTerm::Lam(_) => TreeMetadata { name: format!("{:?}", term.tag()), color: Color::rgb8(0x18, 0x4D, 0x02) },
-            CTerm::Lam(_) => TreeMetadata { 
+            CTerm::Lam(_) => TreeMetadata {
                 name: format!("{:?}", term.tag()),
                 base_color: BLUES.1, 
                 alt_color: BLUES.0,

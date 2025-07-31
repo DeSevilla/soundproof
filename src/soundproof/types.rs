@@ -1,3 +1,5 @@
+// use std::cell::RefCell;
+// use std::error::Error;
 use std::path::Path;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -12,10 +14,46 @@ use crate::music::notes::*;
 use crate::music::stretch::{retime_pitch_wave, retime_wave};
 use crate::DivisionMethod;
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum SoundproofError {
+    Mismatch
+}
+
+pub struct ConfigSequencer {
+    seq: Sequencer,
+    live: bool,
+}
+
+impl ConfigSequencer {
+    pub fn new(seq: Sequencer, live: bool) -> Self {
+        Self { seq, live }
+    }
+
+    pub fn push_duration(
+        &mut self,
+        start_time: f64,
+        duration: f64,
+        fade_ease: Fade,
+        fade_in_time: f64,
+        fade_out_time: f64,
+        unit: Box<dyn AudioUnit>,
+    ) -> EventId {
+        if self.live {
+            self.seq.push_relative(start_time, start_time + duration, fade_ease, fade_in_time, fade_out_time, unit)
+        }
+        else {
+            // note: relative isn't *bad* even for rendering to files but if we can do absolute let's do absolute
+            // self.seq.push_relative(start_time, start_time + duration, fade_ease, fade_in_time, fade_out_time, unit)
+            // self.seq.push(start_time, start_time + duration, fade_ease, fade_in_time, fade_out_time, unit)
+            self.seq.push_duration(start_time, duration, fade_ease, fade_in_time, fade_out_time, unit)
+        }
+    }
+}
+
 /// Objects that can be used to generate audio output through a FunDSP [Sequencer].
 pub trait SoundGenerator {
     /// Generate audio into the sequencer for a duration starting at the selected time.
-    fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64, lean: f32);
+    fn sequence(&self, seq: &mut ConfigSequencer, start_time: f64, duration: f64, lean: f32);
 
     /// Duration of the Sequenceable prior to stretching
     fn base_duration(&self) -> f64;
@@ -23,7 +61,7 @@ pub trait SoundGenerator {
 
 
 impl<T: ?Sized> SoundGenerator for Rc<T> where T: SoundGenerator {
-    fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64, lean: f32) {
+    fn sequence(&self, seq: &mut ConfigSequencer, start_time: f64, duration: f64, lean: f32) {
         Rc::as_ref(self).sequence(seq, start_time, duration, lean);
     }
 
@@ -66,7 +104,7 @@ impl WaveClip {
 }
 
 impl SoundGenerator for WaveClip {
-    fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64, lean: f32) {
+    fn sequence(&self, seq: &mut ConfigSequencer, start_time: f64, duration: f64, lean: f32) {
         let scaled = retime_pitch_wave(&self.wave, duration, self.depth_factor());
         let wave_arc = Arc::new(scaled);
         // TODO incorporate lean
@@ -82,7 +120,7 @@ impl SoundGenerator for WaveClip {
 }
 
 impl SoundGenerator for Wave {
-    fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64, lean: f32) {
+    fn sequence(&self, seq: &mut ConfigSequencer, start_time: f64, duration: f64, lean: f32) {
         let scaled = retime_wave(self, duration);
         let wave_arc = Arc::new(scaled);
         let instr = wavech(&wave_arc, 0, None)
@@ -120,7 +158,7 @@ impl<T: SoundGenerator> Loop<T> {
 }
 
 impl<T: SoundGenerator> SoundGenerator for Loop<T> {
-    fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64, lean: f32) {
+    fn sequence(&self, seq: &mut ConfigSequencer, start_time: f64, duration: f64, lean: f32) {
         let mut loop_dur = self.loop_duration;
         while loop_dur > duration * 0.25 {
             loop_dur *= 0.5;
@@ -294,6 +332,14 @@ impl Melody {
         // self.note_adjust = other.note_adjust;
     }
 
+    pub fn adjust_timings(&mut self, timings: &[f64]) -> Result<(), SoundproofError> {
+        if self.notes.len() != timings.len() {
+            return Err(SoundproofError::Mismatch)
+        }
+        self.map_indexed(|i, (n, _d)| (*n, timings[i]));
+        Ok(())
+    }
+
     /// Applies some adjustments to melodies according to their depth in a [SoundTree].
     /// Melodies deeper into the tree will be higher-pitched and have shorter notes,
     /// for a more twinkly effect.
@@ -313,7 +359,7 @@ impl Melody {
 }
 
 impl SoundGenerator for Melody {
-    fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64, lean: f32) {
+    fn sequence(&self, seq: &mut ConfigSequencer, start_time: f64, duration: f64, lean: f32) {
         if self.duration() <= 0.0 {
             println!("No duration for melody! {:?}", self.notes);
             // println!("{}", std::backtrace::Backtrace::capture());
@@ -328,6 +374,7 @@ impl SoundGenerator for Melody {
             let instr = note.with_instrument(self.instrument.clone());
             let instr = instr >> split() >> (mul(2.0_f32.powf(lean)) | (mul(2.0_f32.powf(-lean))));
             seq.push_duration(start_time + elapsed, dur, Fade::Power, 0.0, 0.0, Box::new(instr));
+            // seq.push_relative(start_time + elapsed, start_time + elapsed + dur, Fade::Power, 0.0, 0.0, Box::new(instr));
             elapsed += dur;
         }
         assert!(elapsed > 0.0, "Melody must cause time to pass!")
@@ -370,7 +417,7 @@ impl Texture {
 }
 
 impl SoundGenerator for Texture {
-    fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64, lean: f32) {
+    fn sequence(&self, seq: &mut ConfigSequencer, start_time: f64, duration: f64, lean: f32) {
         let mut elapsed = 0.0;
         while elapsed < duration {
             let note = self.notes.choose(&mut rng()).unwrap();
@@ -399,7 +446,7 @@ impl<X: AudioNode<Inputs=U1, Outputs=U1> + 'static> EffectMel<X> {
 }
 
 impl<X: AudioNode<Inputs=U1, Outputs=U1> + 'static> SoundGenerator for EffectMel<X> {
-    fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64, lean: f32) {
+    fn sequence(&self, seq: &mut ConfigSequencer, start_time: f64, duration: f64, lean: f32) {
         if self.body.duration() <= 0.0 {
             println!("No duration for melody! {:?}", self.body.notes);
             // println!("{}", std::backtrace::Backtrace::capture());
@@ -454,11 +501,11 @@ impl<T, X> SoundGenerator for EffectSeq<T, X>
         T: SoundGenerator,
         X: AudioNode<Inputs=U1, Outputs=U1> + 'static
 {
-    fn sequence(&self, seq: &mut Sequencer, start_time: f64, duration: f64, lean: f32) {
+    fn sequence(&self, seq: &mut ConfigSequencer, start_time: f64, duration: f64, lean: f32) {
         // self.body.sequence(seq, start_time, duration, lean);
-        let mut new_seq = Sequencer::new(false, 2);
+        let mut new_seq = ConfigSequencer::new(Sequencer::new(false, 2), seq.live);
         self.body.sequence(&mut new_seq, 0.0, duration, lean);
-        let effected = unit::<U0, U2>(Box::new(new_seq)) >> (self.effect.clone() | self.effect.clone());
+        let effected = unit::<U0, U2>(Box::new(new_seq.seq)) >> (self.effect.clone() | self.effect.clone());
         let fade_out = 1.0.min(duration * 0.2);
         seq.push_duration(start_time, duration + fade_out, Fade::Smooth, 0.0, fade_out, Box::new(effected));
     }
@@ -467,6 +514,56 @@ impl<T, X> SoundGenerator for EffectSeq<T, X>
         self.body.base_duration()
     }
 }
+
+// pub struct AsyncEffectMel<X: AudioNode<Inputs=U1, Outputs=U1> + 'static> {
+//     mel: Rc<RefCell<EffectMel<X>>>
+// }
+
+// impl<X: AudioNode<Inputs=U1, Outputs=U1> + 'static> AsyncEffectMel<X> {
+//     pub fn new(melody: EffectMel<X>) -> Self {
+//         Self {
+//             mel: Rc::new(RefCell::new(melody))
+//         }
+//     }
+
+//     pub fn melody(&self) -> Melody {
+//         self.mel.borrow().body.clone()
+//     }
+
+//     pub fn set_melody(&mut self, melody: Melody) {
+//         self.mel.borrow_mut().body = melody;
+//     }
+
+//     pub fn with_effect<T>(&self, effect: T) -> AsyncEffectMel<T> 
+//         where
+//             T: AudioNode<Inputs=U1, Outputs=U1>
+//     {
+//         let old = self.mel.borrow();
+//         let new = EffectMel::new(old.body.clone(), An(effect));
+//         AsyncEffectMel::new(new)
+//     }
+
+//     // pub fn adjust_timings(&self, timings: &[f64]) -> Result<(), SoundproofError> {
+//     //     self.mel.borrow_mut().adjust_timings(timings)
+//     // }
+
+//     // pub fn adjust_depth(&self, depth: usize) {
+//     //     self.mel.borrow_mut().adjust_depth(depth);
+//     // }
+// }
+
+// impl<X> SoundGenerator for AsyncEffectMel<X>
+//     where
+//         X: AudioNode<Inputs=U1, Outputs=U1>
+// {
+//     fn sequence(&self, seq: &mut ConfigSequencer, start_time: f64, duration: f64, lean: f32) {
+//         self.mel.borrow().sequence(seq, start_time, duration, lean);
+//     }
+
+//     fn base_duration(&self) -> f64 {
+//         self.mel.borrow().base_duration()
+//     }
+// }
 
 /// Tree of simultaneous and/or sequential sounds. Lambda calculus terms are translated into this structure.
 /// The purpose of the design is to allow layers of sounds at different paces which each progress in time
@@ -486,6 +583,7 @@ static SIGN: AtomicU32 = AtomicU32::new(0);
 #[derive(Clone, Debug, PartialEq)]
 pub struct TreeMetadata {
     pub name: String,
+    // pub parent: String,
     pub base_color: Color,
     pub alt_color: Color,
     pub max_depth: usize,
@@ -532,7 +630,13 @@ impl SoundTree {
             result.pop().unwrap()
         }
         else {
-            Self::Seq(result, TreeMetadata { name: "".to_owned(), base_color: Color::MAROON, alt_color: Color::MAROON, max_depth })
+            Self::Seq(result, TreeMetadata { 
+                name: "".to_owned(),
+                // parent: "".to_owned(),
+                base_color: Color::MAROON, 
+                alt_color: Color::MAROON, 
+                max_depth 
+            })
         }
         // names += "]";
     }
@@ -569,7 +673,13 @@ impl SoundTree {
             result.pop().unwrap()
         }
         else {
-            Self::Simul(result, TreeMetadata { name: "".to_owned(), base_color: Color::MAROON, alt_color: Color::MAROON, max_depth })
+            Self::Simul(result, TreeMetadata { 
+                name: "".to_owned(),
+                // parent: "".to_owned(),
+                base_color: Color::MAROON,
+                alt_color: Color::MAROON,
+                max_depth
+            })
         }
     }
 
@@ -624,8 +734,12 @@ impl SoundTree {
         self.weight(exp).powf(exp)
     }
 
+    // pub fn generate_over_time(&self, seq: &mut ConfigSequencer, start_time: f64, duration: f64, scaling: DivisionMethod, lean: f32) {
+
+    // }
+
     /// Generate audio into a [Sequencer] for the tree, distributing subtree durations by the selected [scaling](Scaling).
-    pub fn generate_with(&self, seq: &mut Sequencer, start_time: f64, duration: f64, scaling: DivisionMethod, lean: f32) {
+    pub fn generate_with(&self, seq: &mut ConfigSequencer, start_time: f64, duration: f64, scaling: DivisionMethod, lean: f32) {
         if duration <= 2.0 / crate::music::SAMPLE_RATE as f64 {
             // println!("Warning! No duration from start time {start_time}");
             return;

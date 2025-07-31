@@ -9,6 +9,7 @@ pub mod eval;
 pub mod print;
 /// Functions for constructing and modifying terms beyond the basic struct definitions.
 pub mod term;
+// pub mod parse;
 
 // this module structure is essentially Klyuchnikov's
 use ast::*;

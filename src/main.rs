@@ -1,16 +1,21 @@
 use std::fs;
-
-// #![allow(unused)]
 use fundsp::hacker32::*;
-
 use clap::*;
-use lambdapi::*;
+use read_input::prelude::input;
+use read_input::InputBuild;
+use std::time::Instant;
+
 use soundproof::*;
 use soundproof::select::*;
 use music::*;
 use types::*;
 use translate::*;
-use ast::*;
+use lambdapi::*;
+use lambdapi::ast::*;
+
+use crate::parse::{statement, Statement};
+
+// use parse::test_iterm_replicate;
 
 
 /// The "proof" side. Implementation of a simple dependently-typed lambda calculus, 
@@ -23,6 +28,7 @@ pub mod music;
 /// Translation from LambdaPi to music.
 pub mod soundproof;
 
+pub mod parse;
 pub mod draw;
 
 /// Modes for structuring the translation from LambdaPi term to SoundTree.
@@ -169,6 +175,10 @@ pub enum AudioSelectorOptions {
     Bare,
 }
 
+// impl AudioSelectorOptions {
+//     pub fn apply()
+// }
+
 /// Additional filters added after audio generation.
 #[derive(PartialEq, Eq, Clone, Copy, Debug, ValueEnum)]
 pub enum FilterOptions {
@@ -213,6 +223,9 @@ pub struct Args {
     /// When set, generate animation frames.
     #[arg(short, long, action)]
     animate: bool,
+    /// Run live instead of saving to file
+    #[arg(short, long, action)]
+    live: bool,
     /// Name of the output file
     #[arg(short, long, default_value="output.wav")]
     output: String
@@ -233,83 +246,184 @@ impl Args {
     }
 }
 
-pub fn main() {
-    // let wave = Wave::load("output/malhombrechords.wav").unwrap();
-    // let wave = retime_wave(wave, 6.0);
-    // wave.save_wav32("output/malhombreslow.wav").unwrap();
-    let args = Args::parse();
-    //validation just makes sure it typechecks; we can't evaluate the paradox or it'll run forever.
-    validate(&format!("Term: {:?}", args.value), &args.term(), false);
-    use std::time::Instant;
+// pub struct ReplState {
+//     value: ITerm,
+//     division: DivisionMethod,
+//     structure: Structure,
+//     content: AudioSelectorOptions,
+// }
+
+// impl TreeMaker {
+//     pub fn term(&self) -> &ITerm {
+//         &self.value
+//     }
+// }
+
+// impl From<&Args> for TreeMaker {
+//     fn from(value: &Args) -> Self {
+//         Self {
+//             value: value.term(),
+//             division: value.division,
+//             structure: value.structure,
+//             content: value.content
+//         }
+//     }
+// }
+
+pub fn make_tree(structure: Structure, content: AudioSelectorOptions, term: &ITerm) -> SoundTree {
+    // validate(&format!("Term: {:?}", args.value), &args.term(), false);
     println!("Translating...");
     let now = Instant::now();
     // use MelodySelector::*;
-    fn structure_func(selector: impl Selector, args: &Args) -> SoundTree {
-        match args.structure {
-            Structure::Term => term_translate(args.term(), selector),
-            Structure::Type => type_translate(args.term(), selector),
+    fn structure_func(selector: impl Selector, structure: Structure, term: &ITerm) -> SoundTree {
+        match structure {
+            Structure::Term => term_translate(term, selector),
+            Structure::Type => type_translate(term, selector),
             Structure::Test => test_tree(selector),
             // Structure::Buildup => buildup([sets_of(), u(), tau(), sigma(), omega()], selector),//, lem0(), ireduce(lem2()).unwrap(), ireduce(lem3()).unwrap(), girard_reduced()], selector)
         }
     }
     use AudioSelectorOptions::*;
-    let tree = match args.content {
-        A => structure_func(MelodySelector::A.deepen(), &args),
-        B => structure_func(MelodySelector::B.deepen(), &args),
-        C => structure_func(MelodySelector::C.deepen(), &args),
-        D => structure_func(MelodySelector::D.deepen(), &args),
-        E => structure_func(MelodySelector::E.deepen(), &args),
-        F => structure_func(MelodySelector::F.deepen(), &args),
-        PureSine => structure_func(MelodySelector::PureSine.deepen(), &args),
-        NamesShort => structure_func(ClipSelector::names(), &args),
-        NamesLong => structure_func(ClipSelector::names_long(), &args),
-        StratInstr => structure_func(StratifyInstrument::default(), &args),
-        Effects => structure_func(Effector::new(), &args),
-        Mixed => structure_func(MixedOutput::new(), &args),
-        Loop => structure_func(Looper::new(Rhythmizer::new()), &args),
-        Rhythmized => structure_func(Rhythmizer::new(), &args),
-        FullStratified => structure_func(FullStratifier::new(), &args),
-        Bare => structure_func(Plain::new(), &args),
+    let tree = match content {
+        A => structure_func(MelodySelector::A.deepen(), structure, term),
+        B => structure_func(MelodySelector::B.deepen(), structure, term),
+        C => structure_func(MelodySelector::C.deepen(), structure, term),
+        D => structure_func(MelodySelector::D.deepen(), structure, term),
+        E => structure_func(MelodySelector::E.deepen(), structure, term),
+        F => structure_func(MelodySelector::F.deepen(), structure, term),
+        PureSine => structure_func(MelodySelector::PureSine.deepen(), structure, term),
+        NamesShort => structure_func(ClipSelector::names(), structure, term),
+        NamesLong => structure_func(ClipSelector::names_long(), structure, term),
+        StratInstr => structure_func(StratifyInstrument::default(), structure, term),
+        Effects => structure_func(Effector::new(), structure, term),
+        Mixed => structure_func(MixedOutput::new(), structure, term),
+        Loop => structure_func(Looper::new(Rhythmizer::new()), structure, term),
+        Rhythmized => structure_func(Rhythmizer::new(), structure, term),
+        FullStratified => structure_func(FullStratifier::new(), structure, term),
+        Bare => structure_func(Plain::new(), structure, term),
     };
     println!("...done in {:?}", now.elapsed());
+    tree
+}
+
+pub fn draw_tree(tree: &SoundTree, args: &Args) {
     println!("Drawing...");
     let now = Instant::now();
     draw::draw(&tree, args.division, format!("output/images/{:?}{}-viz.png", args.value, if args.reduce { "-reduced" } else { "" }));
     println!("One image: {:?}", now.elapsed());
     draw::draw(&tree, args.division, "output/visualization.png");
-    let time = args.time.unwrap_or(tree.size() as f64);
     if args.animate {
         let frames_path = "output/images/frames";
         fs::remove_dir_all(frames_path).unwrap();
         fs::create_dir(frames_path).unwrap();
-        let frames = (30.0 * time).floor() as usize;
-        println!("Drawing {frames} frames...");
-        draw::draw_anim(&tree, args.division, frames_path, frames);
-        println!("All frames: {:?}", now.elapsed());
+        let time = args.time.unwrap_or(tree.size() as f64);
+        // let frames = (30.0 * time).floor() as usize;
+        // println!("Drawing {frames} frames...");
+        draw::draw_anim(&tree, args.division, time, 30);
+        // println!("All frames: {:?}", now.elapsed());
     }
+}
+
+pub fn make_output(sound: Box<impl AudioUnit + 'static>, args: &Args) -> Box<dyn AudioUnit> {
+    match args.filters {
+        FilterOptions::None => sound,
+        FilterOptions::ClipLowpass => Box::new(unit::<U0, U2>(sound) >>
+            stacki::<U2, _, _>(|_|
+                shape(Adaptive::new(0.1, Tanh(0.5))) >> 
+                lowpass_hz(2500.0, 1.0) >>
+                mul(0.1)
+                // >> mul(10.0)
+            )
+        ),
+        FilterOptions::Quiet => Box::new(unit::<U0, U2>(sound) >> (mul(0.05) | mul(0.05))),
+    }
+}
+
+pub fn main_to_file(args: &Args) {
+    assert!(!args.live);
+    let tree = make_tree(args.structure, args.content, &args.term());
+
+    let time = args.time.unwrap_or(tree.size() as f64);
+    draw_tree(&tree, args);
     if args.draw_only {
         return;
     }
-    let mut seq = Box::new(Sequencer::new(false, 2));
-    // let backend = seq.backend();
+    let mut seq = Sequencer::new(false, 2);
+    let backend = Box::new(seq.backend());
+    // let mut output: Box<dyn AudioUnit> = match args.filters {
+    //     FilterOptions::None => backend,
+    //     FilterOptions::ClipLowpass => Box::new(unit::<U0, U2>(backend) >>
+    //         stacki::<U2, _, _>(|_|
+    //             shape(Adaptive::new(0.1, Tanh(0.5))) >> 
+    //             lowpass_hz(2500.0, 1.0) >>
+    //             mul(0.1)
+    //             // >> mul(10.0)
+    //         )
+    //     ),
+    //     FilterOptions::Quiet => Box::new(unit::<U0, U2>(backend) >> (mul(0.05) | mul(0.05))),
+    // };
     println!("Sequencing over {time} seconds...");
     let now = Instant::now();
-    tree.generate_with(&mut seq, 0.0, time, args.division, 0.0);
+    tree.generate_with(&mut ConfigSequencer::new(seq, args.live), 0.0, time, args.division, 0.0);
     println!("...done in {:?}", now.elapsed());
-    let output: &mut Sequencer = &mut seq;
-    match args.filters {
-        FilterOptions::None => save(output, time),
-        FilterOptions::ClipLowpass => save(
-            &mut (unit::<U0, U2>(seq) >>
-                stacki::<U2, _, _>(|_|
-                    shape(Adaptive::new(0.1, Tanh(0.5))) >> 
-                    lowpass_hz(2500.0, 1.0) >>
-                    mul(0.1)
-                    // >> mul(10.0)
-                )),
-            time
-        ),
-        FilterOptions::Quiet => save(&mut (unit::<U0, U2>(seq) >> (mul(0.05) | mul(0.05))), time),
-    }
+    let mut output = make_output(backend, &args);
+    save(&mut *output, time);
     println!("Done.");
+}
+
+pub fn main_live(args: &mut Args) {
+    let mut seq = Sequencer::new(false, 2);
+    let backend = Box::new(seq.backend());
+    let output = make_output(backend, &args);
+    run_live(output);
+    let mut cfg_seq = ConfigSequencer::new(seq, true);
+    // let mut repl_state: TreeMaker = args.into();
+    let mut term = args.term();
+    loop {
+        println!("{args:?}");
+        let tree = make_tree(args.structure, args.content, &term);
+        let time = args.time.unwrap_or(tree.size() as f64);
+        
+        println!("Sequencing live...");
+        tree.generate_with(&mut cfg_seq, 0.0, time, args.division, 0.0);
+        println!("Done");
+        draw_tree(&tree, &args);
+        // if args.draw_only {
+        //     return;
+        // }
+        // run_live(Box::new(sine_hz(300.0) * 0.1));
+        let cmd = input::<String>().msg("(press enter to exit)...\n").get();
+        if cmd.is_empty() {
+            break
+        }
+        let statement = statement(vec![], &cmd).map(|(_, r)| r).unwrap_or(Statement::Command("uh oh".to_owned()));
+        
+        match statement {
+            Statement::Let(_, iterm) => { term = iterm; },
+            Statement::Assume(_) => todo!(),
+            Statement::Eval(_) => todo!(),
+            Statement::PutStrLn(_) => todo!(),
+            Statement::Out(_) => todo!(),
+            Statement::Command(cmd) => {
+                let terms = ["soundproof.exe"].into_iter().chain(cmd.split_whitespace());
+                // let (term, time) = cmd.split_once(' ').unwrap_or(("omega", "20"));
+                // println!("{cmd}");
+                // let res = args.try_update_from(["soundproof.exe", "--value", term, "-t", time]);
+                let res = args.try_update_from(terms);
+                println!("parsed as: {res:?} {args:?}");
+            }
+        }
+    }
+    println!("Closing connection");
+}
+
+pub fn main() {
+    // test_iterm_replicate();
+    let mut args = Args::parse();
+    if args.live {
+        main_live(&mut args);
+    }
+    else {
+        main_to_file(&args);
+    }
 }

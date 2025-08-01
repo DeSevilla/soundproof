@@ -9,7 +9,7 @@ Karlheinz Stockhausen, and Odz Manouk.
 <!-- Examples of the output can be found on SoundCloud [here (type-structured)](https://soundcloud.com/user-619734785/system-output-v13)
 and [here (term-structured)](https://soundcloud.com/user-619734785/system-output-v12). -->
 
-An example of the output can be found on SoundCloud [here](https://soundcloud.com/user-619734785/girards-paradox-well-foundedness-of-omega).
+The canonical output can be found on Bandcamp [here](https://isdra.bandcamp.com/album/girards-paradox).
 
 The [lambda calculus](https://en.wikipedia.org/wiki/Lambda_calculus) is a formal system for computability,
 built around the concept of functions. Adding type systems to lambda calculi allows them to [represent logical

@@ -430,7 +430,7 @@ pub fn main_live(args: &mut Args) {
     println!("Closing connection");
 }
 
-pub fn main() {
+pub fn main_old() {
     // test_iterm_replicate();
     let mut args= Args::parse();
     if args.live {
@@ -438,4 +438,8 @@ pub fn main() {
     } else {
         main_to_file(&args);
     }
+}
+
+pub fn main() {
+    println!("Hello world!")
 }

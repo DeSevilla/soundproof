@@ -10,11 +10,8 @@ clap = { version = "4.5.16", features = ["derive"] }
 signalsmith-stretch = "0.1.1"
 rangemap = "1.5.1"
 rand = "0.9.1"
-piet-common = { version = "0.7.0", features = ["png"] }
-cpal = "0.16"
-read_input = "0.8.6"
 nom = "8.0.0"
-minifb = "0.28.0"
+bevy = "0.16.1"
 
 [target.x86_64-pc-windows-msvc]
 linker = "rust-lld.exe"

@@ -53,8 +53,8 @@ pub fn draw(tree: &SoundTree, scaling: DivisionMethod, path: impl AsRef<Path>) {
 
 pub fn draw_anim(tree: &SoundTree, scaling: DivisionMethod, duration: f64, fps: usize) {
     let mut device = Device::new().unwrap();
-    let mut window_options = WindowOptions::default();
-    window_options.borderless = true;
+    let window_options = WindowOptions { borderless: true, ..Default::default() };
+    // window_options.borderless = true;
     let mut window = Window::new("Hi", WIDTH_PX, HEIGHT_PX, window_options).unwrap();
     // let mut elapsed = 0.0;
     let frame_time = Duration::new(0, (1e9 / fps as f64) as u32);

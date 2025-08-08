@@ -1,4 +1,6 @@
-use std::rc::Rc;
+use std::collections::HashMap;
+// use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 use piet_common::Color;
 use fundsp::hacker32::*;
@@ -65,6 +67,12 @@ impl Plain {
     }
 }
 
+impl Default for Plain {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Selector for Plain {
     fn isound(&self, term: &ITerm) -> SoundTree {
         SoundTree::sound(Melody::new_even(sine(), &[self.pitch_factor().try_into().unwrap()]), self.imeta(term))
@@ -87,14 +95,146 @@ impl Selector for Plain {
     }
 }
 
-pub struct AsyncStratifier {
-
-}
-
 #[derive(Clone, Debug, PartialEq)]
 enum Term {
     I(ITerm),
     C(CTerm),
+}
+
+impl Term {
+    pub fn tag(&self) -> Tag {
+        match self {
+            Term::I(iterm) => iterm.tag(),
+            Term::C(cterm) => cterm.tag(),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct AsyncNodeInfo {
+    pub notes: Arc<Mutex<[i32; FS_MEL_SIZE]>>,
+    pub timings: Arc<Mutex<[f64; FS_MEL_SIZE]>>,
+    pub instrument: Arc<Mutex<An<Unit<U1, U1>>>>,
+    pub effect: Arc<Mutex<An<Unit<U1, U1>>>>,
+}
+
+// impl SoundGenerator for AsyncNodeInfo {
+//     fn sequence(&self, seq: &mut ConfigSequencer, start_time: f64, duration: f64, lean: f32) {
+//         let notes = self.notes.lock().unwrap().clone();
+//         let timings = self.timings.lock().unwrap().clone();
+//         let instrument = self.instrument.lock().unwrap().clone() >> self.effect.lock().unwrap().clone();
+//         let mut mel = Melody::new_even(instrument, &notes);
+//         mel.adjust_timings(&timings).unwrap();
+//         mel.sequence(seq, start_time, duration, lean);
+//     }
+
+//     fn base_duration(&self) -> f64 {
+//         FS_MEL_SIZE as f64
+//     }
+// }
+
+impl AsyncNodeInfo {
+    fn new(notes: [i32; FS_MEL_SIZE], timings: [f64; FS_MEL_SIZE], instrument: impl AudioUnit + 'static, effect: impl AudioUnit + 'static) -> Self {
+        Self {
+            notes: Arc::new(Mutex::new(notes)),
+            timings: Arc::new(Mutex::new(timings)),
+            instrument: Arc::new(Mutex::new(unit(Box::new(instrument)))),
+            effect: Arc::new(Mutex::new(unit(Box::new(effect)))),
+        }
+        // (notes, unit(Box::new(instrument)), unit(Box::new(effect)))
+    }
+}
+
+#[derive(Clone)]
+pub struct AsyncStratifier
+{
+    params: Arc<HashMap<Tag, AsyncNodeInfo>>,
+    parent: Term,
+    depth: usize
+}
+
+
+
+impl AsyncStratifier {
+    pub fn new() -> Self {
+        let mut params= HashMap::new();
+        use Tag::*;
+        let tags = [Annotation, Type, Pi, Application, BoundVar, FreeVar, Zero, Finite, Lambda];
+        for tag in tags {
+            let info = match tag {
+                Annotation => AsyncNodeInfo::new([A, D, F, A], [1.0, 0.5, 1.5, 1.0], sawfir() * 0.75, (pass() | (800.0 + 100.0 * sine_hz(2.0)) | constant(1.0)) >> highpass()),
+                Type => AsyncNodeInfo::new([B, C, E, E], [1.0, 1.0, 1.0, 1.0], violinish(), pass()),
+                Pi => AsyncNodeInfo::new([E, C, A, C], [0.5, 1.5, 0.5, 1.5], sinesaw() >> split() >> fbd(0.2, -5.0), split() >> fbd(0.25, -3.5)),
+                Application => AsyncNodeInfo::new([A, E, C, B], [2.5, 0.5, 0.5, 0.5], sine() * 2.0, reverb_distort()),
+                BoundVar => AsyncNodeInfo::new([A, A, E, C], [-1.0, 0., 0., 0.], violinish() * 1.1, major_chord() >> join::<U3>()),
+                FreeVar => AsyncNodeInfo::new([B, A, C, B], [1.5, 0.5, 1.0, 1.0], three_equivalents(wobbly_sine()) * 0.7, shape(Clip(0.75))),
+                Zero => AsyncNodeInfo::new([E, F, C, A], [-1.0, 0., 0., 0.], sinesaw(), shape(Clip(100.0))),
+                Finite => AsyncNodeInfo::new([A, A + 12, E, F], [0.7, 0.7, 2.1, 0.5], violinish() * 1.1, bell_hz(200.0, 1.0, 5.0)),
+                Lambda => AsyncNodeInfo::new([D, F, E, C], [1.5, 0.5, 1., 0.5], fm_basic() * 0.28, reverb_highpass()),
+            };
+            params.insert(tag, info);
+        }
+        Self {
+            params: Arc::new(params),
+            parent: Term::I(ITerm::Star),
+            depth: 0,
+        }
+    }
+
+    pub fn get(&self, tag: &Tag) -> AsyncNodeInfo {
+        self.params.get(tag).unwrap().clone()
+    }
+
+    pub fn for_pair(&self, parent: Tag, child: Tag) -> MelodyAsync {
+        let parent = self.params.get(&parent).unwrap();
+        let child = self.params.get(&child).unwrap();
+        MelodyAsync {
+            notes: child.notes.clone(),
+            timings: parent.timings.clone(),
+            instrument: parent.instrument.clone(),
+            effect: parent.effect.clone(),
+            depth: self.depth,
+        }
+    }
+}
+
+impl Default for AsyncStratifier {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Selector for AsyncStratifier
+{
+    fn isound(&self, term: &ITerm) -> SoundTree {
+        // let mel = self.melodies.get(&(self.parent.tag(), term.tag())).unwrap();
+        let mel = self.for_pair(self.parent.tag(), term.tag());
+        // let deep = MelodyAsync::new_depth(mel.clone(), self.depth);
+        SoundTree::sound(mel, self.imeta(term))
+    }
+
+    fn csound(&self, term: &CTerm) -> SoundTree {
+        let mel = self.for_pair(self.parent.tag(), term.tag());
+        // let mel = self.melodies.get(&(self.parent.tag(), term.tag())).unwrap();
+        // let deep = MelodyAsync::new_depth(mel.clone(), self.depth);
+        SoundTree::sound(mel, self.cmeta(term))
+    }
+
+    fn imerge(&self, term: &ITerm) -> Self {
+        Self {
+            params: self.params.clone(),
+            parent: Term::I(term.clone()),
+            depth: self.depth + 1
+        }
+    }
+
+    fn cmerge(&self, term: &CTerm) -> Self {
+        Self {
+            params: self.params.clone(),
+            parent: Term::C(term.clone()),
+            depth: self.depth + 1
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -106,7 +246,7 @@ pub struct FullStratifier {
     depth: usize,
 }
 
-const FS_MEL_SIZE: usize = 4;
+pub const FS_MEL_SIZE: usize = 4;
 
 impl FullStratifier {
     pub fn new() -> Self {
@@ -244,6 +384,12 @@ impl FullStratifier {
     }
 }
 
+impl Default for FullStratifier {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Selector for FullStratifier {
     fn isound(&self, term: &ITerm) -> SoundTree {
         let notes = self.inotes(term);
@@ -375,6 +521,12 @@ impl Rhythmizer {
     }
 }
 
+impl Default for Rhythmizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Selector for Rhythmizer {
     fn isound(&self, term: &ITerm) -> SoundTree {
         let mel = self.imelody(term);
@@ -398,7 +550,7 @@ impl Selector for Rhythmizer {
             ITerm::Fin(_) => vec![0.7, 0.7, 2.1, 0.5],
             _ => unimplemented!()
         };
-        Self { rhythm: rhythm, depth: self.depth + 1 }
+        Self { rhythm, depth: self.depth + 1 }
     }
 
     fn cmerge(&self, term: &CTerm) -> Self {
@@ -406,7 +558,7 @@ impl Selector for Rhythmizer {
             CTerm::Inf(_) => panic!("inf merge???"),
             CTerm::Lam(_) => vec![1.5, 0.5, 1., 0.5],
         };
-        Self { rhythm: rhythm, depth: self.depth + 1 }
+        Self { rhythm, depth: self.depth + 1 }
     }
 }
 
@@ -475,6 +627,12 @@ impl MixedOutput {
             clip2: WaveClip::from_file("files/boundvariable.mp3"),
             depth: 1
         }
+    }
+}
+
+impl Default for MixedOutput {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -554,6 +712,12 @@ pub struct Effector {
 impl Effector {
     pub fn new() -> Self {
         Self { effect: unit(Box::new(pass())), depth: 0 }
+    }
+}
+
+impl Default for Effector {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -647,43 +811,43 @@ impl Selector for StratifyInstrument {
 
 #[derive(Clone)]
 pub struct ClipSelector {
-    ann: Rc<Wave>,
-    star: Rc<Wave>,
-    pi: Rc<Wave>,
-    bound: Rc<Wave>,
-    free: Rc<Wave>,
-    app: Rc<Wave>,
-    zero: Rc<Wave>,
-    fin: Rc<Wave>,
-    lam: Rc<Wave>,
+    ann: Arc<Wave>,
+    star: Arc<Wave>,
+    pi: Arc<Wave>,
+    bound: Arc<Wave>,
+    free: Arc<Wave>,
+    app: Arc<Wave>,
+    zero: Arc<Wave>,
+    fin: Arc<Wave>,
+    lam: Arc<Wave>,
 }
 
 impl ClipSelector {
     pub fn names() -> Self {
         Self {
-            ann: Rc::new(Wave::load("files/annotation.mp3").unwrap()), // type annotation
-            star: Rc::new(Wave::load("files/star.mp3").unwrap()),  // universe type
-            pi: Rc::new(Wave::load("files/forall.mp3").unwrap()),  // universal quantifier
-            bound: Rc::new(Wave::load("files/bound.mp3").unwrap()),  // bound variable
-            free: Rc::new(Wave::load("files/free.mp3").unwrap()),  // free variable
-            app: Rc::new(Wave::load("files/application.mp3").unwrap()),  // function application
-            zero: Rc::new(Wave::load("files/zero.mp3").unwrap()),  // natural number zero
-            fin: Rc::new(Wave::load("files/finite.mp3").unwrap()),  // finite type
-            lam: Rc::new(Wave::load("files/lambdaabstraction.mp3").unwrap()),  // lambda abstraction
+            ann: Arc::new(Wave::load("files/annotation.mp3").unwrap()), // type annotation
+            star: Arc::new(Wave::load("files/star.mp3").unwrap()),  // universe type
+            pi: Arc::new(Wave::load("files/forall.mp3").unwrap()),  // universal quantifier
+            bound: Arc::new(Wave::load("files/bound.mp3").unwrap()),  // bound variable
+            free: Arc::new(Wave::load("files/free.mp3").unwrap()),  // free variable
+            app: Arc::new(Wave::load("files/application.mp3").unwrap()),  // function application
+            zero: Arc::new(Wave::load("files/zero.mp3").unwrap()),  // natural number zero
+            fin: Arc::new(Wave::load("files/finite.mp3").unwrap()),  // finite type
+            lam: Arc::new(Wave::load("files/lambdaabstraction.mp3").unwrap()),  // lambda abstraction
         }
     }
 
     pub fn names_long() -> Self {
         Self {
-            ann: Rc::new(Wave::load("files/annotation.mp3").unwrap()), // type annotation
-            star: Rc::new(Wave::load("files/universe.mp3").unwrap()),  // universe type
-            pi: Rc::new(Wave::load("files/universalquantifier.mp3").unwrap()),  // universal quantifier
-            bound: Rc::new(Wave::load("files/boundvariable.mp3").unwrap()),  // bound variable
-            free: Rc::new(Wave::load("files/freevariable.mp3").unwrap()),  // free variable
-            app: Rc::new(Wave::load("files/functionapplication.mp3").unwrap()),  // function application
-            zero: Rc::new(Wave::load("files/naturalnumberzero.mp3").unwrap()),  // natural number zero
-            fin: Rc::new(Wave::load("files/finitetype.mp3").unwrap()),  // finite type
-            lam: Rc::new(Wave::load("files/lambdaabstraction.mp3").unwrap()),  // lambda abstraction
+            ann: Arc::new(Wave::load("files/annotation.mp3").unwrap()), // type annotation
+            star: Arc::new(Wave::load("files/universe.mp3").unwrap()),  // universe type
+            pi: Arc::new(Wave::load("files/universalquantifier.mp3").unwrap()),  // universal quantifier
+            bound: Arc::new(Wave::load("files/boundvariable.mp3").unwrap()),  // bound variable
+            free: Arc::new(Wave::load("files/freevariable.mp3").unwrap()),  // free variable
+            app: Arc::new(Wave::load("files/functionapplication.mp3").unwrap()),  // function application
+            zero: Arc::new(Wave::load("files/naturalnumberzero.mp3").unwrap()),  // natural number zero
+            fin: Arc::new(Wave::load("files/finitetype.mp3").unwrap()),  // finite type
+            lam: Arc::new(Wave::load("files/lambdaabstraction.mp3").unwrap()),  // lambda abstraction
         }
     }
 }
@@ -701,7 +865,7 @@ impl Selector for ClipSelector {
             ITerm::Fin(_) => &self.fin,
             _ => unimplemented!()
         };
-        SoundTree::sound(Rc::clone(result), self.imeta(term))
+        SoundTree::sound(Arc::clone(result), self.imeta(term))
     }
 
     fn csound(&self, term: &CTerm) -> SoundTree {
@@ -709,7 +873,7 @@ impl Selector for ClipSelector {
             CTerm::Inf(_) => &self.ann,
             CTerm::Lam(_) => &self.lam,
         };
-        SoundTree::sound(Rc::clone(result), self.cmeta(term))
+        SoundTree::sound(Arc::clone(result), self.cmeta(term))
     }
 
     fn imerge(&self, _term: &ITerm) -> Self {

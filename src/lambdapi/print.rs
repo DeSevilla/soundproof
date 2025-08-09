@@ -25,29 +25,34 @@ fn varname(i: usize) -> String {
         val /= ct;
     }
     result.push(VARCHARS[val % ct] as char);
-    result.chars().rev().collect()
+    result.chars().rev().collect::<String>() + &i.to_string()
+}
+
+fn cprint_many(p: usize, i: usize, terms: &[CTerm]) -> String {
+    terms.iter().map(|x| c_print(p, i, x.clone())).reduce(|acc, elem| acc + " " + &elem).unwrap_or("".to_owned())
 }
 
 fn i_print(p: usize, i: usize, term: ITerm) -> String {
     match term {
         ITerm::Ann(cterm, cterm1) => parens_if(p > 1, c_print(2, i, cterm) + " :: " + &c_print(1, i, cterm1)),
         ITerm::Star => "*".to_owned(),
-        ITerm::Pi(cterm, cterm1) => parens_if(p > 0, "forall (".to_owned() + &varname(i + 1) + " : " + &c_print(p, i, cterm) + ") . " + &c_print(p, i + 1, cterm1)),
-        ITerm::Bound(k) => varname(i - k - 1),
+        ITerm::Pi(cterm, cterm1) => parens_if(p > 0, "forall (".to_owned() + &varname(i) + " :: " + &c_print(p, i, cterm) + ") . " + &c_print(p, i + 1, cterm1)),
+        ITerm::Bound(k) => varname(k) + "bnd" + &i.to_string(), //varname(i - k - 1),
         ITerm::Free(Name::Global(name)) => name,
-        ITerm::Free(Name::Local(n)) => varname(i + 1200),
+        ITerm::Free(Name::Local(n)) => varname(i),
         ITerm::Free(n) => format!("{n:?}"),
         ITerm::App(f, x) => parens_if(p > 2, i_print(2, i, *f) + " " + &c_print(3, i, x)),
         ITerm::Nat => "Nat".to_owned(),
         ITerm::Zero => "0".to_owned(),
         ITerm::Succ(cterm) => "Succ".to_owned() + &parens_if(true, c_print(p, i, cterm)),
-        ITerm::NatElim(base, motive, ind, n) => "natElim ".to_owned() + 
-            &[base, motive, ind, n].into_iter().map(|x| c_print(p, i, x)).reduce(|acc, elem| acc + " " + &elem).unwrap_or("".to_owned()),
+        ITerm::NatElim(base, motive, ind, n) => "natElim ".to_owned() + &cprint_many(p, i, &[base, motive, ind, n]),
         ITerm::Fin(cterm) => "Fin".to_owned() + &parens_if(true, c_print(p, i, cterm)),
-        ITerm::FinElim(base, motive, ind, n, f) => "finElim ".to_owned() + 
-            &[base, motive, ind, n, f].into_iter().map(|x| c_print(p, i, x)).reduce(|acc, elem| acc + " " + &elem).unwrap_or("".to_owned()),
+        ITerm::FinElim(base, motive, ind, n, f) => "finElim ".to_owned() + &cprint_many(p, i, &[base, motive, ind, n, f]),
         ITerm::FZero(cterm) => "FZero<".to_owned() + &c_print(p, i, cterm) + ">",
         ITerm::FSucc(cterm, cterm1) => "FSucc<".to_owned() + &c_print(p, i, cterm) + ">(" + &c_print(p, i, cterm1) + ")",
+        ITerm::Eq(a, x, y) => "Eq ".to_owned() + &cprint_many(p, i, &[a, x, y]),
+        ITerm::Refl(a, x) => "Refl ".to_owned() + &c_print(p, i, a) + &c_print(p, i, x),
+        ITerm::EqElim(a, m, mr, x, y, eq) => "eqElim ".to_owned() + &cprint_many(p, i, &[m, mr, x, y, eq]),
     }
 }
 

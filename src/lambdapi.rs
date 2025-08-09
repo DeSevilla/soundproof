@@ -191,11 +191,11 @@ pub fn girard() -> ITerm {
 }
 
 pub fn reduce(term: ITerm) -> CTerm {
-    quote0(term.eval(vec![]))
+    quote0(term.eval(Context::new(vec![])))
 }
 
 pub fn ireduce(term: ITerm) -> Result<ITerm, String> {
-    let ty = term.infer_type(vec![])?;
+    let ty = term.infer_type(Context::new(vec![]))?;
     let reduced = reduce(term);
     match reduced {
         CTerm::Inf(it) => Ok(*it),
@@ -235,22 +235,43 @@ pub fn exfalso() -> ITerm {
 }
 
 /// Make sure a term typechecks, and (if it can be evaluated) that evaluation preserves type.
-pub fn validate(name: &str, term: &ITerm, eval: bool) {
+pub fn validate(name: &str, term: &ITerm, eval_preserve: Option<bool>) {
     println!("{name}");
     // println!("{term}");
-    let typ = term.infer_type(vec![]).expect("Term should be well-typed");
-    if eval {
-        let val = term.clone().eval(vec![]);
+    let ctx = Context::new(vec![]);
+    let typ = term.infer_type(ctx.clone()).expect("Term should be well-typed");
+    if let Some(preserve) = eval_preserve {
+        let val = term.clone().eval(ctx.clone());
         let qval = quote0(val);
-        qval.check_type(vec![], typ.clone()).expect("Evaluation should preserve type");
+        qval.check_type(ctx.clone(), typ.clone()).expect("Evaluation should preserve type");
         let typ1 = quote0(typ);
-        println!("\t{term} :::: {typ1}");
-        println!("Passed type checks!");
-        if qval == term.clone().into() {
-            println!("Is preserved by quote-eval")
-        }
-        else {
-            println!("Not preserved by quote-eval (might just be application)")
-        }
+        println!("\t{term} has type {typ1}");
+        // println!("Passed type checks!");
+        let iqval = match qval {
+            CTerm::Inf(iterm) => *iterm,
+            CTerm::Lam(_) => iann(qval, typ1),
+        };
+        println!("Validating {iqval} vs {term} (should be {preserve})");
+        assert!((iqval == term.clone()) == preserve);
+        println!()
     }
+}
+
+#[test]
+fn u_reducible() {
+    validate("u", &u(), Some(false));
+}
+
+#[test]
+fn omega_reducible() {
+    validate("omega", &omega(), Some(false))
+}
+
+#[test]
+fn lem2_reducible() {
+    validate("lem2", &lem2(), Some(false))
+}
+
+fn pset_irreducible() {
+    validate("powerset", &sets_of(), Some(true))
 }

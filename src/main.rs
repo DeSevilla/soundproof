@@ -413,10 +413,6 @@ pub fn main_live(args: &mut Args) {
             Statement::Let(_, iterm) => {
                 term = iterm;
             }
-            Statement::Assume(_) => todo!(),
-            Statement::Eval(_) => todo!(),
-            Statement::PutStrLn(_) => todo!(),
-            Statement::Out(_) => todo!(),
             Statement::Command(cmd) => {
                 let terms = ["soundproof.exe"].into_iter().chain(cmd.split_whitespace());
                 // let (term, time) = cmd.split_once(' ').unwrap_or(("omega", "20"));
@@ -424,7 +420,8 @@ pub fn main_live(args: &mut Args) {
                 // let res = args.try_update_from(["soundproof.exe", "--value", term, "-t", time]);
                 let res = args.try_update_from(terms);
                 println!("parsed as: {res:?} {args:?}");
-            }
+            },
+            _ => todo!()
         }
     }
     println!("Closing connection");

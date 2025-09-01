@@ -1,10 +1,8 @@
-// use std::cell::RefCell;
-// use std::error::Error;
 use std::path::Path;
-use std::rc::Rc;
+// use std::rc::Rc;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Arc;
-use std::usize;
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use fundsp::hacker32::*;
 use piet_common::Color;
@@ -12,6 +10,7 @@ use rand::seq::IndexedRandom;
 use rand::rng;
 use crate::music::notes::*;
 use crate::music::stretch::{retime_pitch_wave, retime_wave};
+use crate::soundproof::select::FS_MEL_SIZE;
 use crate::DivisionMethod;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -21,12 +20,14 @@ pub enum SoundproofError {
 
 pub struct ConfigSequencer {
     seq: Sequencer,
+    start_time: Option<Instant>,
     live: bool,
 }
 
 impl ConfigSequencer {
     pub fn new(seq: Sequencer, live: bool) -> Self {
-        Self { seq, live }
+        // should probably start this when we first push
+        Self { seq, start_time: None, live }
     }
 
     pub fn push_duration(
@@ -39,6 +40,17 @@ impl ConfigSequencer {
         unit: Box<dyn AudioUnit>,
     ) -> EventId {
         if self.live {
+            let now = Instant::now();
+            let start_time = match self.start_time {
+                None => {
+                    self.start_time = Some(now);
+                    start_time
+                },
+                Some(st) => {
+                    start_time - (st - now).as_secs_f64()
+                }
+            };
+            // let gap = ;
             self.seq.push_relative(start_time, start_time + duration, fade_ease, fade_in_time, fade_out_time, unit)
         }
         else {
@@ -60,13 +72,13 @@ pub trait SoundGenerator {
 }
 
 
-impl<T: ?Sized> SoundGenerator for Rc<T> where T: SoundGenerator {
+impl<T: ?Sized> SoundGenerator for Arc<T> where T: SoundGenerator {
     fn sequence(&self, seq: &mut ConfigSequencer, start_time: f64, duration: f64, lean: f32) {
-        Rc::as_ref(self).sequence(seq, start_time, duration, lean);
+        self.as_ref().sequence(seq, start_time, duration, lean);
     }
 
     fn base_duration(&self) -> f64 {
-        Rc::as_ref(self).base_duration()
+        self.as_ref().base_duration()
     }
 }
 
@@ -74,7 +86,7 @@ impl<T: ?Sized> SoundGenerator for Rc<T> where T: SoundGenerator {
 /// this is commented out until we decide to store additional metadata over just a wave
 #[derive(Clone)]
 pub struct WaveClip {
-    wave: Rc<Wave>,
+    wave: Arc<Wave>,
     depth: usize,
 }
 
@@ -82,14 +94,14 @@ impl WaveClip {
     pub fn from_file<P: AsRef<Path>>(path: P) -> Self {
         // TODO proper error handling
         WaveClip {
-            wave: Rc::new(Wave::load(path).unwrap()),
+            wave: Arc::new(Wave::load(path).unwrap()),
             depth: 0,
         }
     }
 
     pub fn from_wave(wave: Wave) -> Self {
         WaveClip {
-            wave: Rc::new(wave),
+            wave: Arc::new(wave),
             depth: 0,
         }
     }
@@ -515,6 +527,60 @@ impl<T, X> SoundGenerator for EffectSeq<T, X>
     }
 }
 
+pub struct MelodyAsync {
+    pub notes: Arc<Mutex<[i32; FS_MEL_SIZE]>>,
+    pub timings: Arc<Mutex<[f64; FS_MEL_SIZE]>>,
+    pub instrument: Arc<Mutex<An<Unit<U1, U1>>>>,
+    pub effect: Arc<Mutex<An<Unit<U1, U1>>>>,
+    // pub body: Arc<Mutex<Melody>>,
+    pub depth: usize,
+}
+
+// impl MelodyAsync {
+    // pub fn new(body: Melody, depth: usize) -> Self {
+    //     Self {
+    //         body: Arc::new(Mutex::new(body)),
+    //         depth
+    //     }
+    // }
+
+    // fn new(notes: [i32; FS_MEL_SIZE], timings: [f64; FS_MEL_SIZE], instrument: impl AudioUnit + 'static, effect: impl AudioUnit + 'static) -> Self {
+    //     Self {
+    //         notes: Arc::new(Mutex::new(notes)),
+    //         timings: Arc::new(Mutex::new(timings)),
+    //         instrument: Arc::new(Mutex::new(unit(Box::new(instrument)))),
+    //         effect: Arc::new(Mutex::new(unit(Box::new(effect)))),
+    //     }
+    //     // (notes, unit(Box::new(instrument)), unit(Box::new(effect)))
+    // }
+
+    // pub fn new_depth(body: Arc<Mutex<Melody>>, depth: usize) -> Self {
+    //     Self { body, depth }
+    // }
+// }
+
+impl SoundGenerator for MelodyAsync {
+    fn sequence(&self, seq: &mut ConfigSequencer, start_time: f64, duration: f64, lean: f32) {
+        // let x = self.body.lock().unwrap();
+        // let mut mel = x.clone();
+        // mel.adjust_depth(self.depth);
+        // mel.sequence(seq, start_time, duration, lean)
+        let notes = *self.notes.lock().unwrap();
+        let timings = *self.timings.lock().unwrap();
+        let instrument = self.instrument.lock().unwrap().clone() >> self.effect.lock().unwrap().clone();
+        let mut mel = Melody::new_even(instrument, &notes);
+        mel.adjust_timings(&timings).unwrap();
+        mel.adjust_depth(self.depth);
+        mel.sequence(seq, start_time, duration, lean);
+    }
+
+    fn base_duration(&self) -> f64 {
+        FS_MEL_SIZE as f64
+        // let x = self.body.lock().unwrap();
+        // x.base_duration()
+    }
+}
+
 // pub struct AsyncEffectMel<X: AudioNode<Inputs=U1, Outputs=U1> + 'static> {
 //     mel: Rc<RefCell<EffectMel<X>>>
 // }
@@ -575,7 +641,7 @@ pub enum SoundTree {
     /// Subtrees will play sequentially.
     Seq(Vec<SoundTree>, TreeMetadata),
     /// Plays a predefined sound-pattern.
-    Sound(Rc<dyn SoundGenerator>, TreeMetadata)
+    Sound(Arc<dyn SoundGenerator + Send + Sync>, TreeMetadata)
 }
 
 static SIGN: AtomicU32 = AtomicU32::new(0);
@@ -594,8 +660,8 @@ pub struct TreeMetadata {
 
 impl SoundTree {
     /// Constructs a SoundTree containing a single sound-pattern.
-    pub fn sound(sound: impl SoundGenerator + 'static, meta: TreeMetadata) -> Self {
-        Self::Sound(Rc::new(sound), meta)
+    pub fn sound(sound: impl SoundGenerator + Send + Sync + 'static, meta: TreeMetadata) -> Self {
+        Self::Sound(Arc::new(sound), meta)
     }
 
     /// Constructs a SoundTree which plays its subtrees one after another.
@@ -734,9 +800,59 @@ impl SoundTree {
         self.weight(exp).powf(exp)
     }
 
-    // pub fn generate_over_time(&self, seq: &mut ConfigSequencer, start_time: f64, duration: f64, scaling: DivisionMethod, lean: f32) {
-
-    // }
+    pub fn sound_times(&self, sound_time: f64, duration: f64, scaling: DivisionMethod, lean: f32) -> Vec<(f64, Arc<dyn SoundGenerator + Send + Sync>, f64, f32)> {
+        if duration <= 2.0 / crate::music::SAMPLE_RATE as f64 {
+            // println!("Warning! No duration from start time {start_time}");
+            return vec![];
+        }
+        // if duration > 10.0 {
+        //     println!("{}", self.metadata().name.len())
+        // }
+        // this function is mostly like Sequenceable.sequence but carries additional info around
+        // we could refactor to use the trait but then we'd have to carry scaling/lean in TreeMetadata instead
+        // setup would be tricky but could allow within-tree variation.... but we're not there yet.
+        match self {
+            SoundTree::Simul(vec, _) => {
+                let val = SIGN.fetch_add(1, Ordering::Relaxed);
+                let dir = if val % 2 == 0 { 1.0 } else { -1.0 };
+                // let scale = vec.len();
+                let scale = (self.size() - 1) as f32;
+                let base_lean = dir * scale / 2.0;
+                // for (ii, elem) in vec.iter().enumerate() {
+                let mut output = Vec::new();
+                for elem in vec {
+                    let local_lean = (base_lean - dir * elem.size() as f32) * 0.8 / scale; // can't divide by 0 bc if scale is 0 vec is empty
+                    // println!("local lean: {local_lean}, {base_lean}, {scale}: {}, {}", self.size(), vec.len());
+                    // output.push((start_time, duration, scaling, lean + local_lean));
+                    output.append(&mut elem.sound_times(sound_time, duration, scaling, lean + local_lean));
+                }
+                output
+            },
+            SoundTree::Seq(vec, _) => {
+                // let child_count = vec.len();
+                let mut output = Vec::new();
+                let mut time_elapsed = 0.0;
+                for child in vec {
+                    let ratio = scaling.child_scale(child) / scaling.parent_scale(self);
+                    // let ratio = match scaling {
+                    //     Scaling::Linear => 1.0 / vec.len() as f64,
+                    //     Scaling::Weight => child.subtree_weight(Scaling::exponent()) / self.weight(Scaling::exponent()),
+                    //     // we do want scaling exponent to be an argument but for now...
+                    //     // Scaling::SizeAligned => round_by(child.size_factor() / self.size_adjusted(), segment),
+                    //     Scaling::Size => child.size() as f64 / self.size() as f64,
+                    // };
+                    let new_time = duration * ratio;
+                    output.append(&mut child.sound_times(sound_time + time_elapsed, new_time, scaling, lean));
+                    time_elapsed += new_time;
+                }
+                output
+            },
+            SoundTree::Sound(sound, _) => {
+                vec![(sound_time, Arc::clone(sound), duration, lean)]
+                // sound.sequence(seq, start_time, duration, lean),
+            }
+        }
+    }
 
     /// Generate audio into a [Sequencer] for the tree, distributing subtree durations by the selected [scaling](Scaling).
     pub fn generate_with(&self, seq: &mut ConfigSequencer, start_time: f64, duration: f64, scaling: DivisionMethod, lean: f32) {

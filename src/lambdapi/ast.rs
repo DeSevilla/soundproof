@@ -1,5 +1,7 @@
 use std::rc::Rc;
 
+use crate::term::{vapp, vpi, vlam};
+
 // LambdaPi was originally written for Haskell and I translated it to rust.
 // Certain design choices (bidirectional typing, a term/value split, higher-order abstract syntax)
 // are more natural in Haskell than Rust, but they work out alright -- just requires a fair amount of 
@@ -35,7 +37,10 @@ pub enum ITerm {
     /// Successor element of the type with n+1 elements. (n+1, member of Fin(n))
     FSucc(CTerm, CTerm),
     /// Eliminator for induction on finite types. (motive, base case, successor case, size of type, value to fill into motive)
-    FinElim(CTerm, CTerm, CTerm, CTerm, CTerm),   
+    FinElim(CTerm, CTerm, CTerm, CTerm, CTerm),
+    Eq(CTerm, CTerm, CTerm),
+    Refl(CTerm, CTerm),
+    EqElim(CTerm, CTerm, CTerm, CTerm, CTerm, CTerm)
 }
 
 /// Term whose type can be checked.
@@ -81,6 +86,8 @@ pub enum Value {
     FZero(Box<Value>),
     /// Successor value for finite type with n+1 elements. (n+1, element of Fin(n))
     FSucc(Box<Value>, Box<Value>),
+    Eq(Box<Value>, Box<Value>, Box<Value>),
+    Refl(Box<Value>, Box<Value>),
 }
 
 /// Term containing a free variable somewhere, which can't be reduced while it's still there.
@@ -93,7 +100,8 @@ pub enum Neutral {
     /// Natural number eliminator. (motive, base case, successor case, number to fill into motive)
     NatElim(Box<Value>, Box<Value>, Box<Value>, Box<Neutral>),
     /// Finite type eliminator. (motive, base case, successor case, size of type, value to fill into motive)
-    FinElim(Box<Value>, Box<Value>, Box<Value>, Box<Value>, Box<Neutral>)
+    FinElim(Box<Value>, Box<Value>, Box<Value>, Box<Value>, Box<Neutral>),
+    EqElim(Box<Value>, Box<Value>, Box<Value>, Box<Value>, Box<Value>, Box<Neutral>),
 }
 
 /// Environment containing values of local variables for evaluation of de Bruijn indices.
@@ -101,7 +109,60 @@ pub type Env = Vec<Value>;
 /// We do our typechecking with values.
 pub type Type = Value;
 /// Context of free variables for typechecking.
-pub type Context = Vec<(Name, Type)>;
+#[derive(Clone)]
+pub struct Context {
+    pub bound: Vec<Value>,
+    pub free: Vec<(Name, Type, Option<Value>)>,
+    pub bindings: usize,
+}
+
+impl Context {
+    pub fn new(free_vars: Vec<(Name, Type, Option<Value>)>) -> Self {
+        Self {
+            bound: vec![],
+            free: free_vars,
+            bindings: 0
+        }
+    }
+
+    pub fn bind_type(&mut self, typ: Type) -> Name {
+        let name = Name::Local(self.bindings);
+        self.free.push((name.clone(), typ, None));
+        self.bindings += 1;
+        name
+    }
+
+    pub fn bind_value(&mut self, val: Value) {
+        self.bound.push(val);
+        self.bindings += 1;
+    }
+
+    pub fn add_free(&mut self, name: impl Into<String>, val: Option<Value>, ty: Type) -> Name {
+        let name = Name::Global(name.into());
+        self.free.push((name.clone(), ty, val));
+        name
+    }
+
+    pub fn add_free_iterm(&mut self, name: impl Into<String>, value: ITerm) -> Result<Name, String> {
+        let ty = value.infer_type(self.clone())?;
+        let val = value.eval(self.clone());
+        Ok(self.add_free(name, Some(val), ty))
+    }
+
+    pub fn assume_cterm(&mut self, name: impl Into<String>, typ: CTerm) -> Name {
+        let ty = typ.eval(self.clone());
+        self.add_free(name, None, ty)
+    }
+
+    pub fn find_free(&self, name: &Name) -> Option<(Type, Option<Value>)> {
+        self.free.iter().find(|x| x.0 == *name).map(|x| (x.1.clone(), x.2.clone()))
+    }
+
+    pub fn get_bound(&self, ii: usize) -> Value {
+        // println!("{ii} {}", self.bound.len());
+        self.bound[self.bound.len() - ii - 1].clone()
+    }
+}
 
 impl From<ITerm> for CTerm {
     fn from(value: ITerm) -> Self {
@@ -134,7 +195,7 @@ impl TryFrom<CTerm> for ITerm {
 //     }
 // }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum Tag {
     Annotation,
     Type,
@@ -143,6 +204,7 @@ pub enum Tag {
     BoundVar,
     FreeVar,
     Zero,
+    Nat,
     Finite,
     Lambda,
 }
@@ -167,8 +229,9 @@ impl ITerm {
             ITerm::Free(_) => FreeVar,
             ITerm::App(_, _) => Application,
             ITerm::Zero => Zero,
+            ITerm::Nat => Nat,
             ITerm::Fin(_) => Finite,
-            _ => unimplemented!()
+            _ => {println!("{self:?}"); unimplemented!()}
         }
     }
 }

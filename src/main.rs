@@ -2,18 +2,25 @@ use clap::*;
 use fundsp::hacker32::*;
 use read_input::prelude::input;
 use read_input::InputBuild;
+use std::sync::{Arc, Mutex};
+use std::thread;
 use std::fs;
-use std::time::Instant;
+use std::time::{Duration, Instant};
+// use tokio;
 
 use lambdapi::ast::*;
 use lambdapi::*;
 use music::*;
+// use music::notes::*;
 use soundproof::select::*;
 use soundproof::*;
 use translate::*;
 use types::*;
 
-use crate::parse::{statement, Statement};
+// use crate::music::notes::A;
+use parse::{statement, Statement};
+
+use crate::lambdapi::term::std_env;
 
 // use parse::test_iterm_replicate;
 
@@ -140,6 +147,8 @@ impl NamedTerm {
 pub enum AudioSelectorOptions {
     /// Canonical selector: melody is determined by node; instrument, rhythm, and effect are determined by parent node.
     FullStratified,
+    /// Like FullStratified, but uses Arcs to update it on the fly
+    AsyncStratified,
     /// First, highly arbitary melody suite.
     A,
     /// Melodies based on B, C, E, and G with arbitrarily-chosen instruments.
@@ -267,8 +276,13 @@ impl Args {
 //     }
 // }
 
+pub fn async_tree(content: AsyncStratifier, term: &ITerm, ctx: Context) -> SoundTree {
+    // type_translate(term, content)
+    itype_translate(ctx, term, content).unwrap().1
+}
+
 pub fn make_tree(structure: Structure, content: AudioSelectorOptions, term: &ITerm) -> SoundTree {
-    // validate(&format!("Term: {:?}", args.value), &args.term(), false);
+    validate("term", term, None);
     println!("Translating...");
     let now = Instant::now();
     // use MelodySelector::*;
@@ -297,6 +311,7 @@ pub fn make_tree(structure: Structure, content: AudioSelectorOptions, term: &ITe
         Loop => structure_func(Looper::new(Rhythmizer::new()), structure, term),
         Rhythmized => structure_func(Rhythmizer::new(), structure, term),
         FullStratified => structure_func(FullStratifier::new(), structure, term),
+        AsyncStratified => structure_func(AsyncStratifier::new(), structure, term),
         Bare => structure_func(Plain::new(), structure, term),
     };
     println!("...done in {:?}", now.elapsed());
@@ -307,7 +322,7 @@ pub fn draw_tree(tree: &SoundTree, args: &Args) {
     println!("Drawing...");
     let now = Instant::now();
     draw::draw(
-        &tree,
+        tree,
         args.division,
         format!(
             "output/images/{:?}{}-viz.png",
@@ -316,7 +331,7 @@ pub fn draw_tree(tree: &SoundTree, args: &Args) {
         ),
     );
     println!("One image: {:?}", now.elapsed());
-    draw::draw(&tree, args.division, "output/visualization.png");
+    draw::draw(tree, args.division, "output/visualization.png");
     if args.animate {
         let frames_path = "output/images/frames";
         fs::remove_dir_all(frames_path).unwrap();
@@ -324,7 +339,7 @@ pub fn draw_tree(tree: &SoundTree, args: &Args) {
         let time = args.time.unwrap_or(tree.size() as f64);
         // let frames = (30.0 * time).floor() as usize;
         // println!("Drawing {frames} frames...");
-        draw::draw_anim(&tree, args.division, time, 30);
+        draw::draw_anim(tree, args.division, time, 30);
         // println!("All frames: {:?}", now.elapsed());
     }
 }
@@ -375,29 +390,60 @@ pub fn main_to_file(args: &Args) {
         0.0,
     );
     println!("...done in {:?}", now.elapsed());
-    let mut output = make_output(backend, &args);
+    let mut output = make_output(backend, args);
     save(&mut *output, time);
     println!("Done.");
+}
+
+pub fn sequence_times_live(seq: Arc<Mutex<ConfigSequencer>>, times: Vec<(f64, Arc<dyn SoundGenerator + Send + Sync>, f64, f32)>) {
+    let mut last_time = 0.0;
+    for (start_time, sound, duration, lean) in times {
+        let time_gap = start_time - last_time;
+        if time_gap > 0.01 {
+            // println!("Sleeping for {time_gap} seconds {:?}", Instant::now());
+            let gap = Duration::from_secs_f64(time_gap);
+            std::thread::sleep(gap);
+            last_time = start_time; 
+        }
+        // else {
+        //     println!("nowhere to go");
+        // }
+        let mut seq = seq.lock().unwrap();
+        sound.sequence(&mut seq, start_time, duration, lean);
+    }
 }
 
 pub fn main_live(args: &mut Args) {
     let mut seq = Sequencer::new(false, 2);
     let backend = Box::new(seq.backend());
-    let output = make_output(backend, &args);
+    let output = make_output(backend, args);
+    let seq = Arc::new(Mutex::new(ConfigSequencer::new(seq, true)));
     run_live(output);
-    let mut cfg_seq = ConfigSequencer::new(seq, true);
+    // let mut cfg_seq = ConfigSequencer::new(seq, true);
     // let mut repl_state: TreeMaker = args.into();
     let mut term = args.term();
+    let mut new_term = true;
+    let selector = AsyncStratifier::new();
+    let mut ctx = Context::new(std_env());
     loop {
-        println!("{args:?}");
-        let tree = make_tree(args.structure, args.content, &term);
-        let time = args.time.unwrap_or(tree.size() as f64);
-
-        println!("Sequencing live...");
-        tree.generate_with(&mut cfg_seq, 0.0, time, args.division, 0.0);
-        println!("Done");
-        draw_tree(&tree, &args);
-        // if args.draw_only {
+        if new_term {
+            let seq = seq.clone();
+            println!("{args:?}");
+            let tree = async_tree(selector.clone(), &term, ctx.clone());
+            args.time = Some(60.0.min(tree.size() as f64));
+            // let tree = make_tree(args.structure, selector, &term);
+            let time = args.time.unwrap_or(tree.size() as f64);
+            println!("Sequencing live...");
+            let mut sound_times = tree.sound_times(0.0, time, args.division, 0.0);
+            sound_times.sort_by(|a, b| a.0.total_cmp(&b.0));
+            
+            thread::spawn(move || sequence_times_live(seq, sound_times));
+            // tree.generate_with(&mut cfg_seq, 0.0, time, args.division, 0.0);
+            println!("Done");
+            draw_tree(&tree, args);
+ 
+        }
+       // if args.draw_only {
         //     return;
         // }
         // run_live(Box::new(sine_hz(300.0) * 0.1));
@@ -405,18 +451,33 @@ pub fn main_live(args: &mut Args) {
         if cmd.is_empty() {
             break;
         }
-        let statement = statement(vec![], &cmd)
-            .map(|(_, r)| r)
-            .unwrap_or(Statement::Command("uh oh".to_owned()));
-
+        let statement = match statement(vec![], &cmd) {
+            Ok((rest, val)) => if rest.is_empty() { val } else { Statement::Command("incomplete parse: ".to_owned() + rest) },
+            Err(_) => Statement::Command("parse failure".to_owned()),
+        };
+        new_term = false;
         match statement {
-            Statement::Let(_, iterm) => {
+            Statement::Let(name, iterm) => {
+                let res = ctx.add_free_iterm(name, iterm.clone());
+                if res.is_err() {
+                    println!("Got error on term {iterm}: {res:?}");
+                    continue;
+                }
                 term = iterm;
+                new_term = true;
             }
-            Statement::Assume(_) => todo!(),
-            Statement::Eval(_) => todo!(),
-            Statement::PutStrLn(_) => todo!(),
-            Statement::Out(_) => todo!(),
+            Statement::Assume(assumptions) => {
+                for (name, prop) in assumptions {
+                    ctx.assume_cterm(name, prop);
+                }
+            },
+            // Statement::Eval(_) => todo!(),
+            // Statement::PutStrLn(_) => todo!(),
+            Statement::Set(tag, notes) => {
+                let point = selector.get(&tag);
+                *point.notes.lock().unwrap() = notes;
+                println!("Set notes for {tag:?} to {notes:?}");
+            }, //TODO this isn't it
             Statement::Command(cmd) => {
                 let terms = ["soundproof.exe"].into_iter().chain(cmd.split_whitespace());
                 // let (term, time) = cmd.split_once(' ').unwrap_or(("omega", "20"));
@@ -424,7 +485,8 @@ pub fn main_live(args: &mut Args) {
                 // let res = args.try_update_from(["soundproof.exe", "--value", term, "-t", time]);
                 let res = args.try_update_from(terms);
                 println!("parsed as: {res:?} {args:?}");
-            }
+            },
+            _ => todo!()
         }
     }
     println!("Closing connection");

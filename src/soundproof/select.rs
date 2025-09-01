@@ -169,6 +169,7 @@ impl AsyncStratifier {
                 BoundVar => AsyncNodeInfo::new([A, A, E, C], [-1.0, 0., 0., 0.], violinish() * 1.1, major_chord() >> join::<U3>()),
                 FreeVar => AsyncNodeInfo::new([B, A, C, B], [1.5, 0.5, 1.0, 1.0], three_equivalents(wobbly_sine()) * 0.7, shape(Clip(0.75))),
                 Zero => AsyncNodeInfo::new([E, F, C, A], [-1.0, 0., 0., 0.], sinesaw(), shape(Clip(100.0))),
+                Nat => AsyncNodeInfo::new([E, F, G, E], [-1.0, 0., 0., 0.], sinesaw(), shape(Clip(100.0))),
                 Finite => AsyncNodeInfo::new([A, A + 12, E, F], [0.7, 0.7, 2.1, 0.5], violinish() * 1.1, bell_hz(200.0, 1.0, 5.0)),
                 Lambda => AsyncNodeInfo::new([D, F, E, C], [1.5, 0.5, 1., 0.5], fm_basic() * 0.28, reverb_highpass()),
             };
@@ -182,12 +183,15 @@ impl AsyncStratifier {
     }
 
     pub fn get(&self, tag: &Tag) -> AsyncNodeInfo {
-        self.params.get(tag).unwrap().clone()
+        match self.params.get(tag) {
+            Some(t) => t.clone(),
+            None => { println!("{tag:?}"); panic!() }
+        }
     }
 
     pub fn for_pair(&self, parent: Tag, child: Tag) -> MelodyAsync {
-        let parent = self.params.get(&parent).unwrap();
-        let child = self.params.get(&child).unwrap();
+        let parent = self.get(&parent);
+        let child = self.get(&child);
         MelodyAsync {
             notes: child.notes.clone(),
             timings: parent.timings.clone(),
@@ -234,6 +238,20 @@ impl Selector for AsyncStratifier
             parent: Term::C(term.clone()),
             depth: self.depth + 1
         }
+    }
+
+    fn imeta(&self, term: &ITerm) -> TreeMetadata {
+        FullStratifier {
+            parent: self.parent.clone(),
+            depth: self.depth,
+        }.imeta(term)
+    }
+
+    fn cmeta(&self, term: &CTerm) -> TreeMetadata {
+        FullStratifier {
+            parent: self.parent.clone(),
+            depth: self.depth,
+        }.cmeta(term)
     }
 }
 

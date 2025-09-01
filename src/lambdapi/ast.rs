@@ -204,6 +204,7 @@ pub enum Tag {
     BoundVar,
     FreeVar,
     Zero,
+    Nat,
     Finite,
     Lambda,
 }
@@ -228,8 +229,9 @@ impl ITerm {
             ITerm::Free(_) => FreeVar,
             ITerm::App(_, _) => Application,
             ITerm::Zero => Zero,
+            ITerm::Nat => Nat,
             ITerm::Fin(_) => Finite,
-            _ => unimplemented!()
+            _ => {println!("{self:?}"); unimplemented!()}
         }
     }
 }

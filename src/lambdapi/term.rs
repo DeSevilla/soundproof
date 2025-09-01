@@ -243,6 +243,8 @@ pub fn std_env() -> Vec<(Name, Type, Option<Value>)> {
                 ITerm::Bound(4).into(), ITerm::Bound(3).into(), ITerm::Bound(2).into(), ITerm::Bound(1).into(), ITerm::Bound(0).into()
             )))))).eval(Context::new(vec![]))
         ),
+        ("Void", Value::Star, Value::Fin(Box::new(Value::Zero))),
+        ("Not", vpi(Value::Star, |_| Value::Star), vlam(|x| vpi(x, |_| Value::Fin(Box::new(Value::Zero))))),
         ("Eq", 
             vpi(Value::Star, |a| vpi(a.clone(), move |x| vpi(a.clone(), |y| Value::Star))), 
             vlam(|a| 
@@ -293,17 +295,17 @@ pub fn std_env() -> Vec<(Name, Type, Option<Value>)> {
             ))))))).eval(Context::new(vec![]))
             // clam(todo!()).eval(Context::new(vec![]))
         ),
-        ite("P", sets_of()),
-        ite("U", u()),
-        ite("tau", tau()),
-        ite("sigma", sigma()),
-        ite("delta", delta()),
-        ite("preomega", preomega()),
-        ite("omega", omega()),
-        ite("lem0", lem0()),
-        ite("D", d()),
-        ite("lem2", lem2()),
-        ite("lem3", lem3()),
+        // ite("P", sets_of()),
+        // ite("U", u()),
+        // ite("tau", tau()),
+        // ite("sigma", sigma()),
+        // ite("delta", delta()),
+        // ite("preomega", preomega()),
+        // ite("omega", omega()),
+        // ite("lem0", lem0()),
+        // ite("D", d()),
+        // ite("lem2", lem2()),
+        // ite("lem3", lem3()),
         // ("girard", Value::Fin(Box::new(Value::Zero)), Some(girard_reduced())),
     ];
     predata.into_iter().map(|(n, t, v)| (Name::Global(n.to_owned()), t, Some(v))).collect()

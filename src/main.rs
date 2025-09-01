@@ -430,7 +430,7 @@ pub fn main_live(args: &mut Args) {
             let seq = seq.clone();
             println!("{args:?}");
             let tree = async_tree(selector.clone(), &term, ctx.clone());
-
+            args.time = Some(60.0.min(tree.size() as f64));
             // let tree = make_tree(args.structure, selector, &term);
             let time = args.time.unwrap_or(tree.size() as f64);
             println!("Sequencing live...");

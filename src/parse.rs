@@ -31,7 +31,7 @@ pub fn statement(vars: Vec<String>, input: &str) -> IResult<&str, Statement> {
     let (input, _) = ws(input)?;
     alt((
         |i| {
-            let (i, (_, n, _, v)) = (tag("let"), identifier, tag("="), |i| iterm(0, vars.clone(), i)).parse(i)?;
+            let (i, (_, n, _, v, _)) = (tag("let"), identifier, tag("="), |i| iterm(0, vars.clone(), i), ws).parse(i)?;
             Ok((i, Let(n, v)))
         },
         |i| { 
@@ -122,7 +122,7 @@ pub fn ws<'a, E>(input: &'a str) -> IResult<&'a str, (), E>
 {
     // take_while1(char::is_whitespace)(input)
     // many0(one_of(" \t\r\n")).map(|v| v.into_iter().collect()).parse(input)
-    (multispace0, many0((multispace0, tag("--"), not_line_ending, line_ending))).map(|_| ()).parse(input)
+    (multispace0, many0((multispace0, tag("--"), not_line_ending, many0(line_ending)))).map(|_| ()).parse(input)
     // preceded(multispace0, (tag("--"), not_line_ending))
     // space0(input)
 }

@@ -1,9 +1,24 @@
 use clap::*;
 use fundsp::hacker32::*;
-use read_input::prelude::input;
-use read_input::InputBuild;
+// use read_input::prelude::input;
+// use read_input::InputBuild;
+use bevy::prelude::*;
+
+use std::f32::consts::PI;
+
+#[cfg(not(target_arch = "wasm32"))]
+use bevy::pbr::wireframe::{WireframeConfig, WireframePlugin};
+use bevy::{
+    color::palettes::basic::SILVER,
+    prelude::*,
+    render::{
+        render_asset::RenderAssetUsages,
+        render_resource::{Extent3d, TextureDimension, TextureFormat},
+    },
+};
+
 use std::sync::{Arc, Mutex};
-use std::thread;
+// use std::thread;
 use std::fs;
 use std::time::{Duration, Instant};
 // use tokio;
@@ -18,7 +33,7 @@ use translate::*;
 use types::*;
 
 // use crate::music::notes::A;
-use parse::{statement, Statement};
+// use parse::{statement, Statement};
 
 use crate::lambdapi::term::std_env;
 
@@ -413,95 +428,295 @@ pub fn sequence_times_live(seq: Arc<Mutex<ConfigSequencer>>, times: Vec<(f64, Ar
     }
 }
 
-pub fn main_live(args: &mut Args) {
-    let mut seq = Sequencer::new(false, 2);
-    let backend = Box::new(seq.backend());
-    let output = make_output(backend, args);
-    let seq = Arc::new(Mutex::new(ConfigSequencer::new(seq, true)));
-    run_live(output);
-    // let mut cfg_seq = ConfigSequencer::new(seq, true);
-    // let mut repl_state: TreeMaker = args.into();
-    let mut term = args.term();
-    let mut new_term = true;
-    let selector = AsyncStratifier::new();
-    let mut ctx = Context::new(std_env());
-    loop {
-        if new_term {
-            let seq = seq.clone();
-            println!("{args:?}");
-            let tree = async_tree(selector.clone(), &term, ctx.clone());
-            args.time = Some(60.0.min(tree.size() as f64));
-            // let tree = make_tree(args.structure, selector, &term);
-            let time = args.time.unwrap_or(tree.size() as f64);
-            println!("Sequencing live...");
-            let mut sound_times = tree.sound_times(0.0, time, args.division, 0.0);
-            sound_times.sort_by(|a, b| a.0.total_cmp(&b.0));
+// pub fn main_live(args: &mut Args) {
+//     let mut seq = Sequencer::new(false, 2);
+//     let backend = Box::new(seq.backend());
+//     let output = make_output(backend, args);
+//     let seq = Arc::new(Mutex::new(ConfigSequencer::new(seq, true)));
+//     run_live(output);
+//     // let mut cfg_seq = ConfigSequencer::new(seq, true);
+//     // let mut repl_state: TreeMaker = args.into();
+//     let mut term = args.term();
+//     let mut new_term = true;
+//     let selector = AsyncStratifier::new();
+//     let mut ctx = Context::new(std_env());
+//     loop {
+//         if new_term {
+//             let seq = seq.clone();
+//             println!("{args:?}");
+//             let tree = async_tree(selector.clone(), &term, ctx.clone());
+//             args.time = Some(60.0.min(tree.size() as f64));
+//             // let tree = make_tree(args.structure, selector, &term);
+//             let time = args.time.unwrap_or(tree.size() as f64);
+//             println!("Sequencing live...");
+//             let mut sound_times = tree.sound_times(0.0, time, args.division, 0.0);
+//             sound_times.sort_by(|a, b| a.0.total_cmp(&b.0));
             
-            thread::spawn(move || sequence_times_live(seq, sound_times));
-            // tree.generate_with(&mut cfg_seq, 0.0, time, args.division, 0.0);
-            println!("Done");
-            draw_tree(&tree, args);
+//             thread::spawn(move || sequence_times_live(seq, sound_times));
+//             // tree.generate_with(&mut cfg_seq, 0.0, time, args.division, 0.0);
+//             println!("Done");
+//             draw_tree(&tree, args);
  
-        }
-       // if args.draw_only {
-        //     return;
-        // }
-        // run_live(Box::new(sine_hz(300.0) * 0.1));
-        let cmd = input::<String>().msg("(press enter to exit)...\n").get();
-        if cmd.is_empty() {
-            break;
-        }
-        let statement = match statement(vec![], &cmd) {
-            Ok((rest, val)) => if rest.is_empty() { val } else { Statement::Command("incomplete parse: ".to_owned() + rest) },
-            Err(_) => Statement::Command("parse failure".to_owned()),
-        };
-        new_term = false;
-        match statement {
-            Statement::Let(name, iterm) => {
-                let res = ctx.add_free_iterm(name, iterm.clone());
-                if res.is_err() {
-                    println!("Got error on term {iterm}: {res:?}");
-                    continue;
-                }
-                term = iterm;
-                new_term = true;
-            }
-            Statement::Assume(assumptions) => {
-                for (name, prop) in assumptions {
-                    ctx.assume_cterm(name, prop);
-                }
-            },
-            // Statement::Eval(_) => todo!(),
-            // Statement::PutStrLn(_) => todo!(),
-            Statement::Set(tag, notes) => {
-                let point = selector.get(&tag);
-                *point.notes.lock().unwrap() = notes;
-                println!("Set notes for {tag:?} to {notes:?}");
-            }, //TODO this isn't it
-            Statement::Command(cmd) => {
-                let terms = ["soundproof.exe"].into_iter().chain(cmd.split_whitespace());
-                // let (term, time) = cmd.split_once(' ').unwrap_or(("omega", "20"));
-                // println!("{cmd}");
-                // let res = args.try_update_from(["soundproof.exe", "--value", term, "-t", time]);
-                let res = args.try_update_from(terms);
-                println!("parsed as: {res:?} {args:?}");
-            },
-            _ => todo!()
-        }
+//         }
+//        // if args.draw_only {
+//         //     return;
+//         // }
+//         // run_live(Box::new(sine_hz(300.0) * 0.1));
+//         let cmd = input::<String>().msg("(press enter to exit)...\n").get();
+//         if cmd.is_empty() {
+//             break;
+//         }
+//         let statement = match statement(vec![], &cmd) {
+//             Ok((rest, val)) => if rest.is_empty() { val } else { Statement::Command("incomplete parse: ".to_owned() + rest) },
+//             Err(_) => Statement::Command("parse failure".to_owned()),
+//         };
+//         new_term = false;
+//         match statement {
+//             Statement::Let(name, iterm) => {
+//                 let res = ctx.add_free_iterm(name, iterm.clone());
+//                 if res.is_err() {
+//                     println!("Got error on term {iterm}: {res:?}");
+//                     continue;
+//                 }
+//                 term = iterm;
+//                 new_term = true;
+//             }
+//             Statement::Assume(assumptions) => {
+//                 for (name, prop) in assumptions {
+//                     ctx.assume_cterm(name, prop);
+//                 }
+//             },
+//             // Statement::Eval(_) => todo!(),
+//             // Statement::PutStrLn(_) => todo!(),
+//             Statement::Set(tag, notes) => {
+//                 let point = selector.get(&tag);
+//                 *point.notes.lock().unwrap() = notes;
+//                 println!("Set notes for {tag:?} to {notes:?}");
+//             }, //TODO this isn't it
+//             Statement::Command(cmd) => {
+//                 let terms = ["soundproof.exe"].into_iter().chain(cmd.split_whitespace());
+//                 // let (term, time) = cmd.split_once(' ').unwrap_or(("omega", "20"));
+//                 // println!("{cmd}");
+//                 // let res = args.try_update_from(["soundproof.exe", "--value", term, "-t", time]);
+//                 let res = args.try_update_from(terms);
+//                 println!("parsed as: {res:?} {args:?}");
+//             },
+//             _ => todo!()
+//         }
+//     }
+//     println!("Closing connection");
+// }
+
+// pub fn main_old() {
+//     // test_iterm_replicate();
+//     let mut args= Args::parse();
+//     if args.live {
+//         main_live(&mut args);
+//     } else {
+//         main_to_file(&args);
+//     }
+// }
+
+
+pub struct HelloPlugin;
+
+impl Plugin for HelloPlugin {
+    fn build(&self, app: &mut App) {
+        // app.insert_resource(GreetTimer(bevy::prelude::Timer::from_seconds(2.0, TimerMode::Repeating)));
+        app.add_systems(Startup, (setup, add_tree));
+        app.add_systems(Update, rotate);
     }
-    println!("Closing connection");
 }
 
-pub fn main_old() {
-    // test_iterm_replicate();
-    let mut args= Args::parse();
-    if args.live {
-        main_live(&mut args);
-    } else {
-        main_to_file(&args);
+fn add_tree(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut images: ResMut<Assets<Image>>, mut materials: ResMut<Assets<StandardMaterial>>) {
+    
+    
+    let strat = AsyncStratifier::new();
+    let (_, tree) = itype_translate(Context::new(std_env()), &tau(), strat).unwrap();
+    // let tree = itype_translate(Context::new(std_env()), &tau(), AsyncStratifier).unwrap()
+    const MAX_TIME: f64 = 10.0;
+    for (_, timings, meta) in tree.sound_times(0.0, MAX_TIME, DivisionMethod::Weight, 0.0) {
+        let shape = meshes.add(Cylinder { radius: (timings.duration as f32 / 4.0).min(2.0), ..default() });
+        let transform = Transform::from_xyz((timings.start - MAX_TIME * 0.5) as f32, meta.max_depth as f32, timings.lean * 2.0)
+            .with_rotation(Quat::from_rotation_x(PI / 10.0));
+        let (r, g, b, _) = meta.base_color.as_rgba8();
+        let debug_material = materials.add(StandardMaterial {
+            base_color_texture: Some(images.add(uv_debug_texture(r, g, b))),
+            ..default()
+        });
+        commands.spawn((timings, meta, Mesh3d(shape), MeshMaterial3d(debug_material), transform, Shape));
+    }
+    // commands.spawn((Tag::Pi, strat.for_pair(Tag::Pi, Tag::FreeVar), strat.imeta(&sets_of())));
+    // commands.spawn((Tag::Application, strat.for_pair(Tag::Application, Tag::Lambda), strat.imeta(&tau())));
+    // commands.spawn((Tag::Lambda, strat.for_pair(Tag::Application, Tag::Nat), strat.imeta(&sigma())));
+    // commands.spawn((MelodyAsync::))
+}
+
+const SHAPES_X_EXTENT: f32 = 14.0;
+const EXTRUSION_X_EXTENT: f32 = 16.0;
+const Z_EXTENT: f32 = 5.0;
+
+#[derive(Component)]
+struct Shape;
+
+/// Creates a colorful test pattern
+fn uv_debug_texture(r: u8, g: u8, b: u8) -> Image {
+    const TEXTURE_SIZE: usize = 1;
+
+    let mut palette: [u8; 4] = [
+        r, g, b, 255
+    ];
+    // let mut palette: [u8; 32] = [
+    //     255, 102, 159, 255, 255, 159, 102, 255, 236, 255, 102, 255, 121, 255, 102, 255, 102, 255,
+    //     198, 255, 102, 198, 255, 255, 121, 102, 255, 255, 236, 102, 255, 255,
+    // ];
+
+    let mut texture_data = [0; TEXTURE_SIZE * TEXTURE_SIZE * 4];
+    for y in 0..TEXTURE_SIZE {
+        let offset = TEXTURE_SIZE * y * 4;
+        texture_data[offset..(offset + TEXTURE_SIZE * 4)].copy_from_slice(&palette);
+        palette.rotate_right(4);
+    }
+
+    Image::new_fill(
+        Extent3d {
+            width: TEXTURE_SIZE as u32,
+            height: TEXTURE_SIZE as u32,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        &texture_data,
+        TextureFormat::Rgba8UnormSrgb,
+        RenderAssetUsages::RENDER_WORLD,
+    )
+}
+
+fn setup(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut images: ResMut<Assets<Image>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    // let debug_material = materials.add(StandardMaterial {
+    //     base_color_texture: Some(images.add(uv_debug_texture())),
+    //     ..default()
+    // });
+
+    // let shapes = [
+    //     meshes.add(Cuboid::default()),
+    //     meshes.add(Tetrahedron::default()),
+    //     meshes.add(Capsule3d::default()),
+    //     meshes.add(Torus::default()),
+    //     meshes.add(Cylinder::default()),
+    //     meshes.add(Cone::default()),
+    //     meshes.add(ConicalFrustum::default()),
+    //     meshes.add(Sphere::default().mesh().ico(5).unwrap()),
+    //     meshes.add(Sphere::default().mesh().uv(32, 18)),
+    // ];
+
+    // let extrusions = [
+    //     meshes.add(Extrusion::new(Rectangle::default(), 1.)),
+    //     meshes.add(Extrusion::new(Capsule2d::default(), 1.)),
+    //     meshes.add(Extrusion::new(Annulus::default(), 1.)),
+    //     meshes.add(Extrusion::new(Circle::default(), 1.)),
+    //     meshes.add(Extrusion::new(Ellipse::default(), 1.)),
+    //     meshes.add(Extrusion::new(RegularPolygon::default(), 1.)),
+    //     meshes.add(Extrusion::new(Triangle2d::default(), 1.)),
+    // ];
+
+    // let num_shapes = shapes.len();
+
+    // for (i, shape) in shapes.into_iter().enumerate() {
+    //     commands.spawn((
+    //         Mesh3d(shape),
+    //         MeshMaterial3d(debug_material.clone()),
+    //         Transform::from_xyz(
+    //             -SHAPES_X_EXTENT / 2. + i as f32 / (num_shapes - 1) as f32 * SHAPES_X_EXTENT,
+    //             2.0,
+    //             Z_EXTENT / 2.,
+    //         )
+    //         .with_rotation(Quat::from_rotation_x(-PI / 4.)),
+    //         Shape,
+    //     ));
+    // }
+
+    // let num_extrusions = extrusions.len();
+
+    // for (i, shape) in extrusions.into_iter().enumerate() {
+    //     commands.spawn((
+    //         Mesh3d(shape),
+    //         MeshMaterial3d(debug_material.clone()),
+    //         Transform::from_xyz(
+    //             -EXTRUSION_X_EXTENT / 2.
+    //                 + i as f32 / (num_extrusions - 1) as f32 * EXTRUSION_X_EXTENT,
+    //             2.0,
+    //             -Z_EXTENT / 2.,
+    //         )
+    //         .with_rotation(Quat::from_rotation_x(-PI / 4.)),
+    //         Shape,
+    //     ));
+    // }
+
+    commands.spawn((
+        PointLight {
+            shadows_enabled: true,
+            intensity: 10_000_000.,
+            range: 100.0,
+            shadow_depth_bias: 0.2,
+            ..default()
+        },
+        Transform::from_xyz(8.0, 16.0, 8.0),
+    ));
+
+    // ground plane
+    commands.spawn((
+        Mesh3d(meshes.add(Plane3d::default().mesh().size(50.0, 50.0).subdivisions(10))),
+        MeshMaterial3d(materials.add(Color::from(SILVER))),
+    ));
+
+    commands.spawn((
+        Camera3d::default(),
+        Transform::from_xyz(0.0, 10., 14.0).looking_at(Vec3::new(0., 5., 0.), Vec3::Y),
+    ));
+
+    #[cfg(not(target_arch = "wasm32"))]
+    commands.spawn((
+        Text::new("this is my first step towards a new tree visualization!!"),
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(12.0),
+            left: Val::Px(12.0),
+            ..default()
+        },
+    ));
+}
+// #[derive(Resource)]
+// struct GreetTimer(bevy::prelude::Timer);
+
+// fn play(time: Res<Time>, mut timer: ResMut<GreetTimer>, query: Query<&Timings, With<Timings>>) {
+//     if timer.0.tick(time.delta()).just_finished() {
+//         for timings in &query {
+//             println!("hello {timings:?}");
+//         }
+//     }
+// }
+
+fn rotate(mut query: Query<&mut Transform, With<Shape>>, time: Res<Time>) {
+    for mut transform in &mut query {
+        transform.rotate_y(time.delta_secs() / 0.5);
     }
 }
+
+
 
 pub fn main() {
-    println!("Hello world!")
+    // println!("Hello world!");
+    App::new()
+        .add_plugins((
+            DefaultPlugins.set(ImagePlugin::default_nearest()),
+            #[cfg(not(target_arch = "wasm32"))]
+            WireframePlugin::default(),
+        ))
+        .add_plugins(HelloPlugin)
+        .run();
 }

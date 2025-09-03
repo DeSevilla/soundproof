@@ -159,8 +159,8 @@ impl AsyncStratifier {
     pub fn new() -> Self {
         let mut params= HashMap::new();
         use Tag::*;
-        let tags = [Annotation, Type, Pi, Application, BoundVar, FreeVar, Zero, Finite, Lambda];
-        for tag in tags {
+        // let tags = [Annotation, Type, Pi, Application, BoundVar, FreeVar, Zero, Nat, Finite, Lambda];
+        for tag in Tag::all() {
             let info = match tag {
                 Annotation => AsyncNodeInfo::new([A, D, F, A], [1.0, 0.5, 1.5, 1.0], sawfir() * 0.75, (pass() | (800.0 + 100.0 * sine_hz(2.0)) | constant(1.0)) >> highpass()),
                 Type => AsyncNodeInfo::new([B, C, E, E], [1.0, 1.0, 1.0, 1.0], violinish(), pass()),
@@ -470,6 +470,7 @@ impl Selector for FullStratifier {
         };
         TreeMetadata {
             name: format!("{:?}", term.tag()),
+            // tag: term.tag(),
             // parent: format!("{:?}", term.tag()),
             base_color,
             alt_color,

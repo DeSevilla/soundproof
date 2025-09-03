@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+use bevy::prelude::*;
 use fundsp::hacker32::*;
 use piet_common::Color;
 use rand::seq::IndexedRandom;
@@ -527,6 +528,7 @@ impl<T, X> SoundGenerator for EffectSeq<T, X>
     }
 }
 
+#[derive(Component)]
 pub struct MelodyAsync {
     pub notes: Arc<Mutex<[i32; FS_MEL_SIZE]>>,
     pub timings: Arc<Mutex<[f64; FS_MEL_SIZE]>>,
@@ -631,6 +633,13 @@ impl SoundGenerator for MelodyAsync {
 //     }
 // }
 
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct Timings {
+    pub start: f64,
+    pub duration: f64,
+    pub lean: f32,
+}
+
 /// Tree of simultaneous and/or sequential sounds. Lambda calculus terms are translated into this structure.
 /// The purpose of the design is to allow layers of sounds at different paces which each progress in time
 /// as fits their place in the structure.
@@ -646,7 +655,7 @@ pub enum SoundTree {
 
 static SIGN: AtomicU32 = AtomicU32::new(0);
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Component)]
 pub struct TreeMetadata {
     pub name: String,
     // pub parent: String,
@@ -655,8 +664,6 @@ pub struct TreeMetadata {
     pub max_depth: usize,
     // pub lean: f32,
 }
-
-
 
 impl SoundTree {
     /// Constructs a SoundTree containing a single sound-pattern.
@@ -800,7 +807,7 @@ impl SoundTree {
         self.weight(exp).powf(exp)
     }
 
-    pub fn sound_times(&self, sound_time: f64, duration: f64, scaling: DivisionMethod, lean: f32) -> Vec<(f64, Arc<dyn SoundGenerator + Send + Sync>, f64, f32)> {
+    pub fn sound_times(&self, sound_time: f64, duration: f64, scaling: DivisionMethod, lean: f32) -> Vec<(Arc<dyn SoundGenerator + Send + Sync>, Timings, TreeMetadata)> {
         if duration <= 2.0 / crate::music::SAMPLE_RATE as f64 {
             // println!("Warning! No duration from start time {start_time}");
             return vec![];
@@ -847,8 +854,13 @@ impl SoundTree {
                 }
                 output
             },
-            SoundTree::Sound(sound, _) => {
-                vec![(sound_time, Arc::clone(sound), duration, lean)]
+            SoundTree::Sound(sound, meta) => {
+                let timings = Timings {
+                    start: sound_time,
+                    duration,
+                    lean,
+                };
+                vec![(Arc::clone(sound), timings, meta.clone())]
                 // sound.sequence(seq, start_time, duration, lean),
             }
         }

@@ -4,13 +4,13 @@ use fundsp::hacker32::*;
 // use read_input::InputBuild;
 use bevy::prelude::*;
 
-use std::f32::consts::PI;
+use std::{f32::consts::PI, sync::atomic::Ordering};
 
 #[cfg(not(target_arch = "wasm32"))]
 use bevy::pbr::wireframe::{WireframeConfig, WireframePlugin};
 use bevy::{
     color::palettes::basic::SILVER,
-    prelude::*,
+    // prelude::*,
     render::{
         render_asset::RenderAssetUsages,
         render_resource::{Extent3d, TextureDimension, TextureFormat},
@@ -518,45 +518,278 @@ pub fn sequence_times_live(seq: Arc<Mutex<ConfigSequencer>>, times: Vec<(f64, Ar
 // }
 
 
+const MAX_TIME: f64 = 20.0;
+const SEG_LENGTH: f32 = 1.0;
+
+#[derive(Clone, Copy)]
 pub struct HelloPlugin;
 
 impl Plugin for HelloPlugin {
     fn build(&self, app: &mut App) {
-        // app.insert_resource(GreetTimer(bevy::prelude::Timer::from_seconds(2.0, TimerMode::Repeating)));
+        app.insert_resource(TreeTimer(bevy::prelude::Timer::from_seconds(MAX_TIME as f32 + 2.0, TimerMode::Repeating)));
         app.add_systems(Startup, (setup, add_tree));
         app.add_systems(Update, rotate);
+        app.add_systems(Update, time_visibility);
+        // app.add_systems(Update, (rotate, time_visibility));
     }
 }
+
+#[derive(Bundle, Clone)]
+pub struct TreeSegment {
+    timings: Timings,
+    meta: TreeMetadata,
+    mesh: Mesh3d,
+    material: MeshMaterial3d<StandardMaterial>,
+    transform: Transform,
+    visiblity: Visibility,
+    shape: Shape,
+}
+
+fn make_segment(
+    tree: &SoundTree,
+    duration: f64,
+    elapsed: f64,
+    lean: f32,
+    angle: f32,
+    images: &mut ResMut<Assets<Image>>,
+    materials: &mut ResMut<Assets<StandardMaterial>>, 
+    meshes: &mut ResMut<Assets<Mesh>>
+) -> TreeSegment {
+    assert!(match tree { SoundTree::Sound(_, _) => true, _ => false });
+    // println!("duration: {duration}");
+    let timings = Timings {
+        duration,
+        start: elapsed,
+        lean,
+    };
+    let meta = tree.metadata().clone();
+    // let scaler = width;
+    let scaler = (2.0_f32.powf(timings.duration as f32) / (4. * MAX_TIME as f32)).min(0.25);
+    // let scaler = (timings.duration as f32 / 10.0).min(1.0);
+    // let scaler = timings.duration as f32 / 2.0;
+    let shape = meshes.add(Cylinder::new(scaler, SEG_LENGTH));
+    // let shape = meshes.add(Sphere::new(scaler));
+    // let shape = meshes.add(Sphere::new(timings.duration as f32 / 10.0));
+    // let shape = meshes.add(Extrusion { base_shape: Rectangle::from_length(scaler), half_depth: 0.2});
+    // let shape = meshes.add(Capsule3d { radius: scaler, ..default() });
+    // let transform = Transform::from_xyz((timings.start - timings.duration * 0.5) as f32 % 2.0, 1.0, timings.lean)
+    let mut transform = Transform::from_xyz(0.0, SEG_LENGTH, 0.0);
+    transform.rotate_around(Vec3::new(0.0, SEG_LENGTH * 0.5, 0.0), Quat::from_rotation_z(angle));
+    transform.rotate(Quat::from_rotation_y(PI / 10.));
+        // .with_rotation(Quat::from_rotation_z(angle));
+    // let transform = if has_parent {
+    //     Transform::from_xyz(0.0, 1.0, 0.0)
+    //         .with_rotation(Quat::from_rotation_x(PI * (prior + width / 2.) / 10.));
+    // }
+    // else {
+    //     Transform::from_xyz(0.0, 1.0, 0.0)
+    // // let transform = Transform::from_xyz(1.0, 2.0, timings.lean * 2.0)
+    //         .with_rotation(Quat::from_rotation_x(PI / 20.));
+    //     // .with_rotation(Quat::from_rotation_x(PI / 10.0));
+    // }
+    let (r, g, b, _) = tree.metadata().base_color.as_rgba8();
+    let debug_material = materials.add(StandardMaterial {
+        base_color_texture: Some(images.add(uv_debug_texture(r, g, b))),
+        ..default()
+    });
+    TreeSegment {
+        timings, 
+        meta,
+        mesh: Mesh3d(shape),
+        material: MeshMaterial3d(debug_material),
+        transform,
+        visiblity: Visibility::default(),
+        shape: Shape,
+    }
+}
+
+fn add_tree_rec(
+    tree: &SoundTree,
+    parent: Option<Entity>,
+    duration: f64,
+    elapsed: f64,
+    lean: f32,
+    angle: f32,
+    commands: &mut Commands,
+    meshes: &mut ResMut<Assets<Mesh>>,
+    images: &mut ResMut<Assets<Image>>,
+    materials: &mut ResMut<Assets<StandardMaterial>>
+) {
+    let size = tree.size();
+    match tree {
+        SoundTree::Simul(children, meta) => {
+            let val = SIGN.fetch_add(1, Ordering::Relaxed);
+            let dir = if val % 2 == 0 { 1.0 } else { -1.0 };
+            // let scale = vec.len();
+            let scale = (size - 1) as f32;
+            let base_lean = dir * scale / 2.0;
+            // for (ii, elem) in vec.iter().enumerate() {
+            // let mut output = Vec::new();
+            // let mut parent = parent;
+            // commands.spawn(bundle)
+            // if children.len() != 2 {
+            //     // println!();
+            //     panic!("uh oh: {}, {meta:?}", children.len());
+            // }
+            let Some((head, tail)) = children.split_first() else { return; };
+            
+            let head_segment = make_segment(head, duration, elapsed, lean, angle, images, materials, meshes);
+            
+            let head_ref = commands.spawn(head_segment); //.with_children(|parent| {
+            let head_obj = head_ref.id();
+            if let Some(p) = parent {
+                commands.entity(p).add_child(head_obj);
+            }
+            // parent.unwrap().add_child(head_ref);
+            let parent = Some(head_obj);
+            // let mut prior_ratio = 0.0;
+            // assert!(tail.len() == 1);
+            for child in tail {
+                // match subtree {
+                    // SoundTree::Simul(_, _) => panic!("Got a simul in a simul"),
+                    // SoundTree::Seq(children, _) => {
+                    //     for child in children {
+                // let ratio = DivisionMethod::Weight.child_scale(&child) / DivisionMethod::Weight.parent_scale(&tree);
+                let local_lean = (base_lean - dir * child.size() as f32) * 0.8 / scale; // can't divide by 0 bc if scale is 0 vec is empty
+                    //         add_tree_rec(child, parent, duration * ratio, elapsed, lean + local_lean, commands, meshes, images, materials);
+                    //         // let child_segment = make_segment(child, duration, elapsed, lean + local_lean, images, materials, meshes);
+                    //         // let child_ref = parent.spawn(child_segment);
+                    //         time_elapsed += new_time;
+                    //     }
+                    // },
+                add_tree_rec(child, parent, duration, elapsed, lean + local_lean, 0.0, commands, meshes, images, materials);
+                // }
+            }
+            // });
+            // parent = Some(add_tree_rec(head.clone(), parent, duration, elapsed, lean, commands, meshes, images, materials));
+        },
+        SoundTree::Seq(children, _) => {
+            let mut ratio_elapsed = 0.0;
+            for child in children {
+                let ratio = DivisionMethod::Weight.child_scale(&child) / DivisionMethod::Weight.parent_scale(&tree);
+                // let ratio = match scaling {
+                //     Scaling::Linear => 1.0 / vec.len() as f64,
+                //     Scaling::Weight => child.subtree_weight(Scaling::exponent()) / self.weight(Scaling::exponent()),
+                //     // we do want scaling exponent to be an argument but for now...
+                //     // Scaling::SizeAligned => round_by(child.size_factor() / self.size_adjusted(), segment),
+                //     Scaling::Size => child.size() as f64 / self.size() as f64,
+                // };
+                let new_time = duration * ratio;
+                let time_elapsed = duration * ratio_elapsed;
+                let angle = PI * 0.5 * (ratio_elapsed + ratio / 2. - 0.5) as f32;
+                add_tree_rec(child, parent, new_time, elapsed + time_elapsed, lean, angle, commands, meshes, images, materials);
+                // output.append(&mut child.sound_times(sound_time + time_elapsed, new_time, scaling, lean));
+                ratio_elapsed += ratio;
+            }
+        },
+        SoundTree::Sound(_, _) => {
+            // let (r, g, b, _) = meta.base_color.as_rgba8();
+            // let debug_material = materials.add(StandardMaterial {
+            //     base_color_texture: Some(images.add(uv_debug_texture(r, g, b))),
+            //     ..default()
+            // });
+            let segment = make_segment(tree, duration, elapsed, lean, angle, images, materials, meshes);
+            // if parent.is_some() {
+            //     segment.transform = Transform::from_xyz(0.0, 1.0, 0.0)
+            //         .with_rotation(Quat::from_rotation_x(PI * (prior + width / 2.) / 10.));
+            // }
+            let ent_ref = commands.spawn(segment);
+            let ent = ent_ref.id();
+            if let Some(p) = parent {
+                commands.entity(p).add_child(ent);
+            }
+        },
+    }
+}
+
+// fn do_parents(layers: Vec<Vec<TreeSegment>>, layer: usize, seg: Segment) {
+//     for segment in layers[layer] {
+        
+//     }
+// }
 
 fn add_tree(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut images: ResMut<Assets<Image>>, mut materials: ResMut<Assets<StandardMaterial>>) {
     
     
     let strat = AsyncStratifier::new();
-    let (_, tree) = itype_translate(Context::new(std_env()), &tau(), strat).unwrap();
+    let (_, tree) = itype_translate(Context::new(std_env()), &omega(), strat).unwrap();
     // let tree = itype_translate(Context::new(std_env()), &tau(), AsyncStratifier).unwrap()
-    const MAX_TIME: f64 = 10.0;
-    for (_, timings, meta) in tree.sound_times(0.0, MAX_TIME, DivisionMethod::Weight, 0.0) {
-        let shape = meshes.add(Cylinder { radius: (timings.duration as f32 / 4.0).min(2.0), ..default() });
-        let transform = Transform::from_xyz((timings.start - MAX_TIME * 0.5) as f32, meta.max_depth as f32, timings.lean * 2.0)
-            .with_rotation(Quat::from_rotation_x(PI / 10.0));
-        let (r, g, b, _) = meta.base_color.as_rgba8();
-        let debug_material = materials.add(StandardMaterial {
-            base_color_texture: Some(images.add(uv_debug_texture(r, g, b))),
-            ..default()
-        });
-        commands.spawn((timings, meta, Mesh3d(shape), MeshMaterial3d(debug_material), transform, Shape));
-    }
+    add_tree_rec(&tree, None, MAX_TIME, 0.0, 0.0, 0.0, &mut commands, &mut meshes, &mut images, &mut materials);
+    // let mut material_map = HashMap::new();
+    // let mut depth_map = Vec::new();
+    // // let mut children_map = HashMap::new();
+    // for (_, timings, meta) in tree.sound_times(0.0, MAX_TIME, DivisionMethod::Weight, 0.0) {
+    //     let shape = meshes.add(Extrusion { base_shape: Rectangle::from_length(timings.duration as f32 / 2.0), half_depth: 0.5});
+    //     // let shape = meshes.add(Cylinder { radius: (timings.duration as f32 / 4.0).min(2.0), ..default() });
+    //     let transform = Transform::from_xyz((timings.start + timings.duration / 2. - MAX_TIME * 0.5) as f32, meta.max_depth as f32 + 0.5, timings.lean * 2.0)
+    //         .with_rotation(Quat::from_rotation_x(PI / 2.));
+    //     let (r, g, b, _) = meta.base_color.as_rgba8();
+    //     let debug_material = match material_map.get(&(r, g, b)) {
+    //         None => {
+    //             let new_mat = materials.add(StandardMaterial {
+    //                 base_color_texture: Some(images.add(uv_debug_texture(r, g, b))),
+    //                 ..default()
+    //             });
+    //             material_map.insert((r, g, b), new_mat.clone());
+    //             new_mat
+    //         },
+    //         Some(mat) => mat.clone(),
+    //     };
+    //     let depth = meta.max_depth;
+    //     // println!("{} {}", meta.name, meta.max_depth);
+    //     let segment = TreeSegment {
+    //         timings,
+    //         meta,
+    //         mesh: Mesh3d(shape),
+    //         material: MeshMaterial3d(debug_material),
+    //         transform,
+    //         shape: Shape
+    //     };
+    //     match depth_map.get_mut(depth) {
+    //         None => {
+    //             let v = vec![segment];
+    //             depth_map.insert(depth, v);
+    //         },
+    //         Some(v) => {
+    //             // let old_time = v.last().unwrap().timings;
+    //             // println!("extra time {}", segment.timings.start - old_time.start + old_time.duration);
+    //             // TODO we assume this is sorted but don't do anything to ensure it really
+    //             v.push(segment);
+    //         }
+    //     };
+    // }
+    // // let mut results = Vec::new();
+    // for (depth, layer) in depth_map.iter().enumerate() {
+    //     for segment in layer {
+    //         let x = commands.spawn(segment.clone());
+    //         // results.push(x);
+    //         // commands.spawn(segment.clone())
+    //         //     .with_children(|parent| {
+    //         //         if depth >= layer.len() {
+    //         //             return;
+    //         //         }
+    //         //         for child in depth_map[depth + 1].iter() {
+    //         //             if child.timings.start < segment.timings.start || child.timings.start > segment.timings.start + segment.timings.duration {
+    //         //                 continue;
+    //         //             }
+    //         //             parent.spawn(child.clone());
+    //         //         }
+    //         //     });
+    //     }
+    // }
+
+
     // commands.spawn((Tag::Pi, strat.for_pair(Tag::Pi, Tag::FreeVar), strat.imeta(&sets_of())));
     // commands.spawn((Tag::Application, strat.for_pair(Tag::Application, Tag::Lambda), strat.imeta(&tau())));
     // commands.spawn((Tag::Lambda, strat.for_pair(Tag::Application, Tag::Nat), strat.imeta(&sigma())));
     // commands.spawn((MelodyAsync::))
 }
 
-const SHAPES_X_EXTENT: f32 = 14.0;
-const EXTRUSION_X_EXTENT: f32 = 16.0;
-const Z_EXTENT: f32 = 5.0;
+// const SHAPES_X_EXTENT: f32 = 14.0;
+// const EXTRUSION_X_EXTENT: f32 = 16.0;
+// const Z_EXTENT: f32 = 5.0;
 
-#[derive(Component)]
+#[derive(Component, Clone, Copy)]
 struct Shape;
 
 /// Creates a colorful test pattern
@@ -594,7 +827,7 @@ fn uv_debug_texture(r: u8, g: u8, b: u8) -> Image {
 fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut images: ResMut<Assets<Image>>,
+    // mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     // let debug_material = materials.add(StandardMaterial {
@@ -669,19 +902,19 @@ fn setup(
     ));
 
     // ground plane
-    commands.spawn((
-        Mesh3d(meshes.add(Plane3d::default().mesh().size(50.0, 50.0).subdivisions(10))),
-        MeshMaterial3d(materials.add(Color::from(SILVER))),
-    ));
+    // commands.spawn((
+    //     Mesh3d(meshes.add(Plane3d::default().mesh().size(50.0, 50.0).subdivisions(10))),
+    //     MeshMaterial3d(materials.add(Color::from(SILVER))),
+    // ));
 
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(0.0, 10., 14.0).looking_at(Vec3::new(0., 5., 0.), Vec3::Y),
+        Transform::from_xyz(0.0, 15., 20.0).looking_at(Vec3::new(0., 7., 0.), Vec3::Y),
     ));
 
     #[cfg(not(target_arch = "wasm32"))]
     commands.spawn((
-        Text::new("this is my first step towards a new tree visualization!!"),
+        Text::new("this is my next step towards a new tree visualization!!"),
         Node {
             position_type: PositionType::Absolute,
             top: Val::Px(12.0),
@@ -690,8 +923,9 @@ fn setup(
         },
     ));
 }
-// #[derive(Resource)]
-// struct GreetTimer(bevy::prelude::Timer);
+
+#[derive(Resource)]
+struct TreeTimer(bevy::prelude::Timer);
 
 // fn play(time: Res<Time>, mut timer: ResMut<GreetTimer>, query: Query<&Timings, With<Timings>>) {
 //     if timer.0.tick(time.delta()).just_finished() {
@@ -703,7 +937,27 @@ fn setup(
 
 fn rotate(mut query: Query<&mut Transform, With<Shape>>, time: Res<Time>) {
     for mut transform in &mut query {
-        transform.rotate_y(time.delta_secs() / 0.5);
+        // transform.rotate_y(time.delta_secs() / 2.0);
+        transform.rotate_around(Vec3::new(0.0, SEG_LENGTH / 2., 0.0), Quat::from_rotation_y(time.delta_secs() / 2.0));
+    }
+}
+
+fn time_visibility(mut query: Query<(&mut Visibility, &Timings, &mut MeshMaterial3d<StandardMaterial>), With<Shape>>, time: Res<Time>, mut timer: ResMut<TreeTimer>) {
+    const WINDOW: f64 = 1.0;
+    // let moment = time
+    timer.0.tick(time.delta());
+    let moment = timer.0.elapsed_secs_f64();
+    // println!("moment: {moment}");
+    for (mut vis, timings, mut material) in &mut query {
+        if timings.start - moment <= WINDOW / 2. && moment - (timings.start + timings.duration) <= WINDOW / 2. {
+            if timings.start < moment && moment < timings.start + timings.duration {
+                let x = &mut material.0;
+            }
+            *vis = Visibility::Visible;
+        }
+        else {
+            *vis = Visibility::Hidden;
+        }
     }
 }
 

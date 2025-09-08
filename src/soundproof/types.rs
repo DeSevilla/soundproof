@@ -653,7 +653,7 @@ pub enum SoundTree {
     Sound(Arc<dyn SoundGenerator + Send + Sync>, TreeMetadata)
 }
 
-static SIGN: AtomicU32 = AtomicU32::new(0);
+pub static SIGN: AtomicU32 = AtomicU32::new(0);
 
 #[derive(Clone, Debug, PartialEq, Component)]
 pub struct TreeMetadata {

@@ -518,7 +518,7 @@ pub fn sequence_times_live(seq: Arc<Mutex<ConfigSequencer>>, times: Vec<(f64, Ar
 // }
 
 
-const MAX_TIME: f64 = 20.0;
+const MAX_TIME: f64 = 60.0;
 const SEG_LENGTH: f32 = 1.0;
 
 #[derive(Clone, Copy)]
@@ -712,7 +712,7 @@ fn add_tree(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut images
     
     
     let strat = AsyncStratifier::new();
-    let (_, tree) = itype_translate(Context::new(std_env()), &omega(), strat).unwrap();
+    let (_, tree) = itype_translate(Context::new(std_env()), &lem0(), strat).unwrap();
     // let tree = itype_translate(Context::new(std_env()), &tau(), AsyncStratifier).unwrap()
     add_tree_rec(&tree, None, MAX_TIME, 0.0, 0.0, 0.0, &mut commands, &mut meshes, &mut images, &mut materials);
     // let mut material_map = HashMap::new();
@@ -826,70 +826,10 @@ fn uv_debug_texture(r: u8, g: u8, b: u8) -> Image {
 
 fn setup(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
+    // mut meshes: ResMut<Assets<Mesh>>,
     // mut images: ResMut<Assets<Image>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    // mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    // let debug_material = materials.add(StandardMaterial {
-    //     base_color_texture: Some(images.add(uv_debug_texture())),
-    //     ..default()
-    // });
-
-    // let shapes = [
-    //     meshes.add(Cuboid::default()),
-    //     meshes.add(Tetrahedron::default()),
-    //     meshes.add(Capsule3d::default()),
-    //     meshes.add(Torus::default()),
-    //     meshes.add(Cylinder::default()),
-    //     meshes.add(Cone::default()),
-    //     meshes.add(ConicalFrustum::default()),
-    //     meshes.add(Sphere::default().mesh().ico(5).unwrap()),
-    //     meshes.add(Sphere::default().mesh().uv(32, 18)),
-    // ];
-
-    // let extrusions = [
-    //     meshes.add(Extrusion::new(Rectangle::default(), 1.)),
-    //     meshes.add(Extrusion::new(Capsule2d::default(), 1.)),
-    //     meshes.add(Extrusion::new(Annulus::default(), 1.)),
-    //     meshes.add(Extrusion::new(Circle::default(), 1.)),
-    //     meshes.add(Extrusion::new(Ellipse::default(), 1.)),
-    //     meshes.add(Extrusion::new(RegularPolygon::default(), 1.)),
-    //     meshes.add(Extrusion::new(Triangle2d::default(), 1.)),
-    // ];
-
-    // let num_shapes = shapes.len();
-
-    // for (i, shape) in shapes.into_iter().enumerate() {
-    //     commands.spawn((
-    //         Mesh3d(shape),
-    //         MeshMaterial3d(debug_material.clone()),
-    //         Transform::from_xyz(
-    //             -SHAPES_X_EXTENT / 2. + i as f32 / (num_shapes - 1) as f32 * SHAPES_X_EXTENT,
-    //             2.0,
-    //             Z_EXTENT / 2.,
-    //         )
-    //         .with_rotation(Quat::from_rotation_x(-PI / 4.)),
-    //         Shape,
-    //     ));
-    // }
-
-    // let num_extrusions = extrusions.len();
-
-    // for (i, shape) in extrusions.into_iter().enumerate() {
-    //     commands.spawn((
-    //         Mesh3d(shape),
-    //         MeshMaterial3d(debug_material.clone()),
-    //         Transform::from_xyz(
-    //             -EXTRUSION_X_EXTENT / 2.
-    //                 + i as f32 / (num_extrusions - 1) as f32 * EXTRUSION_X_EXTENT,
-    //             2.0,
-    //             -Z_EXTENT / 2.,
-    //         )
-    //         .with_rotation(Quat::from_rotation_x(-PI / 4.)),
-    //         Shape,
-    //     ));
-    // }
-
     commands.spawn((
         PointLight {
             shadows_enabled: true,
@@ -927,14 +867,6 @@ fn setup(
 #[derive(Resource)]
 struct TreeTimer(bevy::prelude::Timer);
 
-// fn play(time: Res<Time>, mut timer: ResMut<GreetTimer>, query: Query<&Timings, With<Timings>>) {
-//     if timer.0.tick(time.delta()).just_finished() {
-//         for timings in &query {
-//             println!("hello {timings:?}");
-//         }
-//     }
-// }
-
 fn rotate(mut query: Query<&mut Transform, With<Shape>>, time: Res<Time>) {
     for mut transform in &mut query {
         // transform.rotate_y(time.delta_secs() / 2.0);
@@ -944,7 +876,6 @@ fn rotate(mut query: Query<&mut Transform, With<Shape>>, time: Res<Time>) {
 
 fn time_visibility(mut query: Query<(&mut Visibility, &Timings, &mut MeshMaterial3d<StandardMaterial>), With<Shape>>, time: Res<Time>, mut timer: ResMut<TreeTimer>) {
     const WINDOW: f64 = 1.0;
-    // let moment = time
     timer.0.tick(time.delta());
     let moment = timer.0.elapsed_secs_f64();
     // println!("moment: {moment}");

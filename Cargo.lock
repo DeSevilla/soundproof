@@ -1003,6 +1003,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_procedural_audio"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b43f7bf2f6b18504462f9983d3895de11e5daab9379fbbb865e6c4f0c2867c98"
+dependencies = [
+ "bevy",
+ "cpal 0.15.3",
+ "fundsp",
+ "once_cell",
+ "rodio",
+ "uuid",
+]
+
+[[package]]
 name = "bevy_ptr"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4682,6 +4696,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7ceb6607dd738c99bc8cb28eff249b7cd5c8ec88b9db96c0608c1480d140fb1"
 dependencies = [
  "cpal 0.15.3",
+ "hound",
  "lewton",
 ]
 
@@ -4900,6 +4915,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "sha1_smol"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbfa15b3dddfee50a0fff136974b3e1bde555604ba463834a7eb7deb6417705d"
+
+[[package]]
 name = "sharded-slab"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4992,6 +5013,7 @@ name = "soundproof"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "bevy_procedural_audio",
  "clap",
  "cpal 0.16.0",
  "fundsp",
@@ -5746,6 +5768,7 @@ dependencies = [
  "getrandom 0.3.3",
  "js-sys",
  "serde",
+ "sha1_smol",
  "wasm-bindgen",
 ]
 

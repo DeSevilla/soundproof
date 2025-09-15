@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+use bevy::asset::uuid::Uuid;
 use bevy::prelude::*;
 use fundsp::hacker32::*;
 use piet_common::Color;
@@ -20,9 +21,9 @@ pub enum SoundproofError {
 }
 
 pub struct ConfigSequencer {
-    seq: Sequencer,
-    start_time: Option<Instant>,
-    live: bool,
+    pub seq: Sequencer,
+    pub start_time: Option<Instant>,
+    pub live: bool,
 }
 
 impl ConfigSequencer {
@@ -662,6 +663,7 @@ pub struct TreeMetadata {
     pub base_color: Color,
     pub alt_color: Color,
     pub max_depth: usize,
+    pub dspthing: Option<Uuid>,
     // pub lean: f32,
 }
 
@@ -708,7 +710,8 @@ impl SoundTree {
                 // parent: "".to_owned(),
                 base_color: Color::MAROON, 
                 alt_color: Color::MAROON, 
-                max_depth 
+                max_depth,
+                dspthing: None,
             })
         }
         // names += "]";
@@ -751,7 +754,8 @@ impl SoundTree {
                 // parent: "".to_owned(),
                 base_color: Color::MAROON,
                 alt_color: Color::MAROON,
-                max_depth
+                max_depth,
+                dspthing: None,
             })
         }
     }

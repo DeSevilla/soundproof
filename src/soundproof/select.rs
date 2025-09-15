@@ -41,13 +41,13 @@ pub trait Selector: Clone {
             ITerm::Fin(_) => TURQUOISE,
             _ => unimplemented!()
         };
-        TreeMetadata { name: term.to_string(), base_color: color, alt_color: color, max_depth: 0 }
+        TreeMetadata { name: term.to_string(), base_color: color, alt_color: color, max_depth: 0, dspthing: None }
     }
     fn cmeta(&self, term: &CTerm) -> TreeMetadata {
         match term {
             CTerm::Inf(it) => self.imeta(it),
             // CTerm::Lam(_) => TreeMetadata { name: term.to_string(), color: Color::YELLOW }
-            CTerm::Lam(_) => TreeMetadata { name: term.to_string(), base_color: DEEPPURPLE, alt_color: VIOLET, max_depth: 0 }
+            CTerm::Lam(_) => TreeMetadata { name: term.to_string(), base_color: DEEPPURPLE, alt_color: VIOLET, max_depth: 0, dspthing: None }
         }
     }
 }
@@ -474,7 +474,8 @@ impl Selector for FullStratifier {
             // parent: format!("{:?}", term.tag()),
             base_color,
             alt_color,
-            max_depth: self.depth
+            max_depth: self.depth,
+            dspthing: None,
         }
     }
 
@@ -489,7 +490,8 @@ impl Selector for FullStratifier {
                 name: format!("{:?}", term.tag()),
                 base_color: BLUES.1, 
                 alt_color: BLUES.0,
-                max_depth: self.depth
+                max_depth: self.depth,
+                dspthing: None,
             },
         }
     }

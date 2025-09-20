@@ -18,6 +18,7 @@ read_input = "0.8.6"
 minifb = "0.28.0"
 piet-common = "0.8.0"
 bevy_procedural_audio = "0.5.0"
+uuid = "1.18.1"
 
 [target.x86_64-pc-windows-msvc]
 linker = "rust-lld.exe"

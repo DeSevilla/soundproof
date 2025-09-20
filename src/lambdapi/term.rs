@@ -295,17 +295,17 @@ pub fn std_env() -> Vec<(Name, Type, Option<Value>)> {
             ))))))).eval(Context::new(vec![]))
             // clam(todo!()).eval(Context::new(vec![]))
         ),
-        // ite("P", sets_of()),
-        // ite("U", u()),
-        // ite("tau", tau()),
-        // ite("sigma", sigma()),
-        // ite("delta", delta()),
-        // ite("preomega", preomega()),
-        // ite("omega", omega()),
-        // ite("lem0", lem0()),
-        // ite("D", d()),
-        // ite("lem2", lem2()),
-        // ite("lem3", lem3()),
+        ite("P", sets_of()),
+        ite("U", u()),
+        ite("tau", tau()),
+        ite("sigma", sigma()),
+        ite("delta", delta()),
+        ite("preomega", preomega()),
+        ite("omega", omega()),
+        ite("lem0", lem0()),
+        ite("D", d()),
+        ite("lem2", lem2()),
+        ite("lem3", lem3()),
         // ("girard", Value::Fin(Box::new(Value::Zero)), Some(girard_reduced())),
     ];
     predata.into_iter().map(|(n, t, v)| (Name::Global(n.to_owned()), t, Some(v))).collect()

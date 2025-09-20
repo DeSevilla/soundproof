@@ -9,8 +9,8 @@ use crate::{
 
 /// Translates [ITerm]s into [SoundTree]s according to their type structure.
 /// Subterms have their types checked or inferred and have their melodies combined with their types' melodies.
-pub fn type_translate(term: &ITerm, meta: impl Selector) -> SoundTree {
-    itype_translate(Context::new(vec![]), term, meta).unwrap().1
+pub fn type_translate(term: &ITerm, meta: impl Selector) -> Result<SoundTree, String> {
+    itype_translate(Context::new(std_env()), term, meta).map(|r| r.1)
 }
 
 /// Translates [ITerm]s into [SoundTree]s according to their term structure.
@@ -22,7 +22,7 @@ pub fn term_translate(term: &ITerm, meta: impl Selector) -> SoundTree {
 pub fn buildup(terms: impl IntoIterator<Item=ITerm>, meta: impl Selector) -> SoundTree {
     // let middle = SoundTree::Sound(Rc::new(Melody::new_even(sine(), &[])), TreeMetadata { name: "".to_owned() });
     let sep = SoundTree::sound(Melody::new_even(sine(), &[G]), meta.imeta(&ITerm::Star));
-    let subtrees: Vec<SoundTree> = terms.into_iter().map(|t| type_translate(&t, meta.clone())).flat_map(|t| [t, sep.clone()]).collect();
+    let subtrees: Vec<SoundTree> = terms.into_iter().map(|t| type_translate(&t, meta.clone())).flat_map(|t| [t.unwrap(), sep.clone()]).collect();
     SoundTree::seq(subtrees)
 }
 

@@ -269,30 +269,6 @@ impl Args {
     }
 }
 
-// pub struct ReplState {
-//     value: ITerm,
-//     division: DivisionMethod,
-//     structure: Structure,
-//     content: AudioSelectorOptions,
-// }
-
-// impl TreeMaker {
-//     pub fn term(&self) -> &ITerm {
-//         &self.value
-//     }
-// }
-
-// impl From<&Args> for TreeMaker {
-//     fn from(value: &Args) -> Self {
-//         Self {
-//             value: value.term(),
-//             division: value.division,
-//             structure: value.structure,
-//             content: value.content
-//         }
-//     }
-// }
-
 pub fn async_tree(content: AsyncStratifier, term: &ITerm, ctx: Context) -> SoundTree {
     // type_translate(term, content)
     itype_translate(ctx, term, content).unwrap().1
@@ -545,8 +521,6 @@ pub struct TreeSegment {
     transform: Transform,
     visiblity: Visibility,
     shape: Shape,
-    // sound: AudioPlayer<DspSource>,
-    // playback: PlaybackSettings,
 }
 
 fn make_segment(
@@ -558,8 +532,6 @@ fn make_segment(
     _images: &mut ResMut<Assets<Image>>,
     materials: &mut ResMut<Assets<StandardMaterial>>, 
     meshes: &mut ResMut<Assets<Mesh>>,
-    // audiostuff: &mut ResMut<Assets<DspSource>>,
-    // dspmanager: &Res<DspManager>,
 ) -> TreeSegment {
     
     let SoundTree::Sound(sound, _) = tree else { panic!("unsound!") };
@@ -601,8 +573,6 @@ fn make_segment(
         // base_color_texture: Some(images.add(uv_debug_texture(r, g, b))),
         ..default()
     });
-    // let audio_player = AudioPlayer(audiostuff.add(dspmanager.get_graph_by_id(&meta.dspthing.unwrap()).unwrap()));
-    // let audio_player = AudioPlayer(audiostuff.add(triangle_w));
     TreeSegment {
         timings, 
         audio_info: AudioInfo::new(sound.clone()),
@@ -612,12 +582,6 @@ fn make_segment(
         transform,
         visiblity: Visibility::default(),
         shape: Shape,
-        // sound: audio_player,
-        // playback: PlaybackSettings {
-        //     paused: true,
-        //     mode: bevy::audio::PlaybackMode::Remove,
-        //     ..default()
-        // },
     }
 }
 
@@ -632,54 +596,35 @@ fn add_tree_rec(
     meshes: &mut ResMut<Assets<Mesh>>,
     images: &mut ResMut<Assets<Image>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
-    // dsp_sources: &mut ResMut<Assets<DspSource>>,
-    // dsp_manager: &Res<DspManager>,
-    counter: &ResMut<TreeCounter>,
+    index: Option<Index>,
 ) {
-    // if let Some(d) = tree.metadata().dspthing {
-    //     println!("adding sound with duration {duration}");
-    //     let timings = Timings {
-    //         duration,
-    //         start: elapsed,
-    //         lean,
-    //     };
-    //     let audio_player = AudioPlayer(dsp_sources.add(dsp_manager.get_graph_by_id(&d).unwrap()));
-    //     let playback = PlaybackSettings {
-    //         paused: true,
-    //         mode: bevy::audio::PlaybackMode::Loop,
-    //         ..default()
-    //     };
-    //     commands.spawn((audio_player, playback, timings));
-    // }
     let size = tree.size();
     match tree {
         SoundTree::Simul(children, _) => {
             let val = SIGN.fetch_add(1, Ordering::Relaxed);
             let dir = if val % 2 == 0 { 1.0 } else { -1.0 };
-            // let scale = vec.len();
             let scale = (size - 1) as f32;
             let base_lean = dir * scale / 2.0;
-            // if children.len() != 2 {
-            //     // println!();
-            //     panic!("uh oh: {}, {meta:?}", children.len());
-            // }
             let Some((head, tail)) = children.split_first() else { return; };
             
             let mut head_segment = make_segment(head, duration, elapsed, lean, angle, images, materials, meshes);
-            if parent.is_none() {
-                let sign = (-1_i32).pow(counter.0 as u32) as f32;
-                println!("sign: {sign} {} ", counter.0);
-                head_segment.transform = head_segment.transform.with_translation(Vec3::new(counter.0 as f32 * 2. * sign, 0., 0.))
+            if let Some(idx) = &index {
+                let sign = (-1_i32).pow(idx.0 as u32) as f32;
+                // println!("sign: {sign} {} ", index.0);
+                head_segment.transform = head_segment.transform.with_translation(Vec3::new(idx.0 as f32 * 2. * sign, 0., 0.))
             }
-            let head_ref = commands.spawn(head_segment); //.with_children(|parent| {
+            let mut head_ref = commands.spawn(head_segment);
+            if let Some(idx) = index {
+                head_ref.insert(idx);
+            }
             let head_obj = head_ref.id();
             if let Some(p) = parent {
                 commands.entity(p).add_child(head_obj);
             }
             let parent = Some(head_obj);
             for child in tail {
-                let local_lean = (base_lean - dir * child.size() as f32) * 0.8 / scale; // can't divide by 0 bc if scale is 0 vec is empty
-                add_tree_rec(child, parent, duration, elapsed, lean + local_lean, 0.0, commands, meshes, images, materials, counter);
+                let local_lean = (base_lean - dir * child.size() as f32) * 0.8 / scale; // can't divide by 0 bc if scale is 0 tail is empty
+                add_tree_rec(child, parent, duration, elapsed, lean + local_lean, 0.0, commands, meshes, images, materials, None);
             }
         },
         SoundTree::Seq(children, _) => {
@@ -689,8 +634,7 @@ fn add_tree_rec(
                 let new_time = duration * ratio;
                 let time_elapsed = duration * ratio_elapsed;
                 let angle = PI * 0.6 * (ratio_elapsed + ratio / 2. - 0.5) as f32;
-                add_tree_rec(child, parent, new_time, elapsed + time_elapsed, lean, angle, commands, meshes, images, materials, counter);
-                // output.append(&mut child.sound_times(sound_time + time_elapsed, new_time, scaling, lean));
+                add_tree_rec(child, parent, new_time, elapsed + time_elapsed, lean, angle, commands, meshes, images, materials, None);
                 ratio_elapsed += ratio;
             }
         },
@@ -711,15 +655,13 @@ fn add_tree(
     meshes: &mut ResMut<Assets<Mesh>>,
     images: &mut ResMut<Assets<Image>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
-    // dsp_sources: &mut ResMut<Assets<DspSource>>,
-    // dsp_manager: &Res<DspManager>,
     time: &Res<Time>,
     counter: &mut ResMut<TreeCounter>,
 ) {
     let current_time = time.elapsed_secs_f64();
-    counter.0 += 1;
+    let index = counter.insert();
     add_tree_rec(&tree, None, MAX_TIME as f64, current_time + 0.1, 0.0, 0.0, 
-        commands, meshes, images, materials, counter);
+        commands, meshes, images, materials, Some(index));
 }
 
 #[derive(Component, Clone, Copy)]
@@ -759,15 +701,15 @@ struct Shape;
 
 fn cleanup(
     mut commands: Commands,
-    query: Query<(&Timings, Entity), (With<Shape>, Without<ChildOf>)>,
+    query: Query<(&Timings, &Index, Entity), (With<Shape>, Without<ChildOf>)>,
     mut counter: ResMut<TreeCounter>,
     time: Res<Time>
 ) {
     let moment = time.elapsed_secs_f64();
-    for (timings, entity) in query {
-        if moment > timings.start + timings.duration {
+    for (timings, idx, entity) in query {
+        if moment > timings.start + timings.duration + WINDOW {
+            counter.remove(idx);
             commands.entity(entity).despawn();
-            counter.0 -= 1;
         }
     }
 }
@@ -777,7 +719,6 @@ pub struct InputTextBuffer;
 
 fn setup(
     mut commands: Commands,
-    // mut seq: ResMut<CfgSeq>,
     dsp_manager: Res<DspManager>,
     mut dsp_sources: ResMut<Assets<DspSource>>,
     seq_id: Res<SeqId>,
@@ -796,12 +737,6 @@ fn setup(
         Transform::from_xyz(8.0, 16.0, 8.0),
     ));
 
-    // ground plane
-    // commands.spawn((
-    //     Mesh3d(meshes.add(Plane3d::default().mesh().size(50.0, 50.0).subdivisions(10))),
-    //     MeshMaterial3d(materials.add(Color::from(SILVER))),
-    // ));
-
     commands.spawn((
         Camera3d::default(),
         Camera {
@@ -815,7 +750,7 @@ fn setup(
 
     #[cfg(not(target_arch = "wasm32"))]
     commands.spawn((
-        Text::new("drzewo!"),
+        Text::new(""),
         Node {
             position_type: PositionType::Absolute,
             top: Val::Px(12.0),
@@ -838,15 +773,6 @@ fn setup(
 #[derive(Component)]
 pub struct Center;
 
-// #[derive(Component)]
-// pub struct LambdaPiEnv(Arc<Mutex<Vec<(lambdapi::ast::Name, Type, Option<Value>)>>>);
-
-// impl Default for LambdaPiEnv {
-//     fn default() -> Self {
-//         Self(Arc::new(Mutex::new(std_env())))
-//     }
-// }
-
 #[derive(Event)]
 pub struct TextCmd(String);
 
@@ -856,8 +782,6 @@ fn run_command(
     mut meshes: ResMut<Assets<Mesh>>,
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    // mut dsp_sources: ResMut<Assets<DspSource>>,
-    // dsp_manager: Res<DspManager>,
     time: Res<Time>,
     mut counter: ResMut<TreeCounter>,
 ) {
@@ -908,13 +832,9 @@ fn handle_typing(
         }
         match (&event.logical_key, &event.text) {
             (Key::Enter, _) => {
-                // for mut obj in &mut query {
-                // buf.push_str(t);
                 println!("Sending command; {buf:?}");
                 text_cmd_events.write(TextCmd(buf.to_string()));
                 buf.clear();
-                    // obj.clear();
-                // }
             },
             (Key::Backspace, _) => {
                 buf.pop();
@@ -928,8 +848,6 @@ fn handle_typing(
     }
 }
 
-// #[derive(Resource)]
-// struct TreeTimer(bevy::prelude::Timer);
 
 fn rotate_root(mut query: Query<(&mut Transform, &Timings), (With<Shape>, Without<ChildOf>)>, time: Res<Time>) {
     for (mut transform, timings) in &mut query {
@@ -945,10 +863,6 @@ fn rotate_child(mut query: Query<(&mut Transform, &Timings), (With<Shape>, With<
     }
 }
 
-// fn update_timer(time: Res<Time>, mut timer: ResMut<TreeTimer>) {
-//     timer.0.tick(time.delta());
-// }
-
 fn color_change(
     mut query: Query<(&Timings, &MeshMaterial3d<StandardMaterial>), With<Shape>>, 
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -957,7 +871,7 @@ fn color_change(
     let moment = timer.elapsed_secs_f64();
     for (timings, material) in &mut query {
         if let Some(mat) = materials.get_mut(&material.0) {
-            if timings.start + timings.duration + 0.002 < moment {
+            if timings.start + timings.duration + 0.01 < moment {
                 // mat.base_color = Color::BLACK;
                 mat.emissive = Color::BLACK.to_linear();
             }
@@ -1008,30 +922,6 @@ const WINDOW: f64 = MAX_TIME as f64 / 12.;
 // const WINDOW: f64 = 2.0;
 const SEG_LENGTH: f32 = 1.0;
 
-// fn tree_app_thing(tree: &mut SoundTree, app: &mut App, duration: f64) {
-//     println!("tree app thing duration {duration}");
-
-//     let seq = Sequencer::new(false, 2);
-//     // let backend = Box::new(seq.backend());
-//     // let output = make_output(backend, args);
-//     // let output = unit::<U0, U2>(backend);
-//         // 
-//     // let seq = Arc::new(Mutex::new(ConfigSequencer::new(seq, true)));
-//     let mut seq = ConfigSequencer::new(seq, true);
-//     tree.generate_with(&mut seq, 0.0, duration, DivisionMethod::Weight, 0.0);
-//     let seq = seq.seq;
-//     let mut output = unit::<U0, U2>(Box::new(seq))
-//         >> stacki::<U2, _, _>(
-//             |_| shape(Adaptive::new(0.1, Tanh(0.5))) >> lowpass_hz(2500.0, 1.0) >> mul(0.3), // >> mul(10.0)
-//         );
-//     // let w = Wave::render(SAMPLE_RATE as f64, duration, &mut output);
-//     // w.save_wav16("output/output_bevy.wav").unwrap();
-//     let thing = move || output.clone();
-//     tree.metadata_mut().dspthing = Some(thing.id());
-//     // app.add_dsp_source(thing, SourceType::Static { duration: duration as f32 });
-//     app.add_dsp_source(thing, SourceType::Dynamic);
-// }
-
 #[derive(Clone, Copy)]
 pub struct HelloPlugin;
 
@@ -1080,38 +970,17 @@ impl AudioUnit for SharedBackend {
 
 impl Plugin for HelloPlugin {
     fn build(&self, app: &mut App) {
-        // let strat = AsyncStratifier::new();
-        // let (_, mut tree) = itype_translate(Context::new(std_env()), &tau(), strat).unwrap();
-        // tree_app_thing(&mut tree, app, MAX_TIME as f64);
-        // fn add_tree_system(tree: SoundTree) -> impl FnMut(Commands, ResMut<Assets<Mesh>>, ResMut<Assets<Image>>, ResMut<Assets<StandardMaterial>>, ResMut<Assets<DspSource>>, Res<DspManager>) {
-        //     move |
-        //         mut commands: Commands,
-        //         mut meshes: ResMut<Assets<Mesh>>,
-        //         mut images: ResMut<Assets<Image>>,
-        //         mut materials: ResMut<Assets<StandardMaterial>>,
-        //         mut dsp_sources: ResMut<Assets<DspSource>>,
-        //         dsp_manager: Res<DspManager>,
-        //     | 
-
-        //     add_tree_rec(&tree, None, MAX_TIME as f64, 0.0, 0.0, 0.0, 
-        //         &mut commands, &mut meshes, &mut images, &mut materials, &mut dsp_sources, &dsp_manager)
-        // }
-        // app.insert_resource(TreeTimer(bevy::prelude::Timer::from_seconds(MAX_TIME + 5.0, TimerMode::Repeating)));
         let mut seq = Sequencer::new(false, 2);
         let backend = SharedBackend::new(seq.backend());
         let thing = move || unit::<U0, U2>(make_output(Box::new(backend.clone()), FilterOptions::ClipLowpass));
         let id = thing.id();
         app.insert_resource(SeqId(id)); 
-        app.insert_resource(TreeCounter(0));
-        // let thing = move || { backend.clone(); &mut backend }; //{ let mut x = backend; &mut x };
         app.add_dsp_source(thing, SourceType::Dynamic);
         let cfg_seq = CfgSeq(ConfigSequencer::new(seq, true));
         app.insert_resource(cfg_seq);
+        app.insert_resource(TreeCounter::new());
         app.add_event::<TextCmd>();
-        // app.add_systems(Startup, (setup, add_tree_closure));
         app.add_systems(Startup, setup);
-        // app.add_systems(Startup, add_tree_system(tree));
-        // app.add_systems(Update, update_timer);
         app.add_systems(Update, (rotate_child, rotate_root));
         app.add_systems(Update, (time_visibility, cleanup));
         app.add_systems(Update, play_sound);
@@ -1121,7 +990,38 @@ impl Plugin for HelloPlugin {
 }
 
 #[derive(Resource)]
-pub struct TreeCounter(u64);
+pub struct TreeCounter(Vec<bool>);
+
+#[derive(Component)]
+pub struct Index(usize);
+
+impl TreeCounter {
+    pub fn new() -> Self {
+        Self(vec![])
+    }
+
+    pub fn insert(&mut self) -> Index {
+        for (i, b) in self.0.iter_mut().enumerate() {
+            if !*b {
+                *b = true;
+                // println!("inserting {i}");
+                return Index(i)
+            }
+        }
+        let res = self.0.len();
+        self.0.push(true);
+        // println!("inserting {res}");
+        Index(res)
+    }
+
+    pub fn remove(&mut self, idx: &Index) {
+        // this can leak in a sense but who cares
+        // length is like 10 here max
+        // can't panic as long as all Indexes are generated by the single TreeCounter
+        // println!("deleting from {}", idx.0);
+        self.0[idx.0] = false;
+    }
+}
 
 #[derive(Resource)]
 pub struct SeqId(uuid::Uuid);
@@ -1130,14 +1030,10 @@ pub struct SeqId(uuid::Uuid);
 pub struct CfgSeq(ConfigSequencer);
 
 pub fn main() {
-    // let tree = itype_translate(Context::new(std_env()), &tau(), AsyncStratifier).unwrap()
-    println!("Hello world! {MAX_TIME}");
     App::new()
         .add_plugins((
             DefaultPlugins.set(ImagePlugin::default_nearest()),
             DspPlugin::default(),
-            // #[cfg(not(target_arch = "wasm32"))]
-            // WireframePlugin::default(),
         ))
         .add_plugins(HelloPlugin)
         .run();

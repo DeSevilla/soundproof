@@ -74,18 +74,36 @@ pub fn sigma() -> ITerm {
     )
 }
 
+pub fn precedes() -> ITerm {
+    iann(
+        clam(
+            clam(
+                ipi(
+                    iapp(sets_of(), u()),
+                    ipi(
+                        iapp(iapp(sigma(), bnd(2)), bnd(0)),
+                        iapp(bnd(1), bnd(2))
+                    )
+                )
+            )
+        ),
+        ipi(u(), iapp(sets_of(), u()))
+    )
+}
+
 /// The subset of U such that for an element x, [tau]\([sigma]\(x)) is not a "predecessor" of x.
 /// See [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf) for details.
 pub fn delta() -> ITerm {
     iann(
         clam(ipi(
-            ipi(
-                iapp(sets_of(), u()),
-                ipi(
-                    iapp(iapp(sigma(), bnd(1)), bnd(0)),
-                    iapp(bnd(1), iapp(tau(), iapp(sigma(), bnd(2))))
-                )
-            ),
+            iapp(iapp(precedes(), bnd(0)), iapp(tau(), iapp(sigma(), bnd(0)))),
+            // ipi(
+            //     iapp(sets_of(), u()),
+            //     ipi(
+            //         iapp(iapp(sigma(), bnd(1)), bnd(0)),
+            //         iapp(bnd(1), iapp(tau(), iapp(sigma(), bnd(2))))
+            //     )
+            // ),
             void()
         )),
         iapp(sets_of(), u())
@@ -143,20 +161,19 @@ pub fn sigma_omega() -> ITerm {
 /// The proposition that [tau]\([sigma]\([omega])) is a predecessor of [omega].
 /// See [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf) for details.
 pub fn d() -> ITerm {
-    ipi(
-        sets_of_u(),
-        ipi(
-            iapp(sigma_omega(), bnd(0)),
-            iapp(bnd(1), iapp(tau(), sigma_omega()))
-        )
-    )
+    iapp(iapp(precedes(), omega()), iapp(tau(), iapp(sigma(), omega())))
+    // ipi(
+    //     sets_of_u(),
+    //     ipi(
+    //         iapp(sigma_omega(), bnd(0)),
+    //         iapp(bnd(1), iapp(tau(), sigma_omega()))
+    //     )
+    // )
 }
 
-/// A proof that [tau]\([sigma]\([omega])) is not a predecessor of [omega].
-/// See [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf) for details.
-pub fn lem2() -> ITerm {
+pub fn delta_inductive() -> ITerm {
     iann(
-        iapp(iapp(lem0(), delta()), clam(
+        clam(
             clam(
                 clam(
                     iapp(iapp(iapp(bnd(0), delta()), bnd(1)), clam(
@@ -166,7 +183,16 @@ pub fn lem2() -> ITerm {
                     ))
                 )
             )    
-        )), 
+        ),
+        iapp(preomega(), delta())
+    ) 
+}
+
+/// A proof that [tau]\([sigma]\([omega])) is not a predecessor of [omega].
+/// See [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf) for details.
+pub fn lem2() -> ITerm {
+    iann(
+        iapp(iapp(lem0(), delta()), delta_inductive()),
         ipi(d(), void())
     )
 }

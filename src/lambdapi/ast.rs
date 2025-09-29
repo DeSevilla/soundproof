@@ -199,12 +199,12 @@ impl TryFrom<CTerm> for ITerm {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, Component)]
 pub enum Tag {
-    Annotation,
+    Ann,
     Type,
     Pi,
-    Application,
-    BoundVar,
-    FreeVar,
+    App,
+    Bound,
+    Free,
     Zero,
     Nat,
     Finite,
@@ -215,12 +215,12 @@ impl Tag {
     pub fn all() -> Vec<Tag> {
         use Tag::*;
         vec![
-            Annotation,
+            Ann,
             Type,
             Pi,
-            Application,
-            BoundVar,
-            FreeVar,
+            App,
+            Bound,
+            Free,
             Zero,
             Nat,
             Finite,
@@ -242,12 +242,12 @@ impl ITerm {
     pub fn tag(&self) -> Tag {
         use Tag::*;
         match self {
-            ITerm::Ann(_, _) => Annotation,
+            ITerm::Ann(_, _) => Ann,
             ITerm::Star => Type,
             ITerm::Pi(_, _) => Pi,
-            ITerm::Bound(_) => BoundVar,
-            ITerm::Free(_) => FreeVar,
-            ITerm::App(_, _) => Application,
+            ITerm::Bound(_) => Bound,
+            ITerm::Free(_) => Free,
+            ITerm::App(_, _) => App,
             ITerm::Zero => Zero,
             ITerm::Nat => Nat,
             ITerm::Fin(_) => Finite,

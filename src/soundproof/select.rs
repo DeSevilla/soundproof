@@ -162,12 +162,12 @@ impl AsyncStratifier {
         // let tags = [Annotation, Type, Pi, Application, BoundVar, FreeVar, Zero, Nat, Finite, Lambda];
         for tag in Tag::all() {
             let info = match tag {
-                Annotation => AsyncNodeInfo::new([A, D, F, A], [1.0, 0.5, 1.5, 1.0], sawfir() * 0.75, (pass() | (800.0 + 100.0 * sine_hz(2.0)) | constant(1.0)) >> highpass()),
+                Ann => AsyncNodeInfo::new([A, D, F, A], [1.0, 0.5, 1.5, 1.0], sawfir() * 0.75, (pass() | (800.0 + 100.0 * sine_hz(2.0)) | constant(1.0)) >> highpass()),
                 Type => AsyncNodeInfo::new([B, C, E, E], [1.0, 1.0, 1.0, 1.0], violinish(), pass()),
                 Pi => AsyncNodeInfo::new([E, C, A, C], [0.5, 1.5, 0.5, 1.5], sinesaw() >> split() >> fbd(0.2, -5.0), split() >> fbd(0.25, -3.5)),
-                Application => AsyncNodeInfo::new([A, E, C, B], [2.5, 0.5, 0.5, 0.5], sine() * 2.0, reverb_distort()),
-                BoundVar => AsyncNodeInfo::new([A, A, E, C], [-1.0, 0., 0., 0.], violinish() * 1.1, major_chord() >> join::<U3>()),
-                FreeVar => AsyncNodeInfo::new([B, A, C, B], [1.5, 0.5, 1.0, 1.0], three_equivalents(wobbly_sine()) * 0.7, shape(Clip(0.75))),
+                App => AsyncNodeInfo::new([A, E, C, B], [2.5, 0.5, 0.5, 0.5], sine() * 2.0, reverb_distort()),
+                Bound => AsyncNodeInfo::new([A, A, E, C], [-1.0, 0., 0., 0.], violinish() * 1.1, major_chord() >> join::<U3>()),
+                Free => AsyncNodeInfo::new([B, A, C, B], [1.5, 0.5, 1.0, 1.0], three_equivalents(wobbly_sine()) * 0.7, shape(Clip(0.75))),
                 Zero => AsyncNodeInfo::new([E, F, C, A], [-1.0, 0., 0., 0.], sinesaw(), shape(Clip(100.0))),
                 Nat => AsyncNodeInfo::new([E, F, G, E], [-1.0, 0., 0., 0.], sinesaw(), shape(Clip(100.0))),
                 Finite => AsyncNodeInfo::new([A, A + 12, E, F], [0.7, 0.7, 2.1, 0.5], violinish() * 1.1, bell_hz(200.0, 1.0, 5.0)),

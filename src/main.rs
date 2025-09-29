@@ -4,26 +4,15 @@ use clap::*;
 use fundsp::{hacker32::*, realseq::SequencerBackend};
 // use read_input::prelude::input;
 // use read_input::InputBuild;
-use bevy::{core_pipeline::bloom::Bloom, input::keyboard::{Key, KeyboardInput}, prelude::*};
+use bevy::{core_pipeline::bloom::Bloom, input::keyboard::{Key, KeyboardInput}, prelude::*, window::WindowMode};
+use rand::Rng;
+// use bevy::render::camera::Viewport;
 
 use std::{f32::consts::PI, sync::atomic::Ordering};
 
-// #[cfg(not(target_arch = "wasm32"))]
-// // use bevy::pbr::wireframe::{WireframeConfig, WireframePlugin};
-// use bevy::{
-//     color::palettes::basic::SILVER,
-//     // prelude::*,
-//     render::{
-//         // render_asset::RenderAssetUsages,
-//         // render_resource::{Extent3d, TextureDimension, TextureFormat},
-//     },
-// };
-
 use std::sync::{Arc, Mutex};
-// use std::thread;
 use std::fs;
 use std::time::{Duration, Instant};
-// use tokio;
 
 use lambdapi::ast::*;
 use lambdapi::*;
@@ -33,6 +22,10 @@ use soundproof::select::*;
 use soundproof::*;
 use translate::*;
 use types::*;
+
+use crate::lambdapi::term::{full_env, iann, quote0, std_env};
+
+// use crate::lambdapi::term::std_env;
 
 // use crate::music::notes::A;
 // use parse::{statement, Statement};
@@ -343,7 +336,7 @@ pub fn make_output(sound: Box<impl AudioUnit + 'static>, filters: FilterOptions)
         FilterOptions::ClipLowpass => Box::new(
             unit::<U0, U2>(sound)
                 >> stacki::<U2, _, _>(
-                    |_| shape(Adaptive::new(0.1, Tanh(0.5))) >> lowpass_hz(2500.0, 1.0) >> mul(0.1), // >> mul(10.0)
+                    |_| shape(Adaptive::new(0.1, Tanh(0.5))) >> lowpass_hz(2500.0, 1.0) >> mul(0.4), // >> mul(10.0)
                 ),
         ),
         FilterOptions::Quiet => Box::new(unit::<U0, U2>(sound) >> (mul(0.05) | mul(0.05))),
@@ -467,9 +460,6 @@ pub fn sequence_times_live(seq: Arc<Mutex<ConfigSequencer>>, times: Vec<(Arc<dyn
 //             // Statement::Eval(_) => todo!(),
 //             // Statement::PutStrLn(_) => todo!(),
 //             Statement::Set(tag, notes) => {
-//                 let point = selector.get(&tag);
-//                 *point.notes.lock().unwrap() = notes;
-//                 println!("Set notes for {tag:?} to {notes:?}");
 //             }, //TODO this isn't it
 //             Statement::Command(cmd) => {
 //                 let terms = ["soundproof.exe"].into_iter().chain(cmd.split_whitespace());
@@ -523,6 +513,19 @@ pub struct TreeSegment {
     shape: Shape,
 }
 
+fn scale_width(duration: f64) -> f32 {
+    // let scaler = width;
+    // let scaler = (2.0_f32.powf(5. * timings.duration as f32 / MAX_TIME) / 4. + 0.02).min(0.25);
+    // let scaler = (timings.duration as f32 / 10.0).min(1.0);
+    // let scaler = timings.duration as f32 / 2.0;
+    (2.0 * duration as f32 / MAX_TIME + 0.02).min(0.25)
+}
+
+fn scale_length(duration: f64) -> f32 {
+    // SEG_LENGTH;
+    (scale_width(duration) * 6. * SEG_LENGTH).max(SEG_LENGTH * 0.7).min(SEG_LENGTH * 1.4)
+}
+
 fn make_segment(
     tree: &SoundTree,
     duration: f64,
@@ -534,27 +537,24 @@ fn make_segment(
     meshes: &mut ResMut<Assets<Mesh>>,
 ) -> TreeSegment {
     
-    let SoundTree::Sound(sound, _) = tree else { panic!("unsound!") };
+    let SoundTree::Sound(sound, meta) = tree else { panic!("unsound!") };
     // println!("duration: {duration}");
     let timings = Timings {
         duration,
         start: elapsed,
         lean,
     };
-    let meta = tree.metadata().clone();
-    // let scaler = width;
-    let scaler = (2.0_f32.powf(timings.duration as f32) / (4. * MAX_TIME) + 0.02).min(0.25);
-    // let scaler = (2.0 * timings.duration / MAX_TIME).min(1.0) as f32;
-    // let scaler = (timings.duration as f32 / 10.0).min(1.0);
-    // let scaler = timings.duration as f32 / 2.0;
+    // let meta =.clone();
+    let scaler = scale_width(timings.duration);
+    let seg_scaler = scale_length(timings.duration);
+    let shape = meshes.add(Cone::new(scaler, seg_scaler));
     // let shape = meshes.add(Cylinder::new(scaler, SEG_LENGTH));
-    let shape = meshes.add(Cone::new(scaler, SEG_LENGTH));
     // let shape = meshes.add(Sphere::new(scaler));
     // let shape = meshes.add(Extrusion { base_shape: Rectangle::from_length(scaler), half_depth: 0.2});
     // let shape = meshes.add(Capsule3d::new(scaler, SEG_LENGTH));
     // let transform = Transform::from_xyz((timings.start - timings.duration * 0.5) as f32 % 2.0, 1.0, timings.lean)
-    let mut transform = Transform::from_xyz(0.0, SEG_LENGTH, 0.0);
-    transform.rotate_around(Vec3::new(0.0, SEG_LENGTH * 0.5, 0.0), Quat::from_rotation_z(angle));
+    let mut transform = Transform::from_xyz(0.0, seg_scaler, 0.0);
+    transform.rotate_around(Vec3::new(0.0, seg_scaler * 0.5, 0.0), Quat::from_rotation_z(angle));
     transform.rotate(Quat::from_rotation_y(PI / 10.));
         // .with_rotation(Quat::from_rotation_z(angle));
     // let transform = if has_parent {
@@ -567,22 +567,56 @@ fn make_segment(
     //         .with_rotation(Quat::from_rotation_x(PI / 20.));
     //     // .with_rotation(Quat::from_rotation_x(PI / 10.0));
     // }
-    let (r, g, b, _) = tree.metadata().base_color.as_rgba8();
-    let debug_material = materials.add(StandardMaterial {
-        base_color: Color::linear_rgba(r as f32 / 255., g as f32 / 255., b as f32 / 255., 1.),
+    let (r, g, b, _) = meta.base_color.as_rgba();
+    let segment_material = materials.add(StandardMaterial {
+        base_color: Color::srgb(r as f32, g as f32, b as f32),
         // base_color_texture: Some(images.add(uv_debug_texture(r, g, b))),
         ..default()
     });
     TreeSegment {
         timings, 
         audio_info: AudioInfo::new(sound.clone()),
-        meta,
+        meta: meta.clone(),
         mesh: Mesh3d(shape),
-        material: MeshMaterial3d(debug_material),
+        material: MeshMaterial3d(segment_material),
         transform,
-        visiblity: Visibility::default(),
+        visiblity: DEFAULT_VIS,
         shape: Shape,
     }
+}
+
+fn spawn_segment<'a>(mut segment: TreeSegment, commands: &mut Commands, parent: Option<Entity>, index: Index) -> Entity {
+    if parent.is_none() {
+        segment.transform = segment.transform.with_translation(Vec3::new(index.x_pos(), 0., 0.));
+    }
+    let (r, g, b, _) = segment.meta.base_color.as_rgba();
+    commands.spawn((
+        Text::new(&segment.meta.name),
+        TextColor(Color::srgb(r as f32, g as f32, b as f32)),
+        TextFont::from_font_size(SIDE_FONT_SIZE),
+        segment.timings,
+        Node {
+            // position_type: PositionType::Relative,
+            // display: Display::Grid,
+            position_type: PositionType::Absolute,
+            top: Val::Px(20. * (segment.meta.max_depth + 1) as f32),
+            right: index.text_pos(),
+            ..default()
+        },
+        Visibility::Hidden,
+        VisibleWhenActive,
+    ));
+    let mut ent_ref = commands.spawn(segment);
+    // ent_ref.add_child(name_text);
+    let ent_id = ent_ref.id();
+    
+    if let Some(p) = parent {
+        commands.entity(p).add_child(ent_id);
+    }
+    else {
+        ent_ref.insert(index);
+    }
+    ent_id
 }
 
 fn add_tree_rec(
@@ -596,35 +630,36 @@ fn add_tree_rec(
     meshes: &mut ResMut<Assets<Mesh>>,
     images: &mut ResMut<Assets<Image>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
-    index: Option<Index>,
+    index: Index,
 ) {
     let size = tree.size();
     match tree {
         SoundTree::Simul(children, _) => {
-            let val = SIGN.fetch_add(1, Ordering::Relaxed);
-            let dir = if val % 2 == 0 { 1.0 } else { -1.0 };
+            let val = SIGN.fetch_xor(1, Ordering::Relaxed);
+            // let val = SIGN.fetch_add(1, Ordering::Relaxed);
+            // let dir = if val % 2 == 0 { 1.0 } else { -1.0 };
+            let dir = 1. - val as f32 * 2.;
             let scale = (size - 1) as f32;
             let base_lean = dir * scale / 2.0;
             let Some((head, tail)) = children.split_first() else { return; };
             
-            let mut head_segment = make_segment(head, duration, elapsed, lean, angle, images, materials, meshes);
-            if let Some(idx) = &index {
-                let sign = (-1_i32).pow(idx.0 as u32) as f32;
-                // println!("sign: {sign} {} ", index.0);
-                head_segment.transform = head_segment.transform.with_translation(Vec3::new(idx.0 as f32 * 2. * sign, 0., 0.))
-            }
-            let mut head_ref = commands.spawn(head_segment);
-            if let Some(idx) = index {
-                head_ref.insert(idx);
-            }
-            let head_obj = head_ref.id();
-            if let Some(p) = parent {
-                commands.entity(p).add_child(head_obj);
-            }
-            let parent = Some(head_obj);
+            let head_segment = make_segment(head, duration, elapsed, lean, angle, images, materials, meshes);
+            // if parent.is_none() {
+            //     head_segment.transform = head_segment.transform.with_translation(Vec3::new(index.x_pos(), 0., 0.))
+            // }
+            // let mut head_ref = commands.spawn(head_segment);
+            // if parent.is_none() {
+            //     head_ref.insert(index);
+            // }
+            let head_obj = spawn_segment(head_segment, commands, parent, index);
+            // let head_obj = head_ref.id();
+            // if let Some(p) = parent {
+            //     commands.entity(p).add_child(head_obj);
+            // }
+            // let parent = Some(head_obj);
             for child in tail {
                 let local_lean = (base_lean - dir * child.size() as f32) * 0.8 / scale; // can't divide by 0 bc if scale is 0 tail is empty
-                add_tree_rec(child, parent, duration, elapsed, lean + local_lean, 0.0, commands, meshes, images, materials, None);
+                add_tree_rec(child, Some(head_obj), duration, elapsed, lean + local_lean, 0.0, commands, meshes, images, materials, index);
             }
         },
         SoundTree::Seq(children, _) => {
@@ -634,23 +669,21 @@ fn add_tree_rec(
                 let new_time = duration * ratio;
                 let time_elapsed = duration * ratio_elapsed;
                 let angle = PI * 0.6 * (ratio_elapsed + ratio / 2. - 0.5) as f32;
-                add_tree_rec(child, parent, new_time, elapsed + time_elapsed, lean, angle, commands, meshes, images, materials, None);
+                add_tree_rec(child, parent, new_time, elapsed + time_elapsed, lean, angle, commands, meshes, images, materials, index);
                 ratio_elapsed += ratio;
             }
         },
         SoundTree::Sound(_, _) => {
             let segment = make_segment(tree, duration, elapsed, lean, angle, images, materials, meshes);
-            let ent_ref = commands.spawn(segment);
-            let ent = ent_ref.id();
-            if let Some(p) = parent {
-                commands.entity(p).add_child(ent);
-            }
+            spawn_segment(segment, commands, parent, index);
+            
         },
     }
 }
 
 fn add_tree(
     tree: &SoundTree,
+    name: &str,
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
     images: &mut ResMut<Assets<Image>>,
@@ -660,12 +693,51 @@ fn add_tree(
 ) {
     let current_time = time.elapsed_secs_f64();
     let index = counter.insert();
-    add_tree_rec(&tree, None, MAX_TIME as f64, current_time + 0.1, 0.0, 0.0, 
-        commands, meshes, images, materials, Some(index));
+    let start = current_time + 0.1;
+    let duration = (tree.size() as f64 * 0.5 + 10.).min(MAX_TIME as f64);
+    let timings = Timings {
+        start,
+        duration,
+        lean: 0.,
+    };
+    commands.spawn((
+        Text::new(name),
+        TextFont::from_font_size(SIDE_FONT_SIZE),
+        timings, 
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(0.),
+            right: index.text_pos(),
+            ..default()
+        },
+        Visibility::Hidden,
+        VisibleWhenActive,
+    ));
+    commands.spawn((
+        // TextLayout::new_with_justify(),
+        timings,
+        Node {
+            position_type: PositionType::Absolute,
+            justify_content: JustifyContent::Center,
+            top: Val::Percent(76.),
+            overflow: Overflow::visible(),
+            max_width: Val::Px(0.0),
+            // right: Val::Px(717. - 30. * index.x_pos()),
+            right: Val::Percent(50.25 - 1.97 * index.x_pos()),
+            ..default()
+        },
+        Visibility::Hidden,
+        VisibleWhenActive,
+    )).with_child((
+        Text::new(name),
+        TextFont::from_font_size(SIDE_FONT_SIZE),
+    ));
+    add_tree_rec(&tree, None, duration, start, 0.0, 0.0, 
+        commands, meshes, images, materials, index);
 }
 
-#[derive(Component, Clone, Copy)]
-struct Shape;
+// struct 
+
 
 /// Creates a colorful test pattern
 // fn uv_debug_texture(r: u8, g: u8, b: u8) -> Image {
@@ -714,50 +786,84 @@ fn cleanup(
     }
 }
 
-#[derive(Component)]
-pub struct InputTextBuffer;
-
 fn setup(
     mut commands: Commands,
     dsp_manager: Res<DspManager>,
+    
     mut dsp_sources: ResMut<Assets<DspSource>>,
     seq_id: Res<SeqId>,
-    // mut meshes: ResMut<Assets<Mesh>>,
+    mut meshes: ResMut<Assets<Mesh>>,
     // mut images: ResMut<Assets<Image>>,
-    // mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    // window: Single<&Window>,
 ) {
     commands.spawn((
         PointLight {
             shadows_enabled: true,
-            intensity: 15_00_000.,
+            intensity: 50_00_000.,
             range: 100.0,
             shadow_depth_bias: 0.2,
             ..default()
         },
-        Transform::from_xyz(8.0, 16.0, 8.0),
+        Transform::from_xyz(8.0, 40.0, 30.0),
     ));
+
+    let mut rng = rand::rng();
+    let shape = meshes.add(Sphere::new(0.035));
+    let material = materials.add(StandardMaterial {
+        base_color: Color::WHITE,
+        emissive: Color::WHITE.into(),
+        ..default()
+    });
+    for _ in 0..1000 {
+        let p = vec3(rng.random_range(-STAR_RANGE..STAR_RANGE), rng.random_range(-STAR_RANGE..STAR_RANGE), -30.0);
+        commands.spawn((
+            Mesh3d(shape.clone()),
+            MeshMaterial3d(material.clone()),
+            // Mesh3d
+            // Sprite {
+            //     color: Color::WHITE,
+            //     custom_size: Some(vec2(0.1, 0.1)),
+            //     ..default()
+            // },
+            Transform::from_translation(p),
+            BgStar,
+        ));
+    }
+
+    // let window_size = window.resolution.physical_size().as_vec2();
 
     commands.spawn((
         Camera3d::default(),
         Camera {
             hdr: true, // 1. HDR is required for bloom
             clear_color: ClearColorConfig::Custom(Color::BLACK),
+            // viewport: Some(Viewport {
+            //     physical_position: UVec2::new(0, 0),
+            //     physical_size: (window_size * 0.75).as_uvec2(),
+            //     ..default()
+            // }),
             ..default()
         },
         Bloom::NATURAL,
         Transform::from_xyz(0.0, 20., 30.0).looking_at(Vec3::new(0., 7., 0.), Vec3::Y),
     ));
 
-    #[cfg(not(target_arch = "wasm32"))]
     commands.spawn((
-        Text::new(""),
         Node {
+            display: Display::Flex,
+            justify_content: JustifyContent::Center,
             position_type: PositionType::Absolute,
-            top: Val::Px(12.0),
-            left: Val::Px(12.0),
+            top: Val::Percent(87.),
+            left: Val::Percent(50.),
+            max_width: Val::Px(0.0),
+            overflow: Overflow::visible(),
             ..default()
         },
+    )).with_child((
         InputTextBuffer,
+        Text::new(""),
+        TextLayout::new_with_justify(JustifyText::Center).with_no_wrap(),
     ));
 
     let seq = dsp_sources.add(dsp_manager.get_graph_by_id(&seq_id.0).unwrap());
@@ -770,11 +876,19 @@ fn setup(
     ));
 }
 
-#[derive(Component)]
-pub struct Center;
-
-#[derive(Event)]
-pub struct TextCmd(String);
+fn subst_std_env(mut iterm: ITerm) -> ITerm {
+    for (name, ty, val) in std_env() {
+        if let Some(v) = val {
+            let body = quote0(v);
+            let replacement = match body {
+                CTerm::Inf(it) => *it,
+                _ => iann(body, quote0(ty))
+            };
+            iterm = iterm.subst_free(&name, &replacement);
+        }
+    }
+    iterm
+}
 
 fn run_command(
     mut commands: Commands,
@@ -784,11 +898,14 @@ fn run_command(
     mut materials: ResMut<Assets<StandardMaterial>>,
     time: Res<Time>,
     mut counter: ResMut<TreeCounter>,
+    selector: ResMut<TheSelector>,
 ) {
     for text in text_events.read() {
         let cmd = match parse::statement(vec![], &text.0) {
             Ok((rest, stmts)) => {
-                println!("Rest: {rest}");
+                if rest.len() > 0 {
+                    println!("Rest: {rest}");
+                }
                 stmts
             },
             Err(e) => {
@@ -797,24 +914,46 @@ fn run_command(
             }
         };
         match cmd {
-            parse::Statement::Let(_, iterm) => {
+            parse::Statement::Let(name, iterm) => {
                 println!("got let statement");
-                let tree = match type_translate(&iterm, AsyncStratifier::new()) {
+                let iterm = match iterm {
+                    ITerm::Free(ref name) => {
+                        if let Some((ty, Some(val))) = Context::new(full_env()).find_free(name) {
+                            iann(quote0(val), quote0(ty))
+                        }
+                        else {
+                            iterm
+                        }
+                    },
+                    _ => subst_std_env(iterm), // might want to substitute out all the std_env variables, since they're just direct LP constructs?
+                };
+                let tree = match type_translate(&iterm, selector.0.clone()) {
                     Ok(t) => t,
                     Err(e) => { println!("{e}"); continue }
                 };
                 add_tree(
-                    &tree,
+                    &tree, &name,
                     &mut commands, &mut meshes, &mut images, &mut materials, 
                     &time, &mut counter,
                 );
             },
-            parse::Statement::Assume(_items) => todo!(),
-            parse::Statement::Eval(_iterm) => todo!(),
-            parse::Statement::PutStrLn(_) => todo!(),
-            parse::Statement::Out(_) => todo!(),
-            parse::Statement::Set(_tag, _notes) => todo!(),
-            parse::Statement::Command(_) => todo!(),
+            // parse::Statement::Assume(_items) => todo!(),
+            // parse::Statement::Eval(_iterm) => todo!(),
+            // parse::Statement::PutStrLn(_) => todo!(),
+            // parse::Statement::Out(_) => todo!(),
+            parse::Statement::Set(tag, notes) => {
+                let point = selector.0.get(&tag);
+                *point.notes.lock().unwrap() = notes;
+                println!("Set notes for {tag:?} to {notes:?}");
+            },
+            // parse::Statement::Clear => {
+            //     println!("clearing by advancing time from {}", time.elapsed_secs_f64());
+            //     // this doesn't work because we're using system time, we'd need our own timer
+            //     time.advance_by(Duration::from_secs(MAX_TIME.ceil() as u64 * 5));
+            //     println!("{}", time.elapsed_secs_f64());
+            // }
+            _ => todo!()
+            // parse::Statement::Command(_) => todo!(),
         }
     }
 }
@@ -839,6 +978,9 @@ fn handle_typing(
             (Key::Backspace, _) => {
                 buf.pop();
             },
+            (Key::Escape, _) => {
+                buf.clear();
+            }
             (_, Some(text)) => {
                 buf.push_str(text);
             },
@@ -848,18 +990,31 @@ fn handle_typing(
     }
 }
 
+fn move_stars(query: Query<&mut Transform, With<BgStar>>, time: Res<Time>) {
+    for mut transform in query {
+        let elapsed = time.delta_secs();
+        if transform.translation.x > STAR_RANGE {
+            transform.translation.x -= 2. * STAR_RANGE;
+        }
+        if transform.translation.y > STAR_RANGE {
+            transform.translation.y -= 2. * STAR_RANGE;
+        }
+        
+        transform.translation += Vec3::new(elapsed * 0.5, elapsed * 0.3, 0.);
+    }
+}
 
 fn rotate_root(mut query: Query<(&mut Transform, &Timings), (With<Shape>, Without<ChildOf>)>, time: Res<Time>) {
     for (mut transform, timings) in &mut query {
-        let factor = 5. + (1. / timings.duration as f32) % 4.;
+        let factor = 11. - (MAX_TIME / timings.duration as f32) % 6.;
         transform.rotate_y(time.delta_secs() / factor);
     }
 }
 
 fn rotate_child(mut query: Query<(&mut Transform, &Timings), (With<Shape>, With<ChildOf>)>, time: Res<Time>) {
     for (mut transform, timings) in &mut query {
-        let factor = 5. + (1. / timings.duration as f32) % 4.;
-        transform.rotate_around(Vec3::new(0.0, SEG_LENGTH / 2., 0.0), Quat::from_rotation_y(time.delta_secs() / factor));
+        let factor = 11. - (MAX_TIME / timings.duration as f32) % 6.;
+        transform.rotate_around(Vec3::new(0.0, scale_length(timings.duration) / 2., 0.0), Quat::from_rotation_y(time.delta_secs() / factor));
     }
 }
 
@@ -871,11 +1026,12 @@ fn color_change(
     let moment = timer.elapsed_secs_f64();
     for (timings, material) in &mut query {
         if let Some(mat) = materials.get_mut(&material.0) {
-            if timings.start + timings.duration + 0.01 < moment {
+            let delta = timer.delta_secs_f64();
+            if timings.start + timings.duration + delta < moment {
                 // mat.base_color = Color::BLACK;
                 mat.emissive = Color::BLACK.to_linear();
             }
-            else if timings.start - 0.002 <= moment && moment <= timings.start + timings.duration + 0.002 {
+            else if timings.start - delta / 2. <= moment && moment <= timings.start + timings.duration + delta / 2. {
                 mat.emissive = mat.base_color.to_linear() * 5.0;
                 // mat.metallic = 1.0;
                 // mat.reflectance = 1.0;
@@ -891,16 +1047,27 @@ fn color_change(
     }
 }
 
-fn time_visibility(mut query: Query<(&mut Visibility, &Timings), With<Shape>>, timer: Res<Time>) {
+
+fn visibility_active(mut query: Query<(&mut Visibility, &Timings), With<VisibleWhenActive>>, timer: Res<Time>) {
+    let moment = timer.elapsed_secs_f64();
+    // println!("moment: {moment}");
+    for (mut vis, timings) in &mut query {
+        if timings.start <= moment && moment <= (timings.start + timings.duration) {
+            *vis = Visibility::Visible;
+        }
+        else {
+            *vis = Visibility::Hidden;
+        }
+    }
+}
+
+fn visibility_window(mut query: Query<(&mut Visibility, &Timings), With<Shape>>, timer: Res<Time>) {
     let moment = timer.elapsed_secs_f64();
     // println!("moment: {moment}");
     for (mut vis, timings) in &mut query {
         if timings.start - moment <= WINDOW / 2. && moment - (timings.start + timings.duration) <= WINDOW / 2. {
             *vis = Visibility::Visible;
-        } // TODO actually despawn stuff, mb in another system
-        // else if moment > timings.start + timings.duration as f64 {
-        //     *vis = Visibility::Visible;
-        // }
+        }
         else {
             *vis = Visibility::Hidden;
         }
@@ -911,19 +1078,97 @@ fn play_sound(query: Query<(&Timings, &mut AudioInfo)>, mut seq: ResMut<CfgSeq>,
     let moment = timer.elapsed_secs_f64();
     for (timings, mut info) in query {
         if !info.done && timings.start - moment < 0.1 {
+            // let loc = transform.translation();
             info.sound.sequence(&mut seq.0, timings.start - moment, timings.duration, timings.lean);
             info.done = true;
         }
     }
 }
 
-const MAX_TIME: f32 = 45.0;
-const WINDOW: f64 = MAX_TIME as f64 / 12.;
-// const WINDOW: f64 = 2.0;
+const SIDE_FONT_SIZE: f32 = 15.;
+const DEFAULT_VIS: Visibility = Visibility::Hidden;
+const TIME_MULT: f32 = 4.;
+const MAX_TIME: f32 = 60.0 * TIME_MULT;
+const WINDOW: f64 = 2.0 * TIME_MULT as f64;
+const STAR_RANGE: f32 = 50.0;
+// const WINDOW: f64 = MAX_TIME as f64 / 12.;
 const SEG_LENGTH: f32 = 1.0;
 
-#[derive(Clone, Copy)]
-pub struct HelloPlugin;
+#[derive(Component, Clone, Copy)]
+struct Shape;
+
+#[derive(Component)]
+pub struct InputTextBuffer;
+
+#[derive(Component)]
+pub struct BgStar;
+
+#[derive(Component)]
+pub struct Center;
+
+#[derive(Event)]
+pub struct TextCmd(String);
+
+#[derive(Component)]
+struct VisibleWhenActive;
+#[derive(Resource)]
+pub struct TheSelector(AsyncStratifier);
+
+#[derive(Resource)]
+pub struct SeqId(uuid::Uuid);
+
+#[derive(Resource)]
+pub struct CfgSeq(ConfigSequencer);
+
+#[derive(Resource)]
+pub struct TreeCounter(Vec<bool>);
+
+#[derive(Component, Clone, Copy)]
+pub struct Index(usize);
+
+impl Index {
+    pub fn x_pos(&self) -> f32 {
+        let sign = (-1_i32).pow(self.0 as u32) as f32;
+        // println!("sign: {sign} {} ", index.0);
+        sign * (self.0 as f32 + 0.5) * 3.
+    }
+
+    pub fn text_pos(&self) -> Val {
+        let sign = (-1_i32).pow(self.0 as u32) as f32;
+        let start = (0.5 - 0.5 * sign) * (1500. - 3. * SIDE_FONT_SIZE);
+        let calc = start + sign * (self.0 as f32 / 2.).floor() * 6.5 * SIDE_FONT_SIZE;
+        Val::Px(calc)
+        // Val::Px(self.0 as f32 * 6.5 * SIDE_FONT_SIZE)
+    }
+}
+
+impl TreeCounter {
+    pub fn new() -> Self {
+        Self(vec![])
+    }
+
+    pub fn insert(&mut self) -> Index {
+        for (i, b) in self.0.iter_mut().enumerate() {
+            if !*b {
+                *b = true;
+                // println!("inserting {i}");
+                return Index(i)
+            }
+        }
+        let res = self.0.len();
+        self.0.push(true);
+        // println!("inserting {res}");
+        Index(res)
+    }
+
+    pub fn remove(&mut self, idx: &Index) {
+        // can panic but w/e
+        // if we disabled copy/clone for Index it wouldn't be able to
+        // but i think we do want a child to know what its index is...
+        // println!("deleting from {}", idx.0);
+        self.0[idx.0] = false;
+    }
+}
 
 #[derive(Clone)]
 pub struct SharedBackend(Arc<Mutex<SequencerBackend>>);
@@ -968,71 +1213,46 @@ impl AudioUnit for SharedBackend {
     }
 }
 
+#[derive(Clone, Copy)]
+pub struct HelloPlugin;
+
 impl Plugin for HelloPlugin {
     fn build(&self, app: &mut App) {
         let mut seq = Sequencer::new(false, 2);
         let backend = SharedBackend::new(seq.backend());
         let thing = move || unit::<U0, U2>(make_output(Box::new(backend.clone()), FilterOptions::ClipLowpass));
         let id = thing.id();
-        app.insert_resource(SeqId(id)); 
         app.add_dsp_source(thing, SourceType::Dynamic);
+        app.insert_resource(SeqId(id)); 
         let cfg_seq = CfgSeq(ConfigSequencer::new(seq, true));
         app.insert_resource(cfg_seq);
+        app.insert_resource(TheSelector(AsyncStratifier::new()));
         app.insert_resource(TreeCounter::new());
         app.add_event::<TextCmd>();
         app.add_systems(Startup, setup);
-        app.add_systems(Update, (rotate_child, rotate_root));
-        app.add_systems(Update, (time_visibility, cleanup));
+        app.add_systems(FixedUpdate, move_stars);
+        // app.add_systems(Update, (visibility_active, rotate_root));
+        app.add_systems(FixedUpdate, (rotate_child, rotate_root));
+        app.add_systems(FixedUpdate, (visibility_active, visibility_window, cleanup));
+        app.add_systems(FixedUpdate, color_change);
         app.add_systems(Update, play_sound);
-        app.add_systems(Update, color_change);
         app.add_systems(Update, (handle_typing, run_command));
     }
 }
 
-#[derive(Resource)]
-pub struct TreeCounter(Vec<bool>);
-
-#[derive(Component)]
-pub struct Index(usize);
-
-impl TreeCounter {
-    pub fn new() -> Self {
-        Self(vec![])
-    }
-
-    pub fn insert(&mut self) -> Index {
-        for (i, b) in self.0.iter_mut().enumerate() {
-            if !*b {
-                *b = true;
-                // println!("inserting {i}");
-                return Index(i)
-            }
-        }
-        let res = self.0.len();
-        self.0.push(true);
-        // println!("inserting {res}");
-        Index(res)
-    }
-
-    pub fn remove(&mut self, idx: &Index) {
-        // this can leak in a sense but who cares
-        // length is like 10 here max
-        // can't panic as long as all Indexes are generated by the single TreeCounter
-        // println!("deleting from {}", idx.0);
-        self.0[idx.0] = false;
-    }
-}
-
-#[derive(Resource)]
-pub struct SeqId(uuid::Uuid);
-
-#[derive(Resource)]
-pub struct CfgSeq(ConfigSequencer);
 
 pub fn main() {
     App::new()
         .add_plugins((
-            DefaultPlugins.set(ImagePlugin::default_nearest()),
+            DefaultPlugins
+                .set(ImagePlugin::default_nearest())
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        mode: WindowMode::BorderlessFullscreen(MonitorSelection::Primary),
+                        ..default()
+                    }),
+                    ..default()
+                }),
             DspPlugin::default(),
         ))
         .add_plugins(HelloPlugin)

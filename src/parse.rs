@@ -19,6 +19,7 @@ pub enum Statement {
     PutStrLn(String),
     Out(String),
     Set(Tag, [i32; 4]),
+    Clear,
     Command(String),
 }
 
@@ -50,17 +51,21 @@ pub fn statement(vars: Vec<String>, input: &str) -> IResult<&str, Statement> {
             let (i, (tag, _, n1, n2, n3, n4)) = parens((node_tag, tag("="), note, note, note, note)).parse(i)?;
             Ok((i, Set(tag, [n1, n2, n3, n4])))
         },
+        |i| {
+            let (i, _) = tag("clear").parse(i)?;
+            Ok((i, Clear))
+        },
     )).parse(input)
 }
 
 fn node_tag(input: &str) -> IResult<&str, Tag> {
     alt((
-        tag("Ann").map(|_| Tag::Annotation),
+        tag("Ann").map(|_| Tag::Ann),
         tag("Star").map(|_| Tag::Type),
         tag("Pi").map(|_| Tag::Pi),
-        tag("App").map(|_| Tag::Application),
-        tag("Bound").map(|_| Tag::BoundVar),
-        tag("Free").map(|_| Tag::FreeVar),
+        tag("App").map(|_| Tag::App),
+        tag("Bound").map(|_| Tag::Bound),
+        tag("Free").map(|_| Tag::Free),
         tag("Zero").map(|_| Tag::Zero),
         tag("Fin").map(|_| Tag::Finite),
         tag("Lam").map(|_| Tag::Lambda),

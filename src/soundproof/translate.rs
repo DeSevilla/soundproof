@@ -10,7 +10,7 @@ use crate::{
 /// Translates [ITerm]s into [SoundTree]s according to their type structure.
 /// Subterms have their types checked or inferred and have their melodies combined with their types' melodies.
 pub fn type_translate(term: &ITerm, meta: impl Selector) -> Result<SoundTree, String> {
-    itype_translate(Context::new(std_env()), term, meta).map(|r| r.1)
+    itype_translate(Context::new(full_env()), term, meta).map(|r| r.1)
 }
 
 /// Translates [ITerm]s into [SoundTree]s according to their term structure.
@@ -72,7 +72,7 @@ pub fn itype_translate(ctx: Context, term: &ITerm, meta: impl Selector) -> Resul
             let name = new_ctx.bind_type(ty.clone());
             let trgtree = ctype_translate(
                 new_ctx,
-                &trg.clone().subst(0, ITerm::Free(name)), 
+                &trg.clone().subst(0, &ITerm::Free(name)), 
                 Value::Star,
                 meta
             )?;
@@ -248,7 +248,7 @@ pub fn ctype_translate(ctx: Context, term: &CTerm, ty: Type, meta: impl Selector
                 let mut new_ctx = ctx.clone();
                 let name = new_ctx.bind_type(*src);
                 let subtree = ctype_translate(new_ctx,
-                    &body.clone().subst(0, ITerm::Free(name.clone())), trg(vfree(name)), meta.clone()
+                    &body.clone().subst(0, &ITerm::Free(name.clone())), trg(vfree(name)), meta.clone()
                 )?;
                 Ok(SoundTree::simul([node_mel, subtree]))
             },

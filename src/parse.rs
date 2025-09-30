@@ -61,7 +61,7 @@ pub fn statement(vars: Vec<String>, input: &str) -> IResult<&str, Statement> {
 fn node_tag(input: &str) -> IResult<&str, Tag> {
     alt((
         tag("Ann").map(|_| Tag::Ann),
-        tag("Star").map(|_| Tag::Type),
+        tag("Type").map(|_| Tag::Type),
         tag("Pi").map(|_| Tag::Pi),
         tag("App").map(|_| Tag::App),
         tag("Bound").map(|_| Tag::Bound),

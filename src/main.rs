@@ -585,7 +585,7 @@ fn make_segment(
     }
 }
 
-fn spawn_segment<'a>(mut segment: TreeSegment, commands: &mut Commands, parent: Option<Entity>, index: Index) -> Entity {
+fn spawn_segment<'a>(mut segment: TreeSegment, commands: &mut Commands, font: &Handle<Font>, parent: Option<Entity>, index: Index) -> Entity {
     if parent.is_none() {
         segment.transform = segment.transform.with_translation(Vec3::new(index.x_pos(), 0., 0.));
     }
@@ -593,7 +593,7 @@ fn spawn_segment<'a>(mut segment: TreeSegment, commands: &mut Commands, parent: 
     commands.spawn((
         Text::new(&segment.meta.name),
         TextColor(Color::srgb(r as f32, g as f32, b as f32)),
-        TextFont::from_font_size(SIDE_FONT_SIZE),
+        TextFont::from_font(font.clone()).with_font_size(SIDE_FONT_SIZE),
         segment.timings,
         Node {
             // position_type: PositionType::Relative,
@@ -627,6 +627,7 @@ fn add_tree_rec(
     lean: f32,
     angle: f32,
     commands: &mut Commands,
+    font: &Handle<Font>,
     meshes: &mut ResMut<Assets<Mesh>>,
     images: &mut ResMut<Assets<Image>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
@@ -651,7 +652,7 @@ fn add_tree_rec(
             // if parent.is_none() {
             //     head_ref.insert(index);
             // }
-            let head_obj = spawn_segment(head_segment, commands, parent, index);
+            let head_obj = spawn_segment(head_segment, commands, font, parent, index);
             // let head_obj = head_ref.id();
             // if let Some(p) = parent {
             //     commands.entity(p).add_child(head_obj);
@@ -659,7 +660,7 @@ fn add_tree_rec(
             // let parent = Some(head_obj);
             for child in tail {
                 let local_lean = (base_lean - dir * child.size() as f32) * 0.8 / scale; // can't divide by 0 bc if scale is 0 tail is empty
-                add_tree_rec(child, Some(head_obj), duration, elapsed, lean + local_lean, 0.0, commands, meshes, images, materials, index);
+                add_tree_rec(child, Some(head_obj), duration, elapsed, lean + local_lean, 0.0, commands, font, meshes, images, materials, index);
             }
         },
         SoundTree::Seq(children, _) => {
@@ -669,13 +670,13 @@ fn add_tree_rec(
                 let new_time = duration * ratio;
                 let time_elapsed = duration * ratio_elapsed;
                 let angle = PI * 0.6 * (ratio_elapsed + ratio / 2. - 0.5) as f32;
-                add_tree_rec(child, parent, new_time, elapsed + time_elapsed, lean, angle, commands, meshes, images, materials, index);
+                add_tree_rec(child, parent, new_time, elapsed + time_elapsed, lean, angle, commands, font, meshes, images, materials, index);
                 ratio_elapsed += ratio;
             }
         },
         SoundTree::Sound(_, _) => {
             let segment = make_segment(tree, duration, elapsed, lean, angle, images, materials, meshes);
-            spawn_segment(segment, commands, parent, index);
+            spawn_segment(segment, commands, font, parent, index);
             
         },
     }
@@ -685,6 +686,7 @@ fn add_tree(
     tree: &SoundTree,
     name: &str,
     commands: &mut Commands,
+    font: &Handle<Font>,
     meshes: &mut ResMut<Assets<Mesh>>,
     images: &mut ResMut<Assets<Image>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
@@ -702,7 +704,8 @@ fn add_tree(
     };
     commands.spawn((
         Text::new(name),
-        TextFont::from_font_size(SIDE_FONT_SIZE),
+        TextFont::from_font(font.clone()).with_font_size(SIDE_FONT_SIZE),
+        // TextFont::from_font_size(SIDE_FONT_SIZE),
         timings, 
         Node {
             position_type: PositionType::Absolute,
@@ -730,10 +733,11 @@ fn add_tree(
         VisibleWhenActive,
     )).with_child((
         Text::new(name),
-        TextFont::from_font_size(SIDE_FONT_SIZE),
+        TextFont::from_font(font.clone()).with_font_size(SIDE_FONT_SIZE),
+        // TextFont::from_font_size(SIDE_FONT_SIZE),
     ));
     add_tree_rec(&tree, None, duration, start, 0.0, 0.0, 
-        commands, meshes, images, materials, index);
+        commands, font, meshes, images, materials, index);
 }
 
 // struct 
@@ -788,8 +792,8 @@ fn cleanup(
 
 fn setup(
     mut commands: Commands,
+    assets: Res<AssetServer>,
     dsp_manager: Res<DspManager>,
-    
     mut dsp_sources: ResMut<Assets<DspSource>>,
     seq_id: Res<SeqId>,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -862,6 +866,7 @@ fn setup(
         },
     )).with_child((
         InputTextBuffer,
+        TextFont::from_font(assets.load(TEXT_FONT)).with_font_size(SIDE_FONT_SIZE),
         Text::new(""),
         TextLayout::new_with_justify(JustifyText::Center).with_no_wrap(),
     ));
@@ -892,6 +897,7 @@ fn subst_std_env(mut iterm: ITerm) -> ITerm {
 
 fn run_command(
     mut commands: Commands,
+    asset_server: Res<AssetServer>,
     mut text_events: EventReader<TextCmd>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut images: ResMut<Assets<Image>>,
@@ -931,9 +937,10 @@ fn run_command(
                     Ok(t) => t,
                     Err(e) => { println!("{e}"); continue }
                 };
+                let font = asset_server.load(TEXT_FONT);
                 add_tree(
                     &tree, &name,
-                    &mut commands, &mut meshes, &mut images, &mut materials, 
+                    &mut commands, &font, &mut meshes, &mut images, &mut materials, 
                     &time, &mut counter,
                 );
             },
@@ -982,7 +989,9 @@ fn handle_typing(
                 buf.clear();
             }
             (_, Some(text)) => {
+                // println!("Adding {text} at {} bytes", text.bytes().len());
                 buf.push_str(text);
+                // println!("Buffer now at {}", buf.bytes().len());
             },
             _ => continue,
             // info!("{:?}: '{}'", event, character);
@@ -1085,6 +1094,7 @@ fn play_sound(query: Query<(&Timings, &mut AudioInfo)>, mut seq: ResMut<CfgSeq>,
     }
 }
 
+const TEXT_FONT: &'static str = "fonts/lambda/JetBrainsMonoLamb-Regular.ttf";
 const SIDE_FONT_SIZE: f32 = 15.;
 const DEFAULT_VIS: Visibility = Visibility::Hidden;
 const TIME_MULT: f32 = 4.;

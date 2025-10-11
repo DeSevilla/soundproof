@@ -156,16 +156,16 @@ pub fn fm_sines(mult: f32, amp_min: f32, amp_max: f32, amp_freq: f32) -> An<impl
     (split() >> ((mul(mult) >> sine()) * (base + sine_hz(amp_freq) * gap) * pass() * ratio)) & pass() >> sine()
 }
 
-
+// node takes one input (frequency in Hz) and produces audio output
 pub fn violinish() -> An<impl AudioNode<Inputs=U1, Outputs=U1>> {
-    let instrument = pass() + 5.0 * ((saw_hz(0.33) * 4.0 + 7.0) >> sine());
-    // let instrument = instrument >> saw() >> fir((1.0, 0.25, 0.25,  1.0));
-    let instrument = instrument >> saw() >> fir((1.0, 0.25, 0.25,  1.0));
-    // let instrument = instrument >> saw() >> split() >> (pass() | pass() * 5.0) >> moog_q(1.0);
-    let instrument = split() >> (instrument | (pass() - ((sine_hz(0.33) + 1.25) >> sine()) * 20.0) | constant(5.0));
-     //>> shape_fn(tanh);
-    // let instrument = instrument >> split() >> !fbd(0.2, -2.0) >> !fbd(0.3, -3.0) >> fbd(0.1, -4.0);
-    instrument >> highpass()
+    // Frequency modulation
+    let frequency = pass() + 5.0 * ((saw_hz(0.33) * 4.0 + 7.0) >> sine());
+    // Saw wave into finite impulse response
+    let instrument = frequency >> saw() >> fir((1.0, 0.25, 0.25,  1.0));
+    split()
+        // Set up parameters for highpass filter
+        >> (instrument | (pass() - ((sine_hz(0.33) + 1.25) >> sine()) * 20.0) | constant(5.0))
+        >> highpass()
 }
 
 pub fn invert() -> An<impl AudioNode<Inputs=U1, Outputs=U1>> {

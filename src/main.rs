@@ -696,7 +696,11 @@ fn add_tree(
     let current_time = time.elapsed_secs_f64();
     let index = counter.insert();
     let start = current_time + 0.1;
-    let duration = (tree.size() as f64 * 0.5 + 10.).min(MAX_TIME as f64);
+    let duration = if name == "girard" {
+        600. - current_time
+    } else {
+        (tree.size() as f64 * 0.5 + 10.).min(MAX_TIME as f64)
+    };
     let timings = Timings {
         start,
         duration,
@@ -722,11 +726,11 @@ fn add_tree(
         Node {
             position_type: PositionType::Absolute,
             justify_content: JustifyContent::Center,
-            top: Val::Percent(76.),
+            top: Val::Percent(82.6),
             overflow: Overflow::visible(),
             max_width: Val::Px(0.0),
             // right: Val::Px(717. - 30. * index.x_pos()),
-            right: Val::Percent(50.25 - 1.97 * index.x_pos()),
+            right: Val::Percent(50.24 - 2.52 * index.x_pos()),
             ..default()
         },
         Visibility::Hidden,
@@ -850,7 +854,7 @@ fn setup(
             ..default()
         },
         Bloom::NATURAL,
-        Transform::from_xyz(0.0, 20., 30.0).looking_at(Vec3::new(0., 7., 0.), Vec3::Y),
+        Transform::from_xyz(0.0, 20., 23.0).looking_at(Vec3::new(0., 8., 0.), Vec3::Y),
     ));
 
     commands.spawn((
@@ -858,7 +862,7 @@ fn setup(
             display: Display::Flex,
             justify_content: JustifyContent::Center,
             position_type: PositionType::Absolute,
-            top: Val::Percent(87.),
+            top: Val::Percent(89.),
             left: Val::Percent(50.),
             max_width: Val::Px(0.0),
             overflow: Overflow::visible(),
@@ -866,7 +870,7 @@ fn setup(
         },
     )).with_child((
         InputTextBuffer,
-        TextFont::from_font(assets.load(TEXT_FONT)).with_font_size(SIDE_FONT_SIZE),
+        TextFont::from_font(assets.load(TEXT_FONT)).with_font_size(COMMAND_FONT_SIZE),
         Text::new(""),
         TextLayout::new_with_justify(JustifyText::Center).with_no_wrap(),
     ));
@@ -874,7 +878,7 @@ fn setup(
     let seq = dsp_sources.add(dsp_manager.get_graph_by_id(&seq_id.0).unwrap());
 
     commands.spawn((AudioPlayer(seq), PlaybackSettings { paused: false, ..Default::default()}));
-
+    println!("{:?}", quote0(sigma().eval(Context::new(full_env()))));
     commands.spawn((
         Center,
         Transform::from_xyz(0., 0., 0.)
@@ -1096,10 +1100,11 @@ fn play_sound(query: Query<(&Timings, &mut AudioInfo)>, mut seq: ResMut<CfgSeq>,
 
 const TEXT_FONT: &'static str = "fonts/lambda/JetBrainsMonoLamb-Regular.ttf";
 const SIDE_FONT_SIZE: f32 = 15.;
+const COMMAND_FONT_SIZE: f32 = 20.;
 const DEFAULT_VIS: Visibility = Visibility::Hidden;
 const TIME_MULT: f32 = 4.;
 const MAX_TIME: f32 = 60.0 * TIME_MULT;
-const WINDOW: f64 = 2.0 * TIME_MULT as f64;
+const WINDOW: f64 = 2.5 * TIME_MULT as f64;
 const STAR_RANGE: f32 = 50.0;
 // const WINDOW: f64 = MAX_TIME as f64 / 12.;
 const SEG_LENGTH: f32 = 1.0;
@@ -1145,12 +1150,18 @@ impl Index {
 
     pub fn text_pos(&self) -> Val {
         let sign = (-1_i32).pow(self.0 as u32) as f32;
-        let start = (0.5 - 0.5 * sign) * (1500. - 3. * SIDE_FONT_SIZE);
+        let start = (0.5 - 0.5 * sign) * (1500. - 35. - 3. * SIDE_FONT_SIZE) + 35.;
         let calc = start + sign * (self.0 as f32 / 2.).floor() * 6.5 * SIDE_FONT_SIZE;
+        // println!("{} {start} -> {calc}", self.0);
         Val::Px(calc)
         // Val::Px(self.0 as f32 * 6.5 * SIDE_FONT_SIZE)
     }
 }
+
+// fn print_window_size(query: Single<&Window>) {
+//     let window = query.into_inner();
+//     println!("{} : {} : [{}, {}]", window.size(), window.physical_size(), window.width(), window.height());
+// }
 
 impl TreeCounter {
     pub fn new() -> Self {
@@ -1240,6 +1251,7 @@ impl Plugin for HelloPlugin {
         app.insert_resource(TreeCounter::new());
         app.add_event::<TextCmd>();
         app.add_systems(Startup, setup);
+        // app.add_systems(Startup, print_window_size);
         app.add_systems(FixedUpdate, move_stars);
         // app.add_systems(Update, (visibility_active, rotate_root));
         app.add_systems(FixedUpdate, (rotate_child, rotate_root));

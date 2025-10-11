@@ -88,13 +88,16 @@ pub fn itype_translate(ctx: Context, term: &ITerm, meta: impl Selector) -> Resul
             Ok((ty.clone(), tree))
         },
         ITerm::App(f, x) => {
-            let (fty, ftree) = itype_translate(ctx.clone(), f, meta.clone())?;
+            let (fty, ftree) = f.infer_translate(ctx.clone(), meta.clone())?;
             match fty {
                 Value::Pi(src, trg) => {
-                    let xtree = ctype_translate(ctx.clone(), x, *src, meta)?;
-                    Ok((trg(x.clone().eval(ctx.clone())), SoundTree::simul([node_melody, SoundTree::seq([ftree, xtree])])))
+                    let xtree = x.check_translate(ctx.clone(), *src, meta)?;
+                    Ok((
+                        trg(x.clone().eval(ctx.clone())),
+                        SoundTree::simul([node_melody, SoundTree::seq([ftree, xtree])])
+                    ))
                 },
-                _ => Err("Invalid function call".to_owned())
+                _ => Err("Function must have Pi type".to_owned())
             }
         },
         ITerm::Nat => Ok((Value::Star, node_melody)),

@@ -19,6 +19,7 @@ pub const SAMPLE_RATE: f32 = 48000.0; //this is the default for my computer
 pub fn make_spectrograph(input_wav: &Path, output_png: &Path) {
     println!("Computing spectrograph...");
     let mut spectrograph = SpecOptionsBuilder::new(2.pow(12))
+        // .scale(10.)
         .load_data_from_file(input_wav).unwrap()
         .build().unwrap();
     let mut spectrograph = spectrograph.compute();

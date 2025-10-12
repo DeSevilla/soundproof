@@ -69,7 +69,7 @@ pub trait SoundGenerator {
     /// Generate audio into the sequencer for a duration starting at the selected time.
     fn sequence(&self, seq: &mut ConfigSequencer, start_time: f64, duration: f64, lean: f32);
 
-    /// Duration of the Sequenceable prior to stretching
+    /// Duration of the SoundGenerator prior to stretching (relevant for audio clips)
     fn base_duration(&self) -> f64;
 }
 

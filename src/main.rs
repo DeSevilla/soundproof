@@ -395,7 +395,7 @@ pub fn sequence_times_live(seq: Arc<Mutex<ConfigSequencer>>, times: Vec<(Arc<dyn
         //     println!("nowhere to go");
         // }
         let mut seq = seq.lock().unwrap();
-        sound.sequence(&mut seq, timings.start, timings.duration, timings.lean);
+        sound.sequence(&mut seq, timings.start, timings.duration, 0.0 /*timings.lean*/);
     }
 }
 
@@ -518,7 +518,7 @@ fn scale_width(duration: f64) -> f32 {
     // let scaler = (2.0_f32.powf(5. * timings.duration as f32 / MAX_TIME) / 4. + 0.02).min(0.25);
     // let scaler = (timings.duration as f32 / 10.0).min(1.0);
     // let scaler = timings.duration as f32 / 2.0;
-    (2.0 * duration as f32 / MAX_TIME + 0.02).min(0.25)
+    (2.0 * duration as f32 / MAX_TIME + 0.037).min(0.23)
 }
 
 fn scale_length(duration: f64) -> f32 {
@@ -633,15 +633,16 @@ fn add_tree_rec(
     materials: &mut ResMut<Assets<StandardMaterial>>,
     index: Index,
 ) {
-    let size = tree.size();
+    // let size = tree.size();
     match tree {
         SoundTree::Simul(children, _) => {
             let val = SIGN.fetch_xor(1, Ordering::Relaxed);
             // let val = SIGN.fetch_add(1, Ordering::Relaxed);
             // let dir = if val % 2 == 0 { 1.0 } else { -1.0 };
             let dir = 1. - val as f32 * 2.;
-            let scale = (size - 1) as f32;
-            let base_lean = dir * scale / 2.0;
+            // let scale = (size - 1) as f32;
+            // let base_lean = dir * scale / 2.0;
+            let base_lean = dir;
             let Some((head, tail)) = children.split_first() else { return; };
             
             let head_segment = make_segment(head, duration, elapsed, lean, angle, images, materials, meshes);
@@ -659,8 +660,9 @@ fn add_tree_rec(
             // }
             // let parent = Some(head_obj);
             for child in tail {
-                let local_lean = (base_lean - dir * child.size() as f32) * 0.8 / scale; // can't divide by 0 bc if scale is 0 tail is empty
-                add_tree_rec(child, Some(head_obj), duration, elapsed, lean + local_lean, 0.0, commands, font, meshes, images, materials, index);
+                let local_lean = base_lean;
+                // let local_lean = (base_lean - dir * child.size() as f32) * 0.8 / scale; // can't divide by 0 bc if scale is 0 tail is empty
+                add_tree_rec(child, Some(head_obj), duration, elapsed, local_lean, 0.0, commands, font, meshes, images, materials, index);
             }
         },
         SoundTree::Seq(children, _) => {
@@ -808,7 +810,7 @@ fn setup(
     commands.spawn((
         PointLight {
             shadows_enabled: true,
-            intensity: 50_00_000.,
+            intensity: 25_000_000.,
             range: 100.0,
             shadow_depth_bias: 0.2,
             ..default()
@@ -817,7 +819,7 @@ fn setup(
     ));
 
     let mut rng = rand::rng();
-    let shape = meshes.add(Sphere::new(0.035));
+    let shape = meshes.add(Sphere::new(0.07));
     let material = materials.add(StandardMaterial {
         base_color: Color::WHITE,
         emissive: Color::WHITE.into(),
@@ -1092,14 +1094,18 @@ fn play_sound(query: Query<(&Timings, &mut AudioInfo)>, mut seq: ResMut<CfgSeq>,
     for (timings, mut info) in query {
         if !info.done && timings.start - moment < 0.1 {
             // let loc = transform.translation();
-            info.sound.sequence(&mut seq.0, timings.start - moment, timings.duration, timings.lean);
+            if (timings.lean.abs() != 1. && timings.lean.abs() != 0.) {
+                println!("{}", timings.lean);
+                panic!();
+            }
+            info.sound.sequence(&mut seq.0, timings.start - moment, timings.duration, timings.lean); //timings.lean);
             info.done = true;
         }
     }
 }
 
 const TEXT_FONT: &'static str = "fonts/lambda/JetBrainsMonoLamb-Regular.ttf";
-const SIDE_FONT_SIZE: f32 = 15.;
+const SIDE_FONT_SIZE: f32 = 20.;
 const COMMAND_FONT_SIZE: f32 = 20.;
 const DEFAULT_VIS: Visibility = Visibility::Hidden;
 const TIME_MULT: f32 = 4.;
@@ -1150,7 +1156,7 @@ impl Index {
 
     pub fn text_pos(&self) -> Val {
         let sign = (-1_i32).pow(self.0 as u32) as f32;
-        let start = (0.5 - 0.5 * sign) * (1500. - 35. - 3. * SIDE_FONT_SIZE) + 35.;
+        let start = (0.5 - 0.5 * sign) * (1500. - 50. - 3. * SIDE_FONT_SIZE) + 35.;
         let calc = start + sign * (self.0 as f32 / 2.).floor() * 6.5 * SIDE_FONT_SIZE;
         // println!("{} {start} -> {calc}", self.0);
         Val::Px(calc)

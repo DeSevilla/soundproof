@@ -679,7 +679,6 @@ fn add_tree_rec(
         SoundTree::Sound(_, _) => {
             let segment = make_segment(tree, duration, elapsed, lean, angle, images, materials, meshes);
             spawn_segment(segment, commands, font, parent, index);
-            
         },
     }
 }
@@ -699,7 +698,7 @@ fn add_tree(
     let index = counter.insert();
     let start = current_time + 0.1;
     let duration = if name == "girard" {
-        600. - current_time
+        630. - current_time
     } else {
         (tree.size() as f64 * 0.5 + 10.).min(MAX_TIME as f64)
     };
@@ -746,7 +745,8 @@ fn add_tree(
         commands, font, meshes, images, materials, index);
 }
 
-// struct 
+// #[derive(Resource)]
+// struct TheTimer(Timer);
 
 
 /// Creates a colorful test pattern
@@ -1094,10 +1094,10 @@ fn play_sound(query: Query<(&Timings, &mut AudioInfo)>, mut seq: ResMut<CfgSeq>,
     for (timings, mut info) in query {
         if !info.done && timings.start - moment < 0.1 {
             // let loc = transform.translation();
-            if (timings.lean.abs() != 1. && timings.lean.abs() != 0.) {
-                println!("{}", timings.lean);
-                panic!();
-            }
+            // if (timings.lean.abs() != 1. && timings.lean.abs() != 0.) {
+            //     println!("{}", timings.lean);
+            //     panic!();
+            // }
             info.sound.sequence(&mut seq.0, timings.start - moment, timings.duration, timings.lean); //timings.lean);
             info.done = true;
         }

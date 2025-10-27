@@ -19,6 +19,7 @@ pub enum Statement {
     PutStrLn(String),
     Out(String),
     Set(Tag, [i32; 4]),
+    Clear,
     Command(String),
 }
 
@@ -31,7 +32,7 @@ pub fn statement(vars: Vec<String>, input: &str) -> IResult<&str, Statement> {
     let (input, _) = ws(input)?;
     alt((
         |i| {
-            let (i, (_, n, _, v)) = (tag("let"), identifier, tag("="), |i| iterm(0, vars.clone(), i)).parse(i)?;
+            let (i, (_, n, _, v, _)) = (tag("let"), identifier, tag("="), |i| iterm(0, vars.clone(), i), ws).parse(i)?;
             Ok((i, Let(n, v)))
         },
         |i| { 
@@ -50,17 +51,21 @@ pub fn statement(vars: Vec<String>, input: &str) -> IResult<&str, Statement> {
             let (i, (tag, _, n1, n2, n3, n4)) = parens((node_tag, tag("="), note, note, note, note)).parse(i)?;
             Ok((i, Set(tag, [n1, n2, n3, n4])))
         },
+        |i| {
+            let (i, _) = tag("clear").parse(i)?;
+            Ok((i, Clear))
+        },
     )).parse(input)
 }
 
 fn node_tag(input: &str) -> IResult<&str, Tag> {
     alt((
-        tag("Ann").map(|_| Tag::Annotation),
-        tag("Star").map(|_| Tag::Type),
+        tag("Ann").map(|_| Tag::Ann),
+        tag("Type").map(|_| Tag::Type),
         tag("Pi").map(|_| Tag::Pi),
-        tag("App").map(|_| Tag::Application),
-        tag("Bound").map(|_| Tag::BoundVar),
-        tag("Free").map(|_| Tag::FreeVar),
+        tag("App").map(|_| Tag::App),
+        tag("Bound").map(|_| Tag::Bound),
+        tag("Free").map(|_| Tag::Free),
         tag("Zero").map(|_| Tag::Zero),
         tag("Fin").map(|_| Tag::Finite),
         tag("Lam").map(|_| Tag::Lambda),
@@ -122,7 +127,7 @@ pub fn ws<'a, E>(input: &'a str) -> IResult<&'a str, (), E>
 {
     // take_while1(char::is_whitespace)(input)
     // many0(one_of(" \t\r\n")).map(|v| v.into_iter().collect()).parse(input)
-    (multispace0, many0((multispace0, tag("--"), not_line_ending, line_ending))).map(|_| ()).parse(input)
+    (multispace0, many0((multispace0, tag("--"), not_line_ending, many0(line_ending)))).map(|_| ()).parse(input)
     // preceded(multispace0, (tag("--"), not_line_ending))
     // space0(input)
 }

@@ -21,7 +21,7 @@ impl ITerm {
                 let src_ty = src.eval(ctx.clone());
                 let mut new_ctx = ctx.clone();
                 let name = new_ctx.bind_type(src_ty.clone());
-                let modified = trg.clone().subst(0, ITerm::Free(name));
+                let modified = trg.clone().subst(0, &ITerm::Free(name));
                 // println!("pi2: {src:?} |- {modified:?}");
                 // let trg_ty = trg.eval(new_ctx.clone());
                 // the type of the body, with its local variable assigned the parameter type, must be a type
@@ -208,7 +208,7 @@ impl CTerm {
                     // let ii = ctx.len();
                     let mut new_ctx = ctx.clone();
                     let name = new_ctx.bind_type(*src);
-                    body.clone().subst(0, ITerm::Free(name.clone())).check_type(new_ctx, trg(vfree(name)))
+                    body.clone().subst(0, &ITerm::Free(name.clone())).check_type(new_ctx, trg(vfree(name)))
                 },
                 _ => Err("Function must have pi type".to_owned())
             }

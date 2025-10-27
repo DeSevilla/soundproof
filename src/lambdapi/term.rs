@@ -1,6 +1,8 @@
-use std::{borrow::Borrow, rc::Rc};
+use std::{borrow::Borrow, path::Path, rc::Rc};
 
-use crate::{lambdapi::{ast::*, d, delta, girard_reduced, lem0, lem2, lem3, omega, preomega, sets_of, sigma, tau, u, validate}, parse::{iterm, statement, statements}};
+use crate::lambdapi::*;
+#[cfg(test)]
+use crate::parse::{iterm, statement, statements};
 
 /// Abbreviated constructor for free variable Values.
 pub fn vfree(name: Name) -> Value {
@@ -74,38 +76,71 @@ pub fn inat(n: usize) -> ITerm {
 }
 
 impl ITerm {
-    /// Recursively substitutes in a new ITerm for a bound variable.
-    pub fn subst(self, i: usize, new: ITerm) -> Self {
+    pub fn subst_free(self, name: &Name, new: &ITerm) -> ITerm {
         match self {
-            ITerm::Ann(b, t) => ITerm::Ann(b.subst(i, new.clone()), t.subst(i, new)),
-            ITerm::Star => ITerm::Star,
-            ITerm::Pi(src, trg) => ITerm::Pi(src.subst(i, new.clone()), trg.subst(i + 1, new)),
-            ITerm::Bound(j) => if i == j { new } else { ITerm::Bound(j) },
-            ITerm::Free(n) => ITerm::Free(n),
-            ITerm::App(f, x) => ITerm::App(Box::new(f.subst(i, new.clone())), x.subst(i, new)),
-            ITerm::Nat => ITerm::Nat,
-            ITerm::Zero => ITerm::Zero,
+            ITerm::Ann(b, t) => ITerm::Ann(b.subst_free(name, new), t.subst_free(name, new)),
+            ITerm::Star => self,
+            ITerm::Pi(src, trg) => ITerm::Pi(src.subst_free(name, new), trg.subst_free(name, new)),
+            ITerm::Bound(j) => self,
+            ITerm::Free(ref n) => if name == n { new.clone() } else { self },
+            ITerm::App(f, x) => ITerm::App(Box::new(f.subst_free(name, new)), x.subst_free(name, new)),
+            ITerm::Nat => self,
+            ITerm::Zero => self,
+            ITerm::Succ(cterm) => ITerm::Succ(cterm.subst_free(name, new)),
+            ITerm::NatElim(motive, base, ind, k) => ITerm::NatElim(
+                        motive.subst_free(name, new), base.subst_free(name, new), ind.subst_free(name, new), k.subst_free(name, new)
+                    ),
+            ITerm::Fin(cterm) => ITerm::Fin(cterm.subst_free(name, new)),
+            ITerm::FinElim(motive, base, ind, n, f) => ITerm::FinElim(
+                        motive.subst_free(name, new), base.subst_free(name, new), ind.subst_free(name, new), n.subst_free(name, new), f.subst_free(name, new)
+                    ),
+            ITerm::FZero(cterm) => ITerm::FZero(cterm.subst_free(name, new)),
+            ITerm::FSucc(n, f) => ITerm::FSucc(n.subst_free(name, new), f.subst_free(name, new)),
+            ITerm::Eq(a, x, y) => ITerm::Eq(a.subst_free(name, new), x.subst_free(name, new), y.subst_free(name, new)),
+            ITerm::Refl(a, x) => ITerm::Refl(a.subst_free(name, new), x.subst_free(name, new)),
+            ITerm::EqElim(a, m, mr, x, y, eq) => ITerm::EqElim(a.subst_free(name, new), m.subst_free(name, new), mr.subst_free(name, new), x.subst_free(name, new), y.subst_free(name, new), eq.subst_free(name, new)),
+        }
+    }
+
+    /// Recursively substitutes in a new ITerm for a bound variable.
+    pub fn subst(self, i: usize, new: &ITerm) -> ITerm {
+        match self {
+            ITerm::Ann(b, t) => ITerm::Ann(b.subst(i, new), t.subst(i, new)),
+            ITerm::Star => self,
+            ITerm::Pi(src, trg) => ITerm::Pi(src.subst(i, new), trg.subst(i + 1, new)),
+            ITerm::Bound(j) => if i == j { new.clone() } else { self },
+            ITerm::Free(_) => self,
+            ITerm::App(f, x) => ITerm::App(Box::new(f.subst(i, new)), x.subst(i, new)),
+            ITerm::Nat => self,
+            ITerm::Zero => self,
             ITerm::Succ(cterm) => ITerm::Succ(cterm.subst(i, new)),
             ITerm::NatElim(motive, base, ind, k) => ITerm::NatElim(
-                        motive.subst(i, new.clone()), base.subst(i, new.clone()), ind.subst(i, new.clone()), k.subst(i, new)
+                        motive.subst(i, new), base.subst(i, new), ind.subst(i, new), k.subst(i, new)
                     ),
             ITerm::Fin(cterm) => ITerm::Fin(cterm.subst(i, new)),
             ITerm::FinElim(motive, base, ind, n, f) => ITerm::FinElim(
-                        motive.subst(i, new.clone()), base.subst(i, new.clone()), ind.subst(i, new.clone()), n.subst(i, new.clone()), f.subst(i, new)
+                        motive.subst(i, new), base.subst(i, new), ind.subst(i, new), n.subst(i, new), f.subst(i, new)
                     ),
             ITerm::FZero(cterm) => ITerm::FZero(cterm.subst(i, new)),
-            ITerm::FSucc(n, f) => ITerm::FSucc(n.subst(i, new.clone()), f.subst(i, new)),
-            ITerm::Eq(a, x, y) => ITerm::Eq(a.subst(i, new.clone()), x.subst(i, new.clone()), y.subst(i, new)),
-            ITerm::Refl(a, x) => ITerm::Refl(a.subst(i, new.clone()), x.subst(i, new)),
-            ITerm::EqElim(a, m, mr, x, y, eq) => ITerm::EqElim(a.subst(i, new.clone()), m.subst(i, new.clone()), mr.subst(i, new.clone()), x.subst(i, new.clone()), y.subst(i, new.clone()), eq.subst(i, new)),
+            ITerm::FSucc(n, f) => ITerm::FSucc(n.subst(i, new), f.subst(i, new)),
+            ITerm::Eq(a, x, y) => ITerm::Eq(a.subst(i, new), x.subst(i, new), y.subst(i, new)),
+            ITerm::Refl(a, x) => ITerm::Refl(a.subst(i, new), x.subst(i, new)),
+            ITerm::EqElim(a, m, mr, x, y, eq) => ITerm::EqElim(a.subst(i, new), m.subst(i, new), mr.subst(i, new), x.subst(i, new), y.subst(i, new), eq.subst(i, new)),
         }
     }
 }
 
 
 impl CTerm {
+    pub fn subst_free(self, name: &Name, new: &ITerm) -> CTerm {
+        match self {
+            CTerm::Inf(it) => CTerm::Inf(Box::new(it.subst_free(name, new))),
+            CTerm::Lam(body) => CTerm::Lam(Box::new(body.subst_free(name, new)))
+        }
+    }
+
     /// Recursively substitutes in a new ITerm for a bound variable.
-    pub fn subst(self, i: usize, new: ITerm) -> Self {
+    pub fn subst(self, i: usize, new: &ITerm) -> CTerm {
         match self {
             CTerm::Inf(it) => CTerm::Inf(Box::new(it.subst(i, new))),
             CTerm::Lam(body) => CTerm::Lam(Box::new(body.subst(i + 1, new)))
@@ -243,7 +278,10 @@ pub fn std_env() -> Vec<(Name, Type, Option<Value>)> {
                 ITerm::Bound(4).into(), ITerm::Bound(3).into(), ITerm::Bound(2).into(), ITerm::Bound(1).into(), ITerm::Bound(0).into()
             )))))).eval(Context::new(vec![]))
         ),
-        ("Eq", 
+        ("False", Value::Star, Value::Fin(Box::new(Value::Zero))),
+        ("Void", Value::Star, Value::Fin(Box::new(Value::Zero))),
+        ("Not", vpi(Value::Star, |_| Value::Star), vlam(|x| vpi(x, |_| Value::Fin(Box::new(Value::Zero))))),
+        ("Eq",
             vpi(Value::Star, |a| vpi(a.clone(), move |x| vpi(a.clone(), |y| Value::Star))), 
             vlam(|a| 
                 vlam(move |x| {let a = a.clone(); 
@@ -293,20 +331,34 @@ pub fn std_env() -> Vec<(Name, Type, Option<Value>)> {
             ))))))).eval(Context::new(vec![]))
             // clam(todo!()).eval(Context::new(vec![]))
         ),
+        // ("girard", Value::Fin(Box::new(Value::Zero)), Some(girard_reduced())),
+    ];
+    predata.into_iter().map(|(n, t, v)| (Name::Global(n.to_owned()), t, Some(v))).collect()
+}
+
+pub fn girard_env() -> Vec<(Name, Type, Option<Value>)> {
+    let predata = [
         ite("P", sets_of()),
         ite("U", u()),
         ite("tau", tau()),
         ite("sigma", sigma()),
+        ite("precedes", precedes()),
         ite("delta", delta()),
-        ite("preomega", preomega()),
+        ite("inductive", preomega()),
+        ite("delta_ind", delta_inductive()),
         ite("omega", omega()),
-        ite("lem0", lem0()),
+        ite("omega_wf", lem0()),
         ite("D", d()),
         ite("lem2", lem2()),
         ite("lem3", lem3()),
-        // ("girard", Value::Fin(Box::new(Value::Zero)), Some(girard_reduced())),
     ];
     predata.into_iter().map(|(n, t, v)| (Name::Global(n.to_owned()), t, Some(v))).collect()
+}
+
+pub fn full_env() -> Vec<(Name, Type, Option<Value>)> {
+    let mut env = std_env();
+    env.append(&mut girard_env());
+    env
 }
 
 #[test]
@@ -343,11 +395,12 @@ fn test_parsetype(ctx: &mut Context, text: &str) {
                 ctx.assume_cterm(name, typ);
             }
         },
-        crate::parse::Statement::Eval(iterm) => todo!(),
-        crate::parse::Statement::PutStrLn(_) => todo!(),
-        crate::parse::Statement::Out(_) => todo!(),
-        crate::parse::Statement::Set(tag, _) => todo!(),
-        crate::parse::Statement::Command(_) => todo!(),
+        _ => todo!(),
+        // crate::parse::Statement::Eval(iterm) => todo!(),
+        // crate::parse::Statement::PutStrLn(_) => todo!(),
+        // crate::parse::Statement::Out(_) => todo!(),
+        // crate::parse::Statement::Set(tag, _) => todo!(),
+        // crate::parse::Statement::Command(_) => todo!(),
     }
 }
 
@@ -406,7 +459,35 @@ fn test_nat1elim() {
 
 #[test]
 fn test_prelude() {
-    let file = std::fs::read("files/prelude.lp").unwrap();
+    let ctx = test_file("files/prelude.lp");
+    let (typ, val) = ctx.find_free(&Name::Global("PowerfulUniverse".to_owned())).unwrap();
+    match typ {
+        Value::Star => println!("yay!"),
+        _ => panic!("wrong variant!")
+    }
+}
+
+#[test]
+fn test_girard() {
+    let ctx = test_file("files/girard.txt");
+    // let (typ2, val3) = ctx.find_free(&Name::Global("lem2".to_owned())).unwrap();
+    // let (typ3, val3) = ctx.find_free(&Name::Global("lem3".to_owned())).unwrap();
+    let typ = iapp(
+        ITerm::Free(Name::Global("lem2".to_owned())), 
+        ITerm::Free(Name::Global("lem3".to_owned()))
+    ).infer_type(ctx).unwrap();
+    let typ = quote0(typ);
+    if typ == CTerm::Inf(Box::new(ITerm::Fin(CTerm::Inf(Box::new(ITerm::Zero))))) {
+        println!("yay!");
+    }
+    else {
+        panic!("wrong variant! {}", typ)
+    }
+}
+
+#[cfg(test)]
+fn test_file(file: &str) -> Context {
+    let file = std::fs::read(file).unwrap();
     let text: String = file.into_iter().map(|i| i as char).collect();
     let (rest, stmts) = statements(&text).expect("Should have parsed");
     println!("Remainder {rest}");
@@ -428,19 +509,16 @@ fn test_prelude() {
                     ctx.assume_cterm(name, typ);
                 }
             },
-            crate::parse::Statement::Eval(iterm) => todo!(),
-            crate::parse::Statement::PutStrLn(_) => todo!(),
-            crate::parse::Statement::Out(_) => todo!(),
-            crate::parse::Statement::Set(tag, _) => todo!(),
-            crate::parse::Statement::Command(_) => todo!(),
+            _ => todo!()
+            // crate::parse::Statement::Eval(iterm) => todo!(),
+            // crate::parse::Statement::PutStrLn(_) => todo!(),
+            // crate::parse::Statement::Out(_) => todo!(),
+            // crate::parse::Statement::Set(tag, _) => todo!(),
+            // crate::parse::Statement::Command(_) => todo!(),
         };
         handled += 1;
         // println!("handled {handled}");
     }
-    let (typ, val) = ctx.find_free(&Name::Global("PowerfulUniverse".to_owned())).unwrap();
-    match typ {
-        Value::Star => println!("yay!"),
-        _ => panic!("wrong variant!")
-    }
+    ctx
     // assert!(typ == Value::Star)
 }

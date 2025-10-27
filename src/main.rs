@@ -1,7 +1,6 @@
 use clap::*;
 use fundsp::hacker32::*;
-use read_input::prelude::input;
-use read_input::InputBuild;
+
 use std::fs;
 use std::time::Instant;
 
@@ -13,9 +12,6 @@ use soundproof::*;
 use translate::*;
 use types::*;
 
-use crate::parse::{statement, Statement};
-
-// use parse::test_iterm_replicate;
 
 /// The "proof" side. Implementation of a simple dependently-typed lambda calculus,
 /// translated from Löh, McBride, and Swierstra's [LambdaPi](https://www.andres-loeh.de/LambdaPi/LambdaPi.pdf)
@@ -26,6 +22,8 @@ pub mod lambdapi;
 pub mod music;
 /// Translation from LambdaPi to music.
 pub mod soundproof;
+/// The live performance
+pub mod performance;
 
 pub mod draw;
 pub mod parse;
@@ -140,6 +138,8 @@ impl NamedTerm {
 pub enum AudioSelectorOptions {
     /// Canonical selector: melody is determined by node; instrument, rhythm, and effect are determined by parent node.
     FullStratified,
+    /// Like FullStratified, but uses Arcs to update it on the fly
+    AsyncStratified,
     /// First, highly arbitary melody suite.
     A,
     /// Melodies based on B, C, E, and G with arbitrarily-chosen instruments.
@@ -243,39 +243,20 @@ impl Args {
     }
 }
 
-// pub struct ReplState {
-//     value: ITerm,
-//     division: DivisionMethod,
-//     structure: Structure,
-//     content: AudioSelectorOptions,
-// }
-
-// impl TreeMaker {
-//     pub fn term(&self) -> &ITerm {
-//         &self.value
-//     }
-// }
-
-// impl From<&Args> for TreeMaker {
-//     fn from(value: &Args) -> Self {
-//         Self {
-//             value: value.term(),
-//             division: value.division,
-//             structure: value.structure,
-//             content: value.content
-//         }
-//     }
-// }
+pub fn async_tree(content: AsyncStratifier, term: &ITerm, ctx: Context) -> SoundTree {
+    // type_translate(term, content)
+    itype_translate(ctx, term, content).unwrap().1
+}
 
 pub fn make_tree(structure: Structure, content: AudioSelectorOptions, term: &ITerm) -> SoundTree {
-    // validate(&format!("Term: {:?}", args.value), &args.term(), false);
+    validate("term", term, None);
     println!("Translating...");
     let now = Instant::now();
     // use MelodySelector::*;
     fn structure_func(selector: impl Selector, structure: Structure, term: &ITerm) -> SoundTree {
         match structure {
             Structure::Term => term_translate(term, selector),
-            Structure::Type => type_translate(term, selector),
+            Structure::Type => type_translate(term, selector).unwrap(),
             Structure::Test => test_tree(selector),
             // Structure::Buildup => buildup([sets_of(), u(), tau(), sigma(), omega()], selector),//, lem0(), ireduce(lem2()).unwrap(), ireduce(lem3()).unwrap(), girard_reduced()], selector)
         }
@@ -297,6 +278,7 @@ pub fn make_tree(structure: Structure, content: AudioSelectorOptions, term: &ITe
         Loop => structure_func(Looper::new(Rhythmizer::new()), structure, term),
         Rhythmized => structure_func(Rhythmizer::new(), structure, term),
         FullStratified => structure_func(FullStratifier::new(), structure, term),
+        AsyncStratified => structure_func(AsyncStratifier::new(), structure, term),
         Bare => structure_func(Plain::new(), structure, term),
     };
     println!("...done in {:?}", now.elapsed());
@@ -307,7 +289,7 @@ pub fn draw_tree(tree: &SoundTree, args: &Args) {
     println!("Drawing...");
     let now = Instant::now();
     draw::draw(
-        &tree,
+        tree,
         args.division,
         format!(
             "output/images/{:?}{}-viz.png",
@@ -316,7 +298,7 @@ pub fn draw_tree(tree: &SoundTree, args: &Args) {
         ),
     );
     println!("One image: {:?}", now.elapsed());
-    draw::draw(&tree, args.division, "output/visualization.png");
+    draw::draw(tree, args.division, "output/visualization.png");
     if args.animate {
         let frames_path = "output/images/frames";
         fs::remove_dir_all(frames_path).unwrap();
@@ -324,18 +306,18 @@ pub fn draw_tree(tree: &SoundTree, args: &Args) {
         let time = args.time.unwrap_or(tree.size() as f64);
         // let frames = (30.0 * time).floor() as usize;
         // println!("Drawing {frames} frames...");
-        draw::draw_anim(&tree, args.division, time, 30);
+        draw::draw_anim(tree, args.division, time, 30);
         // println!("All frames: {:?}", now.elapsed());
     }
 }
 
-pub fn make_output(sound: Box<impl AudioUnit + 'static>, args: &Args) -> Box<dyn AudioUnit> {
-    match args.filters {
+pub fn make_output(sound: Box<impl AudioUnit + 'static>, filters: FilterOptions) -> Box<dyn AudioUnit> {
+    match filters {
         FilterOptions::None => sound,
         FilterOptions::ClipLowpass => Box::new(
             unit::<U0, U2>(sound)
                 >> stacki::<U2, _, _>(
-                    |_| shape(Adaptive::new(0.1, Tanh(0.5))) >> lowpass_hz(2500.0, 1.0) >> mul(0.1), // >> mul(10.0)
+                    |_| shape(Adaptive::new(0.1, Tanh(0.5))) >> lowpass_hz(2500.0, 1.0) >> mul(0.4), // >> mul(10.0)
                 ),
         ),
         FilterOptions::Quiet => Box::new(unit::<U0, U2>(sound) >> (mul(0.05) | mul(0.05))),
@@ -353,18 +335,6 @@ pub fn main_to_file(args: &Args) {
     }
     let mut seq = Sequencer::new(false, 2);
     let backend = Box::new(seq.backend());
-    // let mut output: Box<dyn AudioUnit> = match args.filters {
-    //     FilterOptions::None => backend,
-    //     FilterOptions::ClipLowpass => Box::new(unit::<U0, U2>(backend) >>
-    //         stacki::<U2, _, _>(|_|
-    //             shape(Adaptive::new(0.1, Tanh(0.5))) >>
-    //             lowpass_hz(2500.0, 1.0) >>
-    //             mul(0.1)
-    //             // >> mul(10.0)
-    //         )
-    //     ),
-    //     FilterOptions::Quiet => Box::new(unit::<U0, U2>(backend) >> (mul(0.05) | mul(0.05))),
-    // };
     println!("Sequencing over {time} seconds...");
     let now = Instant::now();
     tree.generate_with(
@@ -375,63 +345,15 @@ pub fn main_to_file(args: &Args) {
         0.0,
     );
     println!("...done in {:?}", now.elapsed());
-    let mut output = make_output(backend, &args);
+    let mut output = make_output(backend, args.filters);
     save(&mut *output, time);
     println!("Done.");
 }
 
-pub fn main_live(args: &mut Args) {
-    let mut seq = Sequencer::new(false, 2);
-    let backend = Box::new(seq.backend());
-    let output = make_output(backend, &args);
-    run_live(output);
-    let mut cfg_seq = ConfigSequencer::new(seq, true);
-    // let mut repl_state: TreeMaker = args.into();
-    let mut term = args.term();
-    loop {
-        println!("{args:?}");
-        let tree = make_tree(args.structure, args.content, &term);
-        let time = args.time.unwrap_or(tree.size() as f64);
-
-        println!("Sequencing live...");
-        tree.generate_with(&mut cfg_seq, 0.0, time, args.division, 0.0);
-        println!("Done");
-        draw_tree(&tree, &args);
-        // if args.draw_only {
-        //     return;
-        // }
-        // run_live(Box::new(sine_hz(300.0) * 0.1));
-        let cmd = input::<String>().msg("(press enter to exit)...\n").get();
-        if cmd.is_empty() {
-            break;
-        }
-        let statement = statement(vec![], &cmd)
-            .map(|(_, r)| r)
-            .unwrap_or(Statement::Command("uh oh".to_owned()));
-
-        match statement {
-            Statement::Let(_, iterm) => {
-                term = iterm;
-            }
-            Statement::Command(cmd) => {
-                let terms = ["soundproof.exe"].into_iter().chain(cmd.split_whitespace());
-                // let (term, time) = cmd.split_once(' ').unwrap_or(("omega", "20"));
-                // println!("{cmd}");
-                // let res = args.try_update_from(["soundproof.exe", "--value", term, "-t", time]);
-                let res = args.try_update_from(terms);
-                println!("parsed as: {res:?} {args:?}");
-            },
-            _ => todo!()
-        }
-    }
-    println!("Closing connection");
-}
-
 pub fn main() {
-    // test_iterm_replicate();
-    let mut args= Args::parse();
+    let args = Args::parse();
     if args.live {
-        main_live(&mut args);
+        performance::main_live();
     } else {
         main_to_file(&args);
     }

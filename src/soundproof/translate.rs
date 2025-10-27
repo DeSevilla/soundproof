@@ -9,8 +9,8 @@ use crate::{
 
 /// Translates [ITerm]s into [SoundTree]s according to their type structure.
 /// Subterms have their types checked or inferred and have their melodies combined with their types' melodies.
-pub fn type_translate(term: &ITerm, meta: impl Selector) -> SoundTree {
-    itype_translate(Context::new(vec![]), term, meta).unwrap().1
+pub fn type_translate(term: &ITerm, meta: impl Selector) -> Result<SoundTree, String> {
+    itype_translate(Context::new(full_env()), term, meta).map(|r| r.1)
 }
 
 /// Translates [ITerm]s into [SoundTree]s according to their term structure.
@@ -22,7 +22,7 @@ pub fn term_translate(term: &ITerm, meta: impl Selector) -> SoundTree {
 pub fn buildup(terms: impl IntoIterator<Item=ITerm>, meta: impl Selector) -> SoundTree {
     // let middle = SoundTree::Sound(Rc::new(Melody::new_even(sine(), &[])), TreeMetadata { name: "".to_owned() });
     let sep = SoundTree::sound(Melody::new_even(sine(), &[G]), meta.imeta(&ITerm::Star));
-    let subtrees: Vec<SoundTree> = terms.into_iter().map(|t| type_translate(&t, meta.clone())).flat_map(|t| [t, sep.clone()]).collect();
+    let subtrees: Vec<SoundTree> = terms.into_iter().map(|t| type_translate(&t, meta.clone())).flat_map(|t| [t.unwrap(), sep.clone()]).collect();
     SoundTree::seq(subtrees)
 }
 
@@ -72,7 +72,7 @@ pub fn itype_translate(ctx: Context, term: &ITerm, meta: impl Selector) -> Resul
             let name = new_ctx.bind_type(ty.clone());
             let trgtree = ctype_translate(
                 new_ctx,
-                &trg.clone().subst(0, ITerm::Free(name)), 
+                &trg.clone().subst(0, &ITerm::Free(name)), 
                 Value::Star,
                 meta
             )?;
@@ -88,13 +88,16 @@ pub fn itype_translate(ctx: Context, term: &ITerm, meta: impl Selector) -> Resul
             Ok((ty.clone(), tree))
         },
         ITerm::App(f, x) => {
-            let (fty, ftree) = itype_translate(ctx.clone(), f, meta.clone())?;
+            let (fty, ftree) = f.infer_translate(ctx.clone(), meta.clone())?;
             match fty {
                 Value::Pi(src, trg) => {
-                    let xtree = ctype_translate(ctx.clone(), x, *src, meta)?;
-                    Ok((trg(x.clone().eval(ctx.clone())), SoundTree::simul([node_melody, SoundTree::seq([ftree, xtree])])))
+                    let xtree = x.check_translate(ctx.clone(), *src, meta)?;
+                    Ok((
+                        trg(x.clone().eval(ctx.clone())),
+                        SoundTree::simul([node_melody, SoundTree::seq([ftree, xtree])])
+                    ))
                 },
-                _ => Err("Invalid function call".to_owned())
+                _ => Err("Function must have Pi type".to_owned())
             }
         },
         ITerm::Nat => Ok((Value::Star, node_melody)),
@@ -248,7 +251,7 @@ pub fn ctype_translate(ctx: Context, term: &CTerm, ty: Type, meta: impl Selector
                 let mut new_ctx = ctx.clone();
                 let name = new_ctx.bind_type(*src);
                 let subtree = ctype_translate(new_ctx,
-                    &body.clone().subst(0, ITerm::Free(name.clone())), trg(vfree(name)), meta.clone()
+                    &body.clone().subst(0, &ITerm::Free(name.clone())), trg(vfree(name)), meta.clone()
                 )?;
                 Ok(SoundTree::simul([node_mel, subtree]))
             },

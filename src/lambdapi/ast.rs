@@ -1,7 +1,5 @@
 use std::rc::Rc;
 
-use bevy::ecs::component::Component;
-
 use crate::term::{vapp, vpi, vlam};
 
 // LambdaPi was originally written for Haskell and I translated it to rust.
@@ -197,7 +195,7 @@ impl TryFrom<CTerm> for ITerm {
 //     }
 // }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, Component)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum Tag {
     Ann,
     Type,

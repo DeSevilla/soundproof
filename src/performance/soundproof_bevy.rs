@@ -47,7 +47,7 @@ fn scale_width(duration: f64) -> f32 {
 
 fn scale_length(duration: f64) -> f32 {
     // SEG_LENGTH;
-    (scale_width(duration) * 6. * SEG_LENGTH).max(SEG_LENGTH * 0.7).min(SEG_LENGTH * 1.4)
+    (scale_width(duration) * 6. * SEG_LENGTH).clamp(SEG_LENGTH * 0.7, SEG_LENGTH * 1.4)
 }
 
 fn make_segment(
@@ -109,7 +109,7 @@ fn make_segment(
     }
 }
 
-fn spawn_segment<'a>(mut segment: TreeSegment, commands: &mut Commands, font: &Handle<Font>, parent: Option<Entity>, index: Index) -> Entity {
+fn spawn_segment(mut segment: TreeSegment, commands: &mut Commands, font: &Handle<Font>, parent: Option<Entity>, index: Index) -> Entity {
     if parent.is_none() {
         segment.transform = segment.transform.with_translation(Vec3::new(index.x_pos(), 0., 0.));
     }
@@ -192,7 +192,7 @@ fn add_tree_rec(
         SoundTree::Seq(children, _) => {
             let mut ratio_elapsed = 0.0;
             for child in children {
-                let ratio = DivisionMethod::Weight.child_scale(&child) / DivisionMethod::Weight.parent_scale(&tree);
+                let ratio = DivisionMethod::Weight.child_scale(child) / DivisionMethod::Weight.parent_scale(tree);
                 let new_time = duration * ratio;
                 let time_elapsed = duration * ratio_elapsed;
                 let angle = PI * 0.6 * (ratio_elapsed + ratio / 2. - 0.5) as f32;
@@ -265,45 +265,12 @@ fn add_tree(
         TextFont::from_font(font.clone()).with_font_size(SIDE_FONT_SIZE),
         // TextFont::from_font_size(SIDE_FONT_SIZE),
     ));
-    add_tree_rec(&tree, None, duration, start, 0.0, 0.0, 
+    add_tree_rec(tree, None, duration, start, 0.0, 0.0, 
         commands, font, meshes, images, materials, index);
 }
 
 // #[derive(Resource)]
 // struct TheTimer(Timer);
-
-
-/// Creates a colorful test pattern
-// fn uv_debug_texture(r: u8, g: u8, b: u8) -> Image {
-//     const TEXTURE_SIZE: usize = 1;
-
-//     let mut palette: [u8; 4] = [
-//         r, g, b, 255
-//     ];
-//     // let mut palette: [u8; 32] = [
-//     //     255, 102, 159, 255, 255, 159, 102, 255, 236, 255, 102, 255, 121, 255, 102, 255, 102, 255,
-//     //     198, 255, 102, 198, 255, 255, 121, 102, 255, 255, 236, 102, 255, 255,
-//     // ];
-
-//     let mut texture_data = [0; TEXTURE_SIZE * TEXTURE_SIZE * 4];
-//     for y in 0..TEXTURE_SIZE {
-//         let offset = TEXTURE_SIZE * y * 4;
-//         texture_data[offset..(offset + TEXTURE_SIZE * 4)].copy_from_slice(&palette);
-//         palette.rotate_right(4);
-//     }
-
-//     Image::new_fill(
-//         Extent3d {
-//             width: TEXTURE_SIZE as u32,
-//             height: TEXTURE_SIZE as u32,
-//             depth_or_array_layers: 1,
-//         },
-//         TextureDimension::D2,
-//         &texture_data,
-//         TextureFormat::Rgba8UnormSrgb,
-//         RenderAssetUsages::RENDER_WORLD,
-//     )
-// }
 
 fn cleanup(
     mut commands: Commands,
@@ -439,7 +406,7 @@ fn run_command(
     for text in text_events.read() {
         let cmd = match parse::statement(vec![], &text.0) {
             Ok((rest, stmts)) => {
-                if rest.len() > 0 {
+                if !rest.is_empty() {
                     println!("Rest: {rest}");
                 }
                 stmts
@@ -628,7 +595,7 @@ fn play_sound(query: Query<(&Timings, &mut AudioInfo)>, mut seq: ResMut<CfgSeq>,
     }
 }
 
-const TEXT_FONT: &'static str = "fonts/lambda/JetBrainsMonoLamb-Regular.ttf";
+const TEXT_FONT: &str = "fonts/lambda/JetBrainsMonoLamb-Regular.ttf";
 const SIDE_FONT_SIZE: f32 = 20.;
 const COMMAND_FONT_SIZE: f32 = 20.;
 const DEFAULT_VIS: Visibility = Visibility::Hidden;
@@ -655,7 +622,6 @@ pub struct BgStar;
 #[derive(Component)]
 pub struct Center;
 
-/// 
 #[derive(Event)]
 pub struct TextCmd(String);
 

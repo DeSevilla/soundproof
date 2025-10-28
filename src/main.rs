@@ -193,6 +193,9 @@ pub enum FilterOptions {
 #[derive(Parser, Debug)]
 #[command(version, about, long_about=None)]
 pub struct Args {
+    /// Run the live performance mode. If set, all other options have no effect.
+    #[arg(short, long, action)]
+    live: bool,
     /// Predefined terms of the dependently typed lambda calculus.
     #[arg(short, long, default_value = "girard")]
     value: NamedTerm,
@@ -220,9 +223,6 @@ pub struct Args {
     /// When set, generate animation frames.
     #[arg(short, long, action)]
     animate: bool,
-    /// Run live instead of saving to file
-    #[arg(short, long, action)]
-    live: bool,
     /// Name of the output file
     #[arg(short, long, default_value = "output.wav")]
     output: String,

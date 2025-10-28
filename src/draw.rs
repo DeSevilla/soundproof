@@ -3,7 +3,7 @@ use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 use minifb::{Window, WindowOptions};
-use piet_common::{Color, Device, DwriteFactory, FontFamily, ImageFormat, PietText, PietTextLayout, RenderContext, Text, TextLayoutBuilder};
+use piet_common::*; //{Color, Device, DwriteFactory, FontFamily, ImageFormat, PietText, PietTextLayout, RenderContext, Text, TextLayoutBuilder};
 use piet_common::kurbo::{Circle, Line, Rect};
 
 use crate::soundproof::types::SoundTree;

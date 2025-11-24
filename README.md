@@ -5,9 +5,9 @@ custom Rust implementation of [LambdaPi](https://www.andres-loeh.de/LambdaPi/) (
 Artistic influences include Iannis Xenakis, Catherine Hennix, Henry Flynt, Drexciya, Perturbator, Sun Ra, 
 Karlheinz Stockhausen, and Odz Manouk.
 
-The canonical output can be found on Bandcamp [here](https://isdra.bandcamp.com/album/girards-paradox).
+The canonical output is available for free download on [Bandcamp](https://isdra.bandcamp.com/album/girards-paradox). A screen recording of the live version is on [Youtube](https://www.youtube.com/watch?v=Fu4yqLvZQOI).
 
-I gave a demo of this project, and a live performance of its output, at [the FARM workshop at ICFP/SPLASH 2025](https://2025.splashcon.org/track/splash-2025-farm). The paper can be found [in the FARM proceedings here](https://dl.acm.org/doi/10.1145/3759162.3759644), and a recording of the talk is available [on the ACM SIGPLAN YouTube channel here](https://www.youtube.com/live/F_7S90vFEsE?t=2015s). Video of the live performance should be available eventually.
+I gave a demo of this project, and a live performance of its output, at [the FARM workshop at ICFP/SPLASH 2025](https://2025.splashcon.org/track/splash-2025-farm). The paper can be found [in the FARM proceedings here](https://dl.acm.org/doi/10.1145/3759162.3759644), and a recording of the talk is available [on the ACM SIGPLAN YouTube channel here](https://www.youtube.com/live/F_7S90vFEsE?t=2015s). Video of the FARM performance should be available eventually.
 
 The [lambda calculus](https://en.wikipedia.org/wiki/Lambda_calculus) is a formal system for computability,
 built around the concept of functions. Adding type systems to lambda calculi allows them to [represent logical

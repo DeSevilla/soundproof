@@ -1,4 +1,4 @@
-# Intro
+### Intro
 
 Soundproof transforms formalized mathematical proofs (or propositions) into music, with the goal of producing a piece based on Girard's Paradox. The audio synthesis is built with
 [FunDSP](https://github.com/SamiPerttu/fundsp). The mathematical proofs are constructed in a
@@ -7,13 +7,13 @@ custom Rust implementation of [LambdaPi](https://www.andres-loeh.de/LambdaPi/) (
 Artistic influences include Iannis Xenakis, Catherine Hennix, Henry Flynt, Drexciya, Perturbator, Sun Ra, 
 Karlheinz Stockhausen, and Odz Manouk.
 
-# Output
+## Output
 
 The canonical output is available for free download on [Bandcamp](https://isdra.bandcamp.com/album/girards-paradox). A screen recording of the live version is on [Youtube](https://www.youtube.com/watch?v=Fu4yqLvZQOI).
 
 I gave a demo of this project, and a live performance of its output, at [the FARM workshop at ICFP/SPLASH 2025](https://2025.splashcon.org/track/splash-2025-farm). The paper can be found [in the FARM proceedings here](https://dl.acm.org/doi/10.1145/3759162.3759644), and a recording of the talk is available [on the ACM SIGPLAN YouTube channel here](https://www.youtube.com/live/F_7S90vFEsE?t=2015s). Video of the FARM performance should be available eventually.
 
-# How It Works
+## How It Works
 
 The [lambda calculus](https://en.wikipedia.org/wiki/Lambda_calculus) is a formal system for computability,
 built around the concept of functions. Adding type systems to lambda calculi allows them to [represent logical
@@ -51,7 +51,7 @@ I would like to add a small-step evaluator and incorporate the (unlimited)
 evaluation process of the non-normalizing term for Girard's Paradox, but there are some structural and
 conceptual obstacles before this can be done.
 
-# Additional Features
+## Additional Features
 
 Along with the audio, it can generate a visualization of the "sound tree" structure, 
 which is saved at `output/visualization.png` and in `output/images/`. With the `--animate` flag, it also
@@ -61,7 +61,7 @@ to make it easy for FFMPEG to handle this process.
 
 The live performance mode takes text input and parses it into terms which are then translated and displayed as moving trees along with the tags of the currently-playing subterms. The display font is a modified version of JetBrains Mono which displays backslash as lambda. 
 
-# Notes
+## Notes
 
 * Soundproof should always be compiled with `--release`, as the synth portions using FunDSP depend highly
   on optimizations that are not enabled in debug mode. It will not run in any reasonable time
@@ -73,7 +73,7 @@ The live performance mode takes text input and parses it into terms which are th
   which have not been included in Git for multiple reasons. The selectors' source in `select.rs` contains the 
   relevant file names if you want to put in local replacements.
 
-# Usage
+## Usage
 
 ```
 Usage: soundproof.exe [OPTIONS]

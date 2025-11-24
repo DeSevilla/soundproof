@@ -9,9 +9,9 @@ use piet_common::kurbo::{Circle, Line, Rect};
 use crate::soundproof::types::SoundTree;
 use crate::DivisionMethod;
 
-const WIDTH_PX: usize = 1280;
+const WIDTH_PX: usize = 377 * 3;
 // const WIDTH_PX: usize = 1920;
-const HEIGHT_PX: usize = 720;
+const HEIGHT_PX: usize = 120 * 3;
 const DPI: f64 = 96.;
 const WIDTH_IN: f64 = WIDTH_PX as f64 / DPI;
 const HEIGHT_IN: f64 = HEIGHT_PX as f64 / DPI;
@@ -22,7 +22,8 @@ pub fn draw(tree: &SoundTree, scaling: DivisionMethod, path: impl AsRef<Path>) {
     let mut rc = bitmap.render_context();
     let rect = Rect::new(0.0, 0.0, WIDTH_IN, HEIGHT_IN);
     // rc.fill(rect, &Color::rgb8(0xCE, 0xCE, 0xCE));
-    rc.fill(rect, &Color::BLACK);
+    // rc.fill(rect, &Color::BLACK);
+    rc.fill(rect, &Color::WHITE);
     let args = FixedDrawArgs::new(tree.metadata().max_depth, None, scaling);
     drawtree(tree, &mut rc, args, 0.0, 1.0, 0);
     rc.finish().unwrap();
@@ -115,8 +116,8 @@ struct FixedDrawArgs {
 
 impl FixedDrawArgs {
     pub fn new(max_depth: usize, current: Option<f64>, scaling: DivisionMethod) -> Self {
-        // let depth_height = if max_depth != 0 { HEIGHT_IN * 0.9 / max_depth as f64 } else { 0.1 };
-        let depth_height = 0.2; //if max_depth != 0 { HEIGHT_IN * 0.9 / max_depth as f64 } else { 0.1 };
+        // let depth_height = if max_depth != 0 { HEIGHT_IN * 0.9 / max_depth as f64 } else { 0.05 };
+        let depth_height = 0.2;
         let text_bar = depth_height * 4.0;
         Self {
             max_depth,
@@ -187,7 +188,7 @@ fn drawtree(
             };
             let border_width = ((right - left).min(args.depth_height) * 0.5).min(0.1);
             if border_width > 1.0 / DPI {
-                ctx.stroke(rect, &Color::BLACK, border_width);
+                ctx.stroke(rect, &Color::WHITE, border_width);
             }
         },
     }

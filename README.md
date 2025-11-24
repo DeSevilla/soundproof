@@ -1,4 +1,4 @@
-### Intro
+## Intro
 
 Soundproof transforms formalized mathematical proofs (or propositions) into music, with the goal of producing a piece based on Girard's Paradox. The audio synthesis is built with
 [FunDSP](https://github.com/SamiPerttu/fundsp). The mathematical proofs are constructed in a

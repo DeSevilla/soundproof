@@ -235,7 +235,7 @@ fn add_tree(
         Text::new(name),
         TextFont::from_font(font.clone()).with_font_size(SIDE_FONT_SIZE),
         // TextFont::from_font_size(SIDE_FONT_SIZE),
-        timings, 
+        timings,
         Node {
             position_type: PositionType::Absolute,
             top: Val::Px(0.),

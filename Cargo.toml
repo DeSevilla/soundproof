@@ -19,6 +19,7 @@ minifb = "0.28.0"
 piet-common = { version = "0.8.0", features = ["png"] }
 bevy_procedural_audio = "0.5.0"
 uuid = "1.18.1"
+# cosmic-text = "0.13.2"
 
 # Enable a small amount of optimization in the dev profile.
 [profile.dev]
@@ -28,5 +29,5 @@ opt-level = 1
 [profile.dev.package."*"]
 opt-level = 3
 
-[patch.crates-io]
-cosmic-text = { path = "./extra-deps/cosmic-text-0.13.2" }
+# [patch.crates-io]
+# cosmic-text = { path = "./extra-deps/cosmic-text-0.13.2" }

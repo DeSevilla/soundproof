@@ -1,13 +1,19 @@
-Soundproof transforms formalized mathematical proofs (or propositions) into music, with a particular focus on Girard's Paradox. The audio synthesis is built with
+# Intro
+
+Soundproof transforms formalized mathematical proofs (or propositions) into music, with the goal of producing a piece based on Girard's Paradox. The audio synthesis is built with
 [FunDSP](https://github.com/SamiPerttu/fundsp). The mathematical proofs are constructed in a
 custom Rust implementation of [LambdaPi](https://www.andres-loeh.de/LambdaPi/) (originally in Haskell);
 [Ilya Klyuchnikov's version](https://github.com/ilya-klyuchnikov/lambdapi) was a particular model.
 Artistic influences include Iannis Xenakis, Catherine Hennix, Henry Flynt, Drexciya, Perturbator, Sun Ra, 
 Karlheinz Stockhausen, and Odz Manouk.
 
+# Output
+
 The canonical output is available for free download on [Bandcamp](https://isdra.bandcamp.com/album/girards-paradox). A screen recording of the live version is on [Youtube](https://www.youtube.com/watch?v=Fu4yqLvZQOI).
 
 I gave a demo of this project, and a live performance of its output, at [the FARM workshop at ICFP/SPLASH 2025](https://2025.splashcon.org/track/splash-2025-farm). The paper can be found [in the FARM proceedings here](https://dl.acm.org/doi/10.1145/3759162.3759644), and a recording of the talk is available [on the ACM SIGPLAN YouTube channel here](https://www.youtube.com/live/F_7S90vFEsE?t=2015s). Video of the FARM performance should be available eventually.
+
+# How It Works
 
 The [lambda calculus](https://en.wikipedia.org/wiki/Lambda_calculus) is a formal system for computability,
 built around the concept of functions. Adding type systems to lambda calculi allows them to [represent logical
@@ -15,7 +21,7 @@ connections](https://en.wikipedia.org/wiki/Curry%E2%80%93Howard_correspondence) 
 and proofs as elements of those types. For example, a function from type A to type B takes a proof of proposition A
 and produces a proof of proposition B, which corresponds to logical implication. 
 [Dependent types](https://en.wikipedia.org/wiki/Dependent_type) can represent essentially all mathematical propositions,
-and thus dependently-typed lambda calculi are used as the basis for many theorem provers, including 
+and dependently-typed lambda calculi are used as the basis for many theorem provers, including 
 [Coq](https://coq.inria.fr/)/[Rocq](https://rocq-prover.org/about#history), [Agda](https://github.com/agda/agda),
 and [Lean](https://lean-lang.org/).
 
@@ -39,27 +45,35 @@ to play their translations in sequential order (potentially increased in pitch, 
 The canonical output follows the call tree of the typechecker,
 which includes all the structure of a term's abstract syntax tree but additionally includes type structure for variables, which is important for lambdas.
 
-Along with the audio, it can generate a visualization of the "sound tree" structure, 
-which is saved at `output/visualization.png` and in `output/images/`. With the `--animate` flag, it also
-generates animation frames matched to the duration of the music at 30FPS; this can take
-quite a long time. Frames are not automatically put together into a video, but the file names are chosen 
-to make it easy for FFMPEG to handle this process.
-
 Various desirable features of LambdaPi (equality types, etc.) have been left out for now,
 as they're not necessary for the paradox or for the musical side of the problem.
 I would like to add a small-step evaluator and incorporate the (unlimited)
 evaluation process of the non-normalizing term for Girard's Paradox, but there are some structural and
 conceptual obstacles before this can be done.
 
-Soundproof should always be compiled with `--release`, as the synth portions using FunDSP depend highly
-on optimizations that are not enabled in debug mode. It will not run in any reasonable time
-otherwise.
+# Additional Features
 
-The live performance mode takes text input and parses it into terms which are then translated and displayed as moving trees along with the tags of the currently-playing subterms. However, the text display requires a few files I haven't incorporated into the repository yet (been too busy to check what the licenses require for redistribution), so it's currently broken except on my machine. If you want to try it before I get around to that, you can edit the font in `soundproof-bevy.rs` and the version of `cosmic-text` in `cargo.toml`.
+Along with the audio, it can generate a visualization of the "sound tree" structure, 
+which is saved at `output/visualization.png` and in `output/images/`. With the `--animate` flag, it also
+generates animation frames matched to the duration of the music at 30FPS; this can take
+quite a long time. Frames are not automatically put together into a video, but the file names are chosen 
+to make it easy for FFMPEG to handle this process.
 
-NOTE: The audio selectors `names-short`, `names-long`, and `mixed` pull from audio files in the `files` folder, 
-which have not been included in Git for multiple reasons. The selectors' source in `select.rs` contains the 
-relevant file names if you want to put in local replacements.
+The live performance mode takes text input and parses it into terms which are then translated and displayed as moving trees along with the tags of the currently-playing subterms. The display font is a modified version of JetBrains Mono which displays backslash as lambda. 
+
+# Notes
+
+* Soundproof should always be compiled with `--release`, as the synth portions using FunDSP depend highly
+  on optimizations that are not enabled in debug mode. It will not run in any reasonable time
+  otherwise.
+
+* While the live performance version uses a font with ligatures, some are broken (most notably ->), due to [a bug in cosmic-text](https://github.com/pop-os/cosmic-text/issues/378). I solved this for my live performances by making an entire local copy of cosmic-text with a deeply bad modification, which I'm not including in this repository (sorry).
+
+* The audio selectors `names-short`, `names-long`, and `mixed` pull from audio files in the `files` folder, 
+  which have not been included in Git for multiple reasons. The selectors' source in `select.rs` contains the 
+  relevant file names if you want to put in local replacements.
+
+# Usage
 
 ```
 Usage: soundproof.exe [OPTIONS]

@@ -634,6 +634,30 @@ impl SoundGenerator for MelodyAsync {
 //     }
 // }
 
+#[derive(Clone)]
+pub struct Toner {
+    pub instrument: An<Unit<U1, U1>>
+}
+
+impl Toner {
+    pub fn new(instr: impl AudioUnit + 'static) -> Self {
+        Self {
+            instrument: unit(Box::new(instr))
+        }
+    }
+}
+
+impl SoundGenerator for Toner {
+    fn sequence(&self, seq: &mut ConfigSequencer, start_time: f64, duration: f64, lean: f32) {
+        let modified_instrument = (constant(start_time as f32 * 2.) >> self.instrument.clone()) >> split::<U2>();
+        seq.push_duration(0.0, 5.0, Fade::Power, 0.0, 0.0, Box::new(modified_instrument));
+    }
+
+    fn base_duration(&self) -> f64 {
+        1.0
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct Timings {
     pub start: f64,

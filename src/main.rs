@@ -170,6 +170,7 @@ pub enum AudioSelectorOptions {
     Rhythmized,
     /// Just plays sine tones, no melody.
     Bare,
+    ToneMake,
 }
 
 // impl AudioSelectorOptions {
@@ -280,6 +281,7 @@ pub fn make_tree(structure: Structure, content: AudioSelectorOptions, term: &ITe
         FullStratified => structure_func(FullStratifier::new(), structure, term),
         AsyncStratified => structure_func(AsyncStratifier::new(), structure, term),
         Bare => structure_func(Plain::new(), structure, term),
+        ToneMake => structure_func(ToneMaker, structure, term)
     };
     println!("...done in {:?}", now.elapsed());
     tree
@@ -346,7 +348,7 @@ pub fn main_to_file(args: &Args) {
     );
     println!("...done in {:?}", now.elapsed());
     let mut output = make_output(backend, args.filters);
-    save(&mut *output, time);
+    save(&mut *output, 5.0);
     println!("Done.");
 }
 

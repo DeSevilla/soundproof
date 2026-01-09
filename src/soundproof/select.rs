@@ -111,6 +111,51 @@ impl Term {
 }
 
 #[derive(Clone)]
+pub struct ToneMaker;
+
+impl Selector for ToneMaker {
+    fn isound(&self, term: &ITerm) -> SoundTree {
+        let tt = match term {
+            ITerm::Ann(_, _) => Toner::new(sine()),
+            ITerm::Star => Toner::new(saw()),
+            ITerm::Pi(_, _) => Toner::new(sinesaw()),
+            ITerm::Bound(_) => Toner::new(square()),
+            ITerm::Free(_) => Toner::new(sine()),
+            ITerm::App(_, _) => Toner::new(saw()),
+            ITerm::Nat => Toner::new(sinesaw()),
+            ITerm::Zero => Toner::new(square()),
+            ITerm::Succ(_) => Toner::new(sine()),
+            ITerm::NatElim(_, _, _, _) => Toner::new(saw()),
+            ITerm::Fin(_) => Toner::new(square()),
+            ITerm::FZero(_) => Toner::new(sinesaw()),
+            ITerm::FSucc(_, _) => Toner::new(sine()),
+            ITerm::FinElim(_, _, _, _, _) => Toner::new(sine()),
+            ITerm::Eq(_, _, _) => Toner::new(sine()),
+            ITerm::Refl(_, _) => Toner::new(sine()),
+            ITerm::EqElim(_, _, _, _, _, _) => Toner::new(sine()),
+        };
+        SoundTree::sound(tt, self.imeta(term))
+    }
+
+    fn csound(&self, term: &CTerm) -> SoundTree {
+        match term {
+            CTerm::Inf(iterm) => self.isound(iterm),
+            CTerm::Lam(_) => SoundTree::sound(Toner::new(sinesaw()), self.cmeta(term)),
+        }
+    }
+
+    fn imerge(&self, _term: &ITerm) -> Self {
+        // todo!()
+        self.clone()
+    }
+
+    fn cmerge(&self, _term: &CTerm) -> Self {
+        // todo!()
+        self.clone()
+    }
+}
+
+#[derive(Clone)]
 pub struct AsyncNodeInfo {
     pub notes: Arc<Mutex<[i32; FS_MEL_SIZE]>>,
     pub timings: Arc<Mutex<[f64; FS_MEL_SIZE]>>,

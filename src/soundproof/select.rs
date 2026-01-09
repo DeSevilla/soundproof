@@ -111,11 +111,29 @@ impl Term {
 }
 
 #[derive(Clone)]
-pub struct ToneMaker;
+pub struct ToneMaker {
+    pub start_time: f64,
+    pub duration: f64,
+}
+
+impl Default for ToneMaker {
+    fn default() -> Self {
+        Self { start_time: 0.0, duration: 10.0 }
+    }
+}
+
+impl ToneMaker {
+    pub fn new(start_time: f64, duration: f64) -> Self {
+        ToneMaker {
+            start_time,
+            duration
+        }
+    }
+}
 
 impl Selector for ToneMaker {
     fn isound(&self, term: &ITerm) -> SoundTree {
-        let tt = match term {
+        let mut tt = match term {
             ITerm::Ann(_, _) => Toner::new(sine()),
             ITerm::Star => Toner::new(saw()),
             ITerm::Pi(_, _) => Toner::new(sinesaw()),
@@ -134,13 +152,20 @@ impl Selector for ToneMaker {
             ITerm::Refl(_, _) => Toner::new(sine()),
             ITerm::EqElim(_, _, _, _, _, _) => Toner::new(sine()),
         };
+        tt.start_time = self.start_time;
+        tt.duration = self.duration;
         SoundTree::sound(tt, self.imeta(term))
     }
 
     fn csound(&self, term: &CTerm) -> SoundTree {
         match term {
             CTerm::Inf(iterm) => self.isound(iterm),
-            CTerm::Lam(_) => SoundTree::sound(Toner::new(sinesaw()), self.cmeta(term)),
+            CTerm::Lam(_) => {
+                let mut tt = Toner::new(sinesaw());
+                tt.start_time = self.start_time;
+                tt.duration = self.duration;
+                SoundTree::sound(tt, self.cmeta(term))
+            }
         }
     }
 

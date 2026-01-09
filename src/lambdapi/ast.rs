@@ -162,6 +162,10 @@ impl Context {
         // println!("{ii} {}", self.bound.len());
         self.bound[self.bound.len() - ii - 1].clone()
     }
+
+    pub fn info_string(&self) -> String {
+        format!("Context:[{}({});{}]", self.bound.len(), self.bindings, self.free.len())
+    }
 }
 
 impl From<ITerm> for CTerm {

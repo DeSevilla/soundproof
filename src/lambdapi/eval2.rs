@@ -1,4 +1,4 @@
-use crate::ast::*;
+use crate::{ast::*, lambdapi::term::quote0};
 
 #[derive(Clone)]
 pub enum Step<T: Stepper> {
@@ -14,8 +14,26 @@ impl<T: Stepper> Step<T> {
             Done(t) => Done(f(t))
         }
     }
-}
 
+    pub fn step(self, ctx: Context) -> Self {
+        match self {
+            Self::Cont(t) => t.step(ctx),
+            Step::Done(_) => self,
+        }
+    }
+
+    pub fn multistep(self, ctx: Context) -> T {
+        use Step::*;
+        let mut result = self;
+        loop {
+            result = result.step(ctx.clone());
+            match result {
+                Done(t) => return t,
+                Cont(_) => (),
+            }
+        }
+    }
+}
 pub trait Stepper {
     fn step(self, ctx: Context) -> Step<Self> where Self: Sized;
 }
@@ -35,13 +53,18 @@ impl Stepper for ITerm {
             ITerm::Pi(src, trg) => match src.clone().step(ctx.clone()) {
                 Cont(c) => Cont(ITerm::Pi(c, trg)),
                 Done(c) => {
-                    let mut ctx2 = ctx.clone();
-                    ctx2.bind_type(src.eval(ctx.clone()));
-                    trg.step(ctx2).apply(|t| ITerm::Pi(c, t))
+                    Done(ITerm::Pi(c, trg))
+                    // let mut ctx2 = ctx.clone();
+                    // println!("We are about to evaluate type {c:?} in context {} based on {src:?} with target {trg:?}", ctx.info_string());
+                    // ctx2.bind_type(c.eval(ctx.clone()));
+                    // trg.step(ctx2).apply(|t| ITerm::Pi(c, t))
                 }
             },
             ITerm::Bound(nat) => Done(ITerm::Bound(nat)),
-            ITerm::Free(name) => Done(ITerm::Free(name)),
+            ITerm::Free(name) => match ctx.find_free(&name) {
+                Some((ty, Some(val))) => Cont(ITerm::Ann(quote0(val), quote0(ty))),
+                _ => panic!("Attempted to evaluate free variable {name:?} without a definition in context"),
+            },
             ITerm::App(func, arg) => {
                 match func.step(ctx.clone()) {
                     Cont(f) => Cont(ITerm::App(Box::new(f), arg)),
@@ -93,3 +116,20 @@ impl Stepper for CTerm {
         }
     }
 }
+
+
+#[test]
+fn check_omega_match() {
+    use crate::omega;
+    let u_tm = omega();
+    println!("Base term: {u_tm:?}");
+    let u_eval1 = quote0(u_tm.eval(Context::new(vec![])));
+    println!("Term 1: {u_eval1:?}");
+    let u_eval2 = match Step::Cont(u_tm).multistep(Context::new(vec![])) {
+        ITerm::Ann(ut, ty) => ut,
+        _ => panic!("inferrable!!"),
+    };
+    println!("Term 2: {u_eval2:?}");
+    assert!(u_eval1 == u_eval2);
+}
+

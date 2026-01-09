@@ -636,21 +636,29 @@ impl SoundGenerator for MelodyAsync {
 
 #[derive(Clone)]
 pub struct Toner {
-    pub instrument: An<Unit<U1, U1>>
+    pub instrument: An<Unit<U1, U1>>,
+    pub start_time: f64,
+    pub duration: f64,
 }
 
 impl Toner {
     pub fn new(instr: impl AudioUnit + 'static) -> Self {
         Self {
-            instrument: unit(Box::new(instr))
+            instrument: unit(Box::new(instr)),
+            start_time: 0.0,
+            duration: 10.0,
         }
     }
 }
 
 impl SoundGenerator for Toner {
-    fn sequence(&self, seq: &mut ConfigSequencer, start_time: f64, duration: f64, lean: f32) {
+    fn sequence(&self, seq: &mut ConfigSequencer, start_time: f64, _duration: f64, _lean: f32) {
+        SIGN.fetch_add(1, Ordering::Relaxed);
         let modified_instrument = (constant(start_time as f32 * 2.) >> self.instrument.clone()) >> split::<U2>();
-        seq.push_duration(0.0, 5.0, Fade::Power, 0.0, 0.0, Box::new(modified_instrument));
+        // if self.start_time > 11.0 {
+        //     println!("{}", self.start_time)
+        // }
+        seq.push_duration(self.start_time, self.duration, Fade::Smooth, self.duration / 20., self.duration / 20., Box::new(modified_instrument));
     }
 
     fn base_duration(&self) -> f64 {
@@ -848,8 +856,9 @@ impl SoundTree {
         // setup would be tricky but could allow within-tree variation.... but we're not there yet.
         match self {
             SoundTree::Simul(vec, _) => {
-                let val = SIGN.fetch_add(1, Ordering::Relaxed);
-                let dir = if val % 2 == 0 { 1.0 } else { -1.0 };
+                // let val = SIGN.fetch_add(1, Ordering::Relaxed);
+                // let dir = if val % 2 == 0 { 1.0 } else { -1.0 };
+                let dir = 0.0;
                 // let scale = vec.len();
                 let scale = (self.size() - 1) as f32;
                 let base_lean = dir * scale / 2.0;
@@ -908,8 +917,9 @@ impl SoundTree {
         // setup would be tricky but could allow within-tree variation.... but we're not there yet.
         match self {
             SoundTree::Simul(vec, _) => {
-                let val = SIGN.fetch_add(1, Ordering::Relaxed);
-                let dir = if val % 2 == 0 { 1.0 } else { -1.0 };
+                // let val = SIGN.fetch_add(1, Ordering::Relaxed);
+                // let dir = if val % 2 == 0 { 1.0 } else { -1.0 };
+                let dir = 0.0;
                 // let scale = vec.len();
                 let scale = (self.size() - 1) as f32;
                 let base_lean = dir * scale / 2.0;

@@ -281,7 +281,7 @@ pub fn make_tree(structure: Structure, content: AudioSelectorOptions, term: &ITe
         FullStratified => structure_func(FullStratifier::new(), structure, term),
         AsyncStratified => structure_func(AsyncStratifier::new(), structure, term),
         Bare => structure_func(Plain::new(), structure, term),
-        ToneMake => structure_func(ToneMaker, structure, term)
+        ToneMake => structure_func(ToneMaker::new(0.0, 10.0), structure, term)
     };
     println!("...done in {:?}", now.elapsed());
     tree
@@ -329,7 +329,6 @@ pub fn make_output(sound: Box<impl AudioUnit + 'static>, filters: FilterOptions)
 pub fn main_to_file(args: &Args) {
     assert!(!args.live);
     let tree = make_tree(args.structure, args.content, &args.term());
-
     let time = args.time.unwrap_or(tree.size() as f64);
     draw_tree(&tree, args);
     if args.draw_only {
@@ -348,7 +347,45 @@ pub fn main_to_file(args: &Args) {
     );
     println!("...done in {:?}", now.elapsed());
     let mut output = make_output(backend, args.filters);
-    save(&mut *output, 5.0);
+    save(&mut *output, time);
+    println!("Done.")
+}
+
+pub fn tonegenerator(args: &Args) {
+    assert!(!args.live);
+    // let term = args.term();
+    let mut seq = Sequencer::new(false, 2);
+    let backend = Box::new(seq.backend());
+    let cfg_seq = &mut ConfigSequencer::new(seq, args.live);
+    let base_dur = 1.0;
+    let mut content = ToneMaker::new(0.0, base_dur);
+    for term in [tau(), sigma(), tau(), sigma(), tau(), sigma(), tau(), sigma(), tau(), sigma()] { 
+        println!("starting at {}", content.start_time);
+        let tree = type_translate(&term, content.clone()).unwrap();
+        // let tree = make_tree(args.structure, args.content, &term);
+
+        content.start_time += base_dur;
+        let time = args.time.unwrap_or(tree.size() as f64);
+        draw_tree(&tree, args);
+        if args.draw_only {
+            return;
+        }
+        println!("Sequencing over {time} seconds...");
+        let now = Instant::now();
+        tree.generate_with(
+            cfg_seq,
+            0.0,
+            time,
+            args.division,
+            0.0,
+        );
+        println!("...done in {:?}", now.elapsed());
+        println!("Got this many events: {}", SIGN.load(std::sync::atomic::Ordering::SeqCst));
+    }
+    use crate::SIGN;
+    println!("Got this many events: {}", SIGN.load(std::sync::atomic::Ordering::SeqCst));
+    let mut output = make_output(backend, args.filters);
+    save(&mut *output, 10. * base_dur);
     println!("Done.");
 }
 
@@ -357,6 +394,7 @@ pub fn main() {
     if args.live {
         performance::main_live();
     } else {
-        main_to_file(&args);
+        tonegenerator(&args);
+        // main_to_file(&args);
     }
 }

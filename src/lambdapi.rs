@@ -5,6 +5,7 @@ pub mod ast;
 pub mod check;
 /// Evaluation of lambda calculus terms. Code is an impl on the AST types.
 pub mod eval;
+pub mod eval2;
 /// Functions for rendering terms and types as strings.
 pub mod print;
 /// Functions for constructing and modifying terms beyond the basic struct definitions.

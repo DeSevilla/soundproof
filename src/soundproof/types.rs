@@ -4,8 +4,8 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use bevy::asset::uuid::Uuid;
-use bevy::prelude::*;
+// use bevy::asset::uuid::Uuid;
+// use bevy::prelude::*;
 use fundsp::hacker32::*;
 use piet_common::Color;
 use rand::seq::IndexedRandom;
@@ -529,7 +529,7 @@ impl<T, X> SoundGenerator for EffectSeq<T, X>
     }
 }
 
-#[derive(Component)]
+// #[derive(Component)]
 pub struct MelodyAsync {
     pub notes: Arc<Mutex<[i32; FS_MEL_SIZE]>>,
     pub timings: Arc<Mutex<[f64; FS_MEL_SIZE]>>,
@@ -652,13 +652,17 @@ impl Toner {
 }
 
 impl SoundGenerator for Toner {
-    fn sequence(&self, seq: &mut ConfigSequencer, start_time: f64, _duration: f64, _lean: f32) {
+    fn sequence(&self, seq: &mut ConfigSequencer, start_time: f64, duration: f64, _lean: f32) {
         SIGN.fetch_add(1, Ordering::Relaxed);
-        let modified_instrument = (constant(start_time as f32 * 2.) >> self.instrument.clone()) >> split::<U2>();
+        let center = start_time + duration * 0.5;
+        let freq = center as f32 * 1.5;
+        let modified_instrument = (constant(freq) >> self.instrument.clone()) >> split::<U2>();
         // if self.start_time > 11.0 {
         //     println!("{}", self.start_time)
         // }
-        seq.push_duration(self.start_time, self.duration, Fade::Smooth, self.duration / 20., self.duration / 20., Box::new(modified_instrument));
+        // let fade_duration = self.duration / 50.;
+        let fade_duration = 0.;
+        seq.push_duration(self.start_time, self.duration, Fade::Power, fade_duration, fade_duration, Box::new(modified_instrument));
     }
 
     fn base_duration(&self) -> f64 {
@@ -666,7 +670,8 @@ impl SoundGenerator for Toner {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Component)]
+// #[derive(Debug, Clone, Copy, PartialEq, Component)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Timings {
     pub start: f64,
     pub duration: f64,
@@ -688,14 +693,15 @@ pub enum SoundTree {
 
 pub static SIGN: AtomicU32 = AtomicU32::new(0);
 
-#[derive(Clone, Debug, PartialEq, Component)]
+// #[derive(Clone, Debug, PartialEq, Component)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TreeMetadata {
     pub name: String,
     // pub parent: String,
     pub base_color: Color,
     pub alt_color: Color,
     pub max_depth: usize,
-    pub dspthing: Option<Uuid>,
+    // pub dspthing: Option<Uuid>,
     // pub lean: f32,
 }
 
@@ -743,7 +749,7 @@ impl SoundTree {
                 base_color: Color::MAROON, 
                 alt_color: Color::MAROON, 
                 max_depth,
-                dspthing: None,
+                // dspthing: None,
             })
         }
         // names += "]";
@@ -787,7 +793,7 @@ impl SoundTree {
                 base_color: Color::MAROON,
                 alt_color: Color::MAROON,
                 max_depth,
-                dspthing: None,
+                // dspthing: None,
             })
         }
     }

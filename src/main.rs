@@ -1,7 +1,7 @@
 use clap::*;
 use fundsp::hacker32::*;
 
-use std::fs;
+// use std::fs;
 use std::time::Instant;
 
 use lambdapi::ast::*;
@@ -23,9 +23,9 @@ pub mod music;
 /// Translation from LambdaPi to music.
 pub mod soundproof;
 /// The live performance
-pub mod performance;
+// pub mod performance;
 
-pub mod draw;
+// pub mod draw;
 pub mod parse;
 
 /// Modes for structuring the translation from LambdaPi term to SoundTree.
@@ -287,31 +287,31 @@ pub fn make_tree(structure: Structure, content: AudioSelectorOptions, term: &ITe
     tree
 }
 
-pub fn draw_tree(tree: &SoundTree, args: &Args) {
-    println!("Drawing...");
-    let now = Instant::now();
-    draw::draw(
-        tree,
-        args.division,
-        format!(
-            "output/images/{:?}{}-viz.png",
-            args.value,
-            if args.reduce { "-reduced" } else { "" }
-        ),
-    );
-    println!("One image: {:?}", now.elapsed());
-    draw::draw(tree, args.division, "output/visualization.png");
-    if args.animate {
-        let frames_path = "output/images/frames";
-        fs::remove_dir_all(frames_path).unwrap();
-        fs::create_dir(frames_path).unwrap();
-        let time = args.time.unwrap_or(tree.size() as f64);
-        // let frames = (30.0 * time).floor() as usize;
-        // println!("Drawing {frames} frames...");
-        draw::draw_anim(tree, args.division, time, 30);
-        // println!("All frames: {:?}", now.elapsed());
-    }
-}
+// pub fn draw_tree(tree: &SoundTree, args: &Args) {
+//     println!("Drawing...");
+//     let now = Instant::now();
+//     draw::draw(
+//         tree,
+//         args.division,
+//         format!(
+//             "output/images/{:?}{}-viz.png",
+//             args.value,
+//             if args.reduce { "-reduced" } else { "" }
+//         ),
+//     );
+//     println!("One image: {:?}", now.elapsed());
+//     draw::draw(tree, args.division, "output/visualization.png");
+//     if args.animate {
+//         let frames_path = "output/images/frames";
+//         fs::remove_dir_all(frames_path).unwrap();
+//         fs::create_dir(frames_path).unwrap();
+//         let time = args.time.unwrap_or(tree.size() as f64);
+//         // let frames = (30.0 * time).floor() as usize;
+//         // println!("Drawing {frames} frames...");
+//         draw::draw_anim(tree, args.division, time, 30);
+//         // println!("All frames: {:?}", now.elapsed());
+//     }
+// }
 
 pub fn make_output(sound: Box<impl AudioUnit + 'static>, filters: FilterOptions) -> Box<dyn AudioUnit> {
     match filters {
@@ -328,73 +328,94 @@ pub fn make_output(sound: Box<impl AudioUnit + 'static>, filters: FilterOptions)
 
 pub fn main_to_file(args: &Args) {
     assert!(!args.live);
-    let tree = make_tree(args.structure, args.content, &args.term());
-    let time = args.time.unwrap_or(tree.size() as f64);
-    draw_tree(&tree, args);
     if args.draw_only {
         return;
     }
-    let mut seq = Sequencer::new(false, 2);
-    let backend = Box::new(seq.backend());
+    let tree = make_tree(args.structure, args.content, &args.term());
+    let time = args.time.unwrap_or(tree.size() as f64);
+    // draw_tree(&tree, args);
+    
+    let seq = Sequencer::new(false, 2);
+    let mut cfg_seq = ConfigSequencer::new(seq, args.live);
+    // let backend = Box::new(seq.backend());
     println!("Sequencing over {time} seconds...");
     let now = Instant::now();
     tree.generate_with(
-        &mut ConfigSequencer::new(seq, args.live),
+        &mut cfg_seq,
         0.0,
         time,
         args.division,
         0.0,
     );
     println!("...done in {:?}", now.elapsed());
-    let mut output = make_output(backend, args.filters);
+    let mut output = make_output(Box::new(cfg_seq.seq), args.filters);
     save(&mut *output, time);
     println!("Done.")
 }
 
 pub fn tonegenerator(args: &Args) {
+    use crate::eval2::Step;
+    use crate::term::std_env;
     assert!(!args.live);
-    // let term = args.term();
-    let mut seq = Sequencer::new(false, 2);
-    let backend = Box::new(seq.backend());
-    let cfg_seq = &mut ConfigSequencer::new(seq, args.live);
-    let base_dur = 1.0;
+    println!("Starting tone generation at {:?}", Instant::now());
+    let start_term = args.term();
+    let seq = Sequencer::new(false, 2);
+    // let backend = Box::new(seq.backend());
+    let mut cfg_seq = ConfigSequencer::new(seq, args.live);
+    let base_dur = 0.3;
     let mut content = ToneMaker::new(0.0, base_dur);
-    for term in [tau(), sigma(), tau(), sigma(), tau(), sigma(), tau(), sigma(), tau(), sigma()] { 
+    // let terms = [tau(), sigma(), delta(), omega(), lem0(), lem2(), lem3(), girard(), girard_reduced()];
+    let mut current = Step::Cont(start_term);
+    let mut steps = 0;
+    loop {
+        let term = match &current {
+            Step::Cont(t) => t.clone(),
+            Step::Done(_) => break,
+        };
         println!("starting at {}", content.start_time);
         let tree = type_translate(&term, content.clone()).unwrap();
         // let tree = make_tree(args.structure, args.content, &term);
 
         content.start_time += base_dur;
-        let time = args.time.unwrap_or(tree.size() as f64);
-        draw_tree(&tree, args);
+        let time = args.time.unwrap_or((tree.size() + 40) as f64);
+        // draw_tree(&tree, args);
         if args.draw_only {
             return;
         }
         println!("Sequencing over {time} seconds...");
         let now = Instant::now();
         tree.generate_with(
-            cfg_seq,
+            &mut cfg_seq,
             0.0,
             time,
             args.division,
             0.0,
         );
         println!("...done in {:?}", now.elapsed());
-        println!("Got this many events: {}", SIGN.load(std::sync::atomic::Ordering::SeqCst));
+        current = current.step(Context::new(std_env()));
+        steps += 1;
+        if steps > 500 {
+            println!("Hit 300 steps");
+            break
+        }
+        // println!("Got this many events: {}", SIGN.load(std::sync::atomic::Ordering::SeqCst));
     }
-    use crate::SIGN;
-    println!("Got this many events: {}", SIGN.load(std::sync::atomic::Ordering::SeqCst));
-    let mut output = make_output(backend, args.filters);
-    save(&mut *output, 10. * base_dur);
+    // use crate::SIGN;
+    // println!("Got this many events: {}", SIGN.load(std::sync::atomic::Ordering::SeqCst));
+    let mut output = make_output(Box::new(cfg_seq.seq), args.filters);
+    save(&mut *output, steps as f64 * base_dur);
     println!("Done.");
 }
 
 pub fn main() {
     let args = Args::parse();
-    if args.live {
-        performance::main_live();
-    } else {
-        // tonegenerator(&args);
-        main_to_file(&args);
-    }
+    // if args.live {
+    //     performance::main_live();
+    // } else {
+    //     // tonegenerator(&args);
+    //     main_to_file(&args);
+    // }
+    tonegenerator(&args);
+    // main_to_file(&args);
+
 }

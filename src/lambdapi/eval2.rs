@@ -1,9 +1,31 @@
 use crate::{ast::*, lambdapi::term::quote0};
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum Step<T: Stepper> {
     Cont(T),
     Done(T)
+}
+
+pub struct StepOver<T: Stepper> {
+    tm: Step<T>,
+    ctx: Context,
+}
+
+impl<T: Stepper> Iterator for StepOver<T> {
+    type Item = T;
+    
+    fn next(&mut self) -> Option<Self::Item> {
+        match &self.tm {
+            Step::Done(_) => None,
+            Step::Cont(t) => {
+                let res = t.clone();
+                self.tm = t.clone().step(self.ctx.clone());
+                Some(res)
+            } 
+        }
+
+    }
+    
 }
 
 impl<T: Stepper> Step<T> {
@@ -22,7 +44,7 @@ impl<T: Stepper> Step<T> {
         }
     }
 
-    pub fn multistep(self, ctx: Context) -> T {
+    pub fn step_eval(self, ctx: Context) -> T {
         use Step::*;
         let mut result = self;
         loop {
@@ -34,7 +56,7 @@ impl<T: Stepper> Step<T> {
         }
     }
 }
-pub trait Stepper {
+pub trait Stepper: Clone {
     fn step(self, ctx: Context) -> Step<Self> where Self: Sized;
 }
 
@@ -69,8 +91,10 @@ impl Stepper for ITerm {
                             ITerm::Ann(CTerm::Lam(body), CTerm::Inf(ty)) => {
                                 match *ty.clone() {
                                     ITerm::Pi(src, trg) => {
-                                        let res = body.subst(0, &ITerm::Ann(arg, src));
-                                        Cont(ITerm::Ann(res, CTerm::Inf(ty)))
+                                        let tm = ITerm::Ann(arg, src);
+                                        let resbody = body.subst(0, &tm);
+                                        let resty = trg.subst(0, &tm);
+                                        Cont(ITerm::Ann(resbody, resty))
                                     },
                                     _ => panic!("got malformed lambda type"),
                                 }
@@ -105,6 +129,24 @@ impl Stepper for CTerm {
     }
 }
 
+#[cfg(test)]
+fn eval_verify(tm: ITerm, ctx: Context) -> ITerm {
+    use crate::lambdapi::term::std_env;
+    tm.infer_type(ctx.clone()).unwrap();
+    let mut current = Step::Cont(tm);
+    let mut steps = 0;
+    loop {
+        steps += 1;
+        match current {
+            Step::Cont(t) => {
+                println!("{steps} {t:?}");
+                t.infer_type(ctx.clone()).unwrap();
+                current = t.step(ctx.clone());
+            },
+            Step::Done(t) => return t
+        }
+    } 
+}
 
 #[cfg(test)]
 fn check_match(tm: ITerm) {
@@ -113,9 +155,15 @@ fn check_match(tm: ITerm) {
     let ctx = Context::new(std_env());
     let u_eval1 = quote0(tm.eval(ctx.clone()));
     println!("Term 1: {u_eval1:?}");
-    let u_eval2 = quote0(Step::Cont(tm).multistep(ctx.clone()).eval(ctx));
+    let u_eval2 = quote0(eval_verify(tm, ctx.clone()).eval(ctx));
     println!("Term 2: {u_eval2:?}");
     assert!(u_eval1 == u_eval2);
+}
+
+#[test]
+fn check_tau() {
+    use crate::tau;
+    check_match(tau());
 }
 
 #[test]
@@ -129,4 +177,6 @@ fn check_lem2() {
     use crate::lem2;
     check_match(lem2());
 }
+
+
 

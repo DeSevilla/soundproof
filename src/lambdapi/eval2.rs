@@ -50,14 +50,10 @@ impl Stepper for ITerm {
                 }),
             },
             ITerm::Star => Done(ITerm::Star),
-            ITerm::Pi(src, trg) => match src.clone().step(ctx.clone()) {
+            ITerm::Pi(src, trg) => match src.clone().step(ctx) {
                 Cont(c) => Cont(ITerm::Pi(c, trg)),
                 Done(c) => {
                     Done(ITerm::Pi(c, trg))
-                    // let mut ctx2 = ctx.clone();
-                    // println!("We are about to evaluate type {c:?} in context {} based on {src:?} with target {trg:?}", ctx.info_string());
-                    // ctx2.bind_type(c.eval(ctx.clone()));
-                    // trg.step(ctx2).apply(|t| ITerm::Pi(c, t))
                 }
             },
             ITerm::Bound(nat) => Done(ITerm::Bound(nat)),
@@ -78,19 +74,11 @@ impl Stepper for ITerm {
                                     },
                                     _ => panic!("got malformed lambda type"),
                                 }
-                                // let new = ;
-                                // Cont(new)
                             }
                             _ => panic!("got malformed lambda value"),
                         }
                     }
                 }
-                // let fn_ty = func.infer_type(ctx).unwrap();
-                // match fn_ty {
-                //     ITerm::Pi(src, trg) => 
-                //     _ => panic!("Got invalid type for function while evaluating")
-                // }
-
             },
             ITerm::Nat => Done(ITerm::Nat),
             ITerm::Zero => Done(ITerm::Zero),
@@ -118,18 +106,27 @@ impl Stepper for CTerm {
 }
 
 
-#[test]
-fn check_omega_match() {
-    use crate::omega;
-    let u_tm = omega();
-    println!("Base term: {u_tm:?}");
-    let u_eval1 = quote0(u_tm.eval(Context::new(vec![])));
+#[cfg(test)]
+fn check_match(tm: ITerm) {
+    use crate::lambdapi::std_env;
+    println!("Base term: {tm:?}");
+    let ctx = Context::new(std_env());
+    let u_eval1 = quote0(tm.eval(ctx.clone()));
     println!("Term 1: {u_eval1:?}");
-    let u_eval2 = match Step::Cont(u_tm).multistep(Context::new(vec![])) {
-        ITerm::Ann(ut, ty) => ut,
-        _ => panic!("inferrable!!"),
-    };
+    let u_eval2 = quote0(Step::Cont(tm).multistep(ctx.clone()).eval(ctx));
     println!("Term 2: {u_eval2:?}");
     assert!(u_eval1 == u_eval2);
+}
+
+#[test]
+fn check_omega() {
+    use crate::omega;
+    check_match(omega());
+}
+
+#[test]
+fn check_lem2() {
+    use crate::lem2;
+    check_match(lem2());
 }
 

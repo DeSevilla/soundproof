@@ -394,7 +394,7 @@ pub fn main() {
     if args.live {
         performance::main_live();
     } else {
-        tonegenerator(&args);
-        // main_to_file(&args);
+        // tonegenerator(&args);
+        main_to_file(&args);
     }
 }

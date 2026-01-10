@@ -718,7 +718,7 @@ impl SharedBackend {
         SharedBackend(Arc::new(Mutex::new(seq)))
     }
 
-    fn lock(&self) -> std::sync::MutexGuard<SequencerBackend> {
+    fn lock(&'_ self) -> std::sync::MutexGuard<'_, SequencerBackend> {
         self.0.lock().unwrap()
     }
 }

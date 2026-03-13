@@ -4,12 +4,14 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-// use bevy::asset::uuid::Uuid;
-// use bevy::prelude::*;
 use fundsp::hacker32::*;
 use piet_common::Color;
 use rand::seq::IndexedRandom;
 use rand::rng;
+
+#[cfg(feature = "perform")]
+use bevy::prelude::*;
+
 use crate::music::notes::*;
 use crate::music::stretch::{retime_pitch_wave, retime_wave};
 use crate::soundproof::select::FS_MEL_SIZE;
@@ -670,8 +672,8 @@ impl SoundGenerator for Toner {
     }
 }
 
-// #[derive(Debug, Clone, Copy, PartialEq, Component)]
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "perform", derive(Component))]
 pub struct Timings {
     pub start: f64,
     pub duration: f64,
@@ -694,6 +696,7 @@ pub enum SoundTree {
 pub static SIGN: AtomicU32 = AtomicU32::new(0);
 
 // #[derive(Clone, Debug, PartialEq, Component)]
+#[cfg_attr(feature = "perform", derive(Component))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct TreeMetadata {
     pub name: String,

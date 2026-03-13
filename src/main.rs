@@ -13,8 +13,8 @@ use translate::*;
 use types::*;
 
 use crate::draw::animate_term_steps;
-use crate::lambdapi::eval2::*;
-use crate::lambdapi::term::std_env;
+// use crate::lambdapi::eval2::*;
+// use crate::lambdapi::term::std_env;
 
 
 /// The "proof" side. Implementation of a simple dependently-typed lambda calculus,
@@ -448,6 +448,6 @@ pub fn main() {
         RunMode::Live => performance::main_live(),
         RunMode::Term => main_to_file(&args),
         RunMode::Steps => tonegenerator(&args),
-        _ => unimplemented!()
+        // _ => unimplemented!()
     }
 }

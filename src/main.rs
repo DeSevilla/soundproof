@@ -201,13 +201,24 @@ pub enum RunMode {
     /// Generates a file for a proof term's evolution as it reduces
     Steps,
     /// Live performance mode
+    #[cfg(feature = "perform")]
     Live,
 }
 
 impl RunMode {
     fn live(&self) -> bool {
-        *self == Self::Live 
+        match self {
+            RunMode::Term => false,
+            RunMode::Steps => false,
+            #[cfg(feature = "perform")]
+            RunMode::Live => true,
+        }
     }
+
+    // #[cfg(not(feature = "perform"))]
+    // fn live(&self) -> bool {
+    //     false
+    // }
 }
 
 /// A system which converts dependently-typed lambda calculus into music, with a focus on Girard's Paradox.

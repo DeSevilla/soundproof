@@ -1,7 +1,7 @@
 use clap::*;
 use fundsp::hacker32::*;
 
-// use std::fs;
+use std::fs;
 use std::time::Instant;
 
 use lambdapi::ast::*;
@@ -11,6 +11,10 @@ use soundproof::select::*;
 use soundproof::*;
 use translate::*;
 use types::*;
+
+use crate::draw::animate_term_steps;
+use crate::lambdapi::eval2::*;
+use crate::lambdapi::term::std_env;
 
 
 /// The "proof" side. Implementation of a simple dependently-typed lambda calculus,
@@ -23,9 +27,10 @@ pub mod music;
 /// Translation from LambdaPi to music.
 pub mod soundproof;
 /// The live performance
-// pub mod performance;
+#[cfg(feature = "perform")]
+pub mod performance;
 
-// pub mod draw;
+pub mod draw;
 pub mod parse;
 
 /// Modes for structuring the translation from LambdaPi term to SoundTree.
@@ -188,6 +193,23 @@ pub enum FilterOptions {
     None,
 }
 
+/// Which process to run
+#[derive(PartialEq, Eq, Clone, Copy, Debug, ValueEnum)]
+pub enum RunMode {
+    /// Generates a file for a single proof term
+    Term,  
+    /// Generates a file for a proof term's evolution as it reduces
+    Steps,
+    /// Live performance mode
+    Live,
+}
+
+impl RunMode {
+    fn live(&self) -> bool {
+        *self == Self::Live 
+    }
+}
+
 /// A system which converts dependently-typed lambda calculus into music, with a focus on Girard's Paradox.
 /// Generates audio, a spectrograph, an image representation of the "sound tree" structure, and
 /// animation frames matching the visualization with the sound.
@@ -195,8 +217,8 @@ pub enum FilterOptions {
 #[command(version, about, long_about=None)]
 pub struct Args {
     /// Run the live performance mode. If set, all other options have no effect.
-    #[arg(short, long, action)]
-    live: bool,
+    #[arg(short, long, default_value="term")]
+    mode: RunMode,
     /// Predefined terms of the dependently typed lambda calculus.
     #[arg(short, long, default_value = "girard")]
     value: NamedTerm,
@@ -287,31 +309,32 @@ pub fn make_tree(structure: Structure, content: AudioSelectorOptions, term: &ITe
     tree
 }
 
-// pub fn draw_tree(tree: &SoundTree, args: &Args) {
-//     println!("Drawing...");
-//     let now = Instant::now();
-//     draw::draw(
-//         tree,
-//         args.division,
-//         format!(
-//             "output/images/{:?}{}-viz.png",
-//             args.value,
-//             if args.reduce { "-reduced" } else { "" }
-//         ),
-//     );
-//     println!("One image: {:?}", now.elapsed());
-//     draw::draw(tree, args.division, "output/visualization.png");
-//     if args.animate {
-//         let frames_path = "output/images/frames";
-//         fs::remove_dir_all(frames_path).unwrap();
-//         fs::create_dir(frames_path).unwrap();
-//         let time = args.time.unwrap_or(tree.size() as f64);
-//         // let frames = (30.0 * time).floor() as usize;
-//         // println!("Drawing {frames} frames...");
-//         draw::draw_anim(tree, args.division, time, 30);
-//         // println!("All frames: {:?}", now.elapsed());
-//     }
-// }
+
+pub fn draw_tree(tree: &SoundTree, args: &Args) {
+    println!("Drawing...");
+    let now = Instant::now();
+    draw::draw(
+        tree,
+        args.division,
+        format!(
+            "output/images/{:?}{}-viz.png",
+            args.value,
+            if args.reduce { "-reduced" } else { "" }
+        ),
+    );
+    println!("One image: {:?}", now.elapsed());
+    draw::draw(tree, args.division, "output/visualization.png");
+    if args.animate {
+        let frames_path = "output/images/frames";
+        fs::remove_dir_all(frames_path).unwrap();
+        fs::create_dir(frames_path).unwrap();
+        let time = args.time.unwrap_or(tree.size() as f64);
+        // let frames = (30.0 * time).floor() as usize;
+        // println!("Drawing {frames} frames...");
+        draw::draw_anim(tree, args.division, time, 30);
+        // println!("All frames: {:?}", now.elapsed());
+    }
+}
 
 pub fn make_output(sound: Box<impl AudioUnit + 'static>, filters: FilterOptions) -> Box<dyn AudioUnit> {
     match filters {
@@ -327,7 +350,7 @@ pub fn make_output(sound: Box<impl AudioUnit + 'static>, filters: FilterOptions)
 }
 
 pub fn main_to_file(args: &Args) {
-    assert!(!args.live);
+    assert!(!args.mode.live());
     if args.draw_only {
         return;
     }
@@ -335,10 +358,10 @@ pub fn main_to_file(args: &Args) {
     let time = args.time.unwrap_or(tree.size() as f64);
     // draw_tree(&tree, args);
     
-    let seq = Sequencer::new(false, 2);
-    let mut cfg_seq = ConfigSequencer::new(seq, args.live);
-    // let backend = Box::new(seq.backend());
     println!("Sequencing over {time} seconds...");
+    let seq = Sequencer::new(false, 2);
+    let mut cfg_seq = ConfigSequencer::new(seq, false);
+    // let backend = Box::new(seq.backend());
     let now = Instant::now();
     tree.generate_with(
         &mut cfg_seq,
@@ -356,34 +379,44 @@ pub fn main_to_file(args: &Args) {
 pub fn tonegenerator(args: &Args) {
     use crate::eval2::Step;
     use crate::term::std_env;
-    assert!(!args.live);
     println!("Starting tone generation at {:?}", Instant::now());
     let start_term = args.term();
-    let seq = Sequencer::new(false, 2);
-    // let backend = Box::new(seq.backend());
-    let mut cfg_seq = ConfigSequencer::new(seq, args.live);
-    let base_dur = 0.3;
+    let base_dur = 0.69;
     let mut content = ToneMaker::new(0.0, base_dur);
     // let terms = [tau(), sigma(), delta(), omega(), lem0(), lem2(), lem3(), girard(), girard_reduced()];
-    let mut current = Step::Cont(start_term);
     let mut steps = 0;
+    let limit = 100;
+    if args.animate {
+        animate_term_steps(start_term.clone(), Silence, DivisionMethod::Weight, limit, 24.);
+    }
+    if args.draw_only {
+        return;
+    }
+
+    let seq = Sequencer::new(false, 2);
+    // let backend = Box::new(seq.backend());
+    let mut cfg_seq = ConfigSequencer::new(seq, args.mode.live());
+    let mut current = Step::Cont(start_term);
     loop {
+        steps += 1;
+        // println!("starting at {}", content.start_time);
+        println!("Translating for number {steps}...");
+        let now = Instant::now();
         let term = match &current {
             Step::Cont(t) => t.clone(),
             Step::Done(_) => break,
         };
-        println!("starting at {}", content.start_time);
         let tree = type_translate(&term, content.clone()).unwrap();
+        println!("...done in {:?}, output size {}", now.elapsed(), tree.size());
         // let tree = make_tree(args.structure, args.content, &term);
 
         content.start_time += base_dur;
         let time = args.time.unwrap_or((tree.size() + 40) as f64);
+        println!("Sequencing over frequency range {time}...");
         // draw_tree(&tree, args);
-        if args.draw_only {
-            return;
-        }
-        println!("Sequencing over {time} seconds...");
-        let now = Instant::now();
+        // if args.draw_only {
+        //     return;
+        // }
         tree.generate_with(
             &mut cfg_seq,
             0.0,
@@ -391,11 +424,11 @@ pub fn tonegenerator(args: &Args) {
             args.division,
             0.0,
         );
-        println!("...done in {:?}", now.elapsed());
+        println!("...adding up to {:?}", now.elapsed());
         current = current.step(Context::new(std_env()));
-        steps += 1;
-        if steps > 500 {
-            println!("Hit 300 steps");
+        println!("...and with stepping, {:?}", now.elapsed());
+        if steps > limit {
+            println!("Hit {limit} steps");
             break
         }
         // println!("Got this many events: {}", SIGN.load(std::sync::atomic::Ordering::SeqCst));
@@ -409,13 +442,12 @@ pub fn tonegenerator(args: &Args) {
 
 pub fn main() {
     let args = Args::parse();
-    // if args.live {
-    //     performance::main_live();
-    // } else {
-    //     // tonegenerator(&args);
-    //     main_to_file(&args);
-    // }
-    tonegenerator(&args);
-    // main_to_file(&args);
-
+    println!("Running in mode: {:?}", args.mode);
+    match args.mode {
+        #[cfg(feature = "perform")]
+        RunMode::Live => performance::main_live(),
+        RunMode::Term => main_to_file(&args),
+        RunMode::Steps => tonegenerator(&args),
+        _ => unimplemented!()
+    }
 }

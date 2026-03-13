@@ -6,12 +6,18 @@ use minifb::{Window, WindowOptions};
 use piet_common::*; //{Color, Device, DwriteFactory, FontFamily, ImageFormat, PietText, PietTextLayout, RenderContext, Text, TextLayoutBuilder};
 use piet_common::kurbo::{Circle, Line, Rect};
 
+use crate::lambdapi::ast::*;
+use crate::lambdapi::term::*;
+use crate::Selector;
+use crate::type_translate;
+use crate::eval2::*;
 use crate::soundproof::types::SoundTree;
 use crate::DivisionMethod;
 
-const WIDTH_PX: usize = 377 * 3;
-// const WIDTH_PX: usize = 1920;
-const HEIGHT_PX: usize = 120 * 3;
+// const WIDTH_PX: usize = 377 * 3;
+const WIDTH_PX: usize = 1300;
+// const HEIGHT_PX: usize = 120 * 3;
+const HEIGHT_PX: usize = 656;
 const DPI: f64 = 96.;
 const WIDTH_IN: f64 = WIDTH_PX as f64 / DPI;
 const HEIGHT_IN: f64 = HEIGHT_PX as f64 / DPI;
@@ -22,8 +28,8 @@ pub fn draw(tree: &SoundTree, scaling: DivisionMethod, path: impl AsRef<Path>) {
     let mut rc = bitmap.render_context();
     let rect = Rect::new(0.0, 0.0, WIDTH_IN, HEIGHT_IN);
     // rc.fill(rect, &Color::rgb8(0xCE, 0xCE, 0xCE));
-    // rc.fill(rect, &Color::BLACK);
-    rc.fill(rect, &Color::WHITE);
+    rc.fill(rect, &Color::BLACK);
+    // rc.fill(rect, &Color::WHITE);
     let args = FixedDrawArgs::new(tree.metadata().max_depth, None, scaling);
     drawtree(tree, &mut rc, args, 0.0, 1.0, 0);
     rc.finish().unwrap();
@@ -52,6 +58,55 @@ pub fn draw(tree: &SoundTree, scaling: DivisionMethod, path: impl AsRef<Path>) {
 //     }
     
 // }
+
+
+pub fn animate_term_steps(term: ITerm, meta: impl Selector, scaling: DivisionMethod, limit: usize, fps: f64) {
+    let mut device = Device::new().unwrap();
+    let window_options = WindowOptions { borderless: true, ..Default::default() };
+    // window_options.borderless = true;
+    let mut window = Window::new("Hi", WIDTH_PX, HEIGHT_PX, window_options).unwrap();
+    // let mut elapsed = 0.0;
+    let frame_time = Duration::new(0, (1e9 / fps as f64) as u32);
+    // let frames = (duration * fps as f64).ceil() as usize;
+    let ctx = Context::new(std_env());
+    for (ii, tm) in term.step_over(ctx.clone()).enumerate() {
+        if ii > limit {
+            break;
+        }
+        let tree = type_translate(&tm, meta.clone()).unwrap();
+        let frame_start = Instant::now();
+        if !window.is_open() {
+            println!("Window closed; quitting");
+            break;
+        }
+        let mut bitmap = device.bitmap_target(WIDTH_PX, HEIGHT_PX, DPI).unwrap();
+        let mut rc = bitmap.render_context();
+        let rect = Rect::new(0.0, 0.0, WIDTH_IN, HEIGHT_IN);
+        rc.fill(rect, &Color::BLACK);
+        let args = FixedDrawArgs::new(tree.metadata().max_depth, None, scaling);
+        drawtree(&tree, &mut rc, args, 0.0, 1.0, 0);
+        rc.finish().unwrap();
+        std::mem::drop(rc);
+        let a = bitmap.to_image_buf(ImageFormat::RgbaPremul).unwrap();
+        let buf: Vec<u32> = a.raw_pixels()
+            .chunks_exact(4)
+            .map(|s| s.try_into().unwrap())
+            .map(|[r, g, b, _a]: [u8; 4]| ((r as u32) << 16) | ((g as u32) << 8) | b as u32)
+            .collect();
+        window.update_with_buffer(&buf, WIDTH_PX, HEIGHT_PX).unwrap();
+        // let digits = frames.ilog10() as usize + 1;
+        // bitmap.save_to_file(path.as_ref().join(format!("{:0digits$}.png", ii))).expect("should save file successfully");
+        // if ii % log_margin == 0 {
+        //     println!("Completed {ii}/{frames} frames in {:?}", Instant::now() - start);
+        // }
+        // elapsed += frame_time;
+        let frame_end = Instant::now();
+        let render_dur = frame_end - frame_start;
+        if render_dur < frame_time {
+            sleep(frame_time - render_dur)
+        }
+    }
+}
 
 pub fn draw_anim(tree: &SoundTree, scaling: DivisionMethod, duration: f64, fps: usize) {
     let mut device = Device::new().unwrap();
@@ -173,7 +228,8 @@ fn drawtree(
                 top,
             );
             if args.current.is_some_and(|t| start_time <= t && t <= start_time + fraction) {
-                let mut text_manager = PietText::new_with_shared_fonts(DwriteFactory::new().unwrap(), None);
+                // let mut text_manager = PietText::new_with_shared_fonts(DwriteFactory::new().unwrap(), None);
+                let mut text_manager = PietText::new();
                 let text = meta.name.to_owned();
                 let text_layout = text_manager.new_text_layout(text)
                     .max_width(args.text_bar)
@@ -188,7 +244,7 @@ fn drawtree(
             };
             let border_width = ((right - left).min(args.depth_height) * 0.5).min(0.1);
             if border_width > 1.0 / DPI {
-                ctx.stroke(rect, &Color::WHITE, border_width);
+                ctx.stroke(rect, &Color::BLACK, border_width);
             }
         },
     }

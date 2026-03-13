@@ -23,9 +23,7 @@ impl<T: Stepper> Iterator for StepOver<T> {
                 Some(res)
             } 
         }
-
     }
-    
 }
 
 impl<T: Stepper> Step<T> {
@@ -58,6 +56,10 @@ impl<T: Stepper> Step<T> {
 }
 pub trait Stepper: Clone {
     fn step(self, ctx: Context) -> Step<Self> where Self: Sized;
+
+    fn step_over(self, ctx: Context) -> StepOver<Self> where Self: Sized {
+        StepOver { tm: Step::Cont(self), ctx }
+    }
 }
 
 impl Stepper for ITerm {

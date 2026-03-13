@@ -655,7 +655,7 @@ impl SoundGenerator for Toner {
     fn sequence(&self, seq: &mut ConfigSequencer, start_time: f64, duration: f64, _lean: f32) {
         SIGN.fetch_add(1, Ordering::Relaxed);
         let center = start_time + duration * 0.5;
-        let freq = center as f32 * 1.5;
+        let freq = center as f32 * 1.5 + 100.;
         let modified_instrument = (constant(freq) >> self.instrument.clone()) >> split::<U2>();
         // if self.start_time > 11.0 {
         //     println!("{}", self.start_time)

@@ -15,9 +15,9 @@ use crate::soundproof::types::SoundTree;
 use crate::DivisionMethod;
 
 // const WIDTH_PX: usize = 377 * 3;
-const WIDTH_PX: usize = 1300;
+const WIDTH_PX: usize = 1920;
 // const HEIGHT_PX: usize = 120 * 3;
-const HEIGHT_PX: usize = 656;
+const HEIGHT_PX: usize = 1080;
 const DPI: f64 = 96.;
 const WIDTH_IN: f64 = WIDTH_PX as f64 / DPI;
 const HEIGHT_IN: f64 = HEIGHT_PX as f64 / DPI;
@@ -106,6 +106,7 @@ pub fn animate_term_steps(term: ITerm, meta: impl Selector, scaling: DivisionMet
             sleep(frame_time - render_dur)
         }
     }
+    sleep(Duration::from_secs(10))
 }
 
 pub fn draw_anim(tree: &SoundTree, scaling: DivisionMethod, duration: f64, fps: usize) {

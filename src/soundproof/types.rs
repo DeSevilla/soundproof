@@ -71,7 +71,7 @@ pub trait SoundGenerator {
     /// Generate audio into the sequencer for a duration starting at the selected time.
     fn sequence(&self, seq: &mut ConfigSequencer, start_time: f64, duration: f64, lean: f32);
 
-    /// Duration of the SoundGenerator prior to stretching (relevant for audio clips)
+    /// Duration of the SoundGenerator prior to stretching (relevant for audio clips & looping)
     fn base_duration(&self) -> f64;
 }
 
@@ -658,7 +658,8 @@ impl SoundGenerator for Toner {
         SIGN.fetch_add(1, Ordering::Relaxed);
         let center = start_time + duration * 0.5;
         let freq = center as f32 * 1.5 + 100.;
-        let modified_instrument = (constant(freq) >> self.instrument.clone()) >> split::<U2>();
+        let factor = 8e-4;
+        let modified_instrument = (constant(freq) >> self.instrument.clone()) >> split::<U2>() * factor;
         // if self.start_time > 11.0 {
         //     println!("{}", self.start_time)
         // }

@@ -215,14 +215,21 @@ impl ToneMaker {
             duration
         }
     }
+
+    pub fn increment(&mut self) {
+        self.start_time += self.duration;
+    } 
 }
 
 impl Selector for ToneMaker {
     fn isound(&self, term: &ITerm) -> SoundTree {
+        fn lerper<T: AudioNode>(n: An<T>) -> An<Unop<Unop<T, FrameMulScalar<T::Outputs>>, FrameAddScalar<T::Outputs>>> { 
+            n * 0.5 + 0.5
+        }
         let mut tt = match term {
-            ITerm::Ann(_, _) => Toner::new(sine()),
-            ITerm::Star => Toner::new(saw()),
-            ITerm::Pi(_, _) => Toner::new(sinesaw()),
+            ITerm::Ann(_, _) => Toner::new(sine() * lerper(saw_hz(0.5 * self.duration as f32))),
+            ITerm::Star => Toner::new(saw() * lerper(sine_hz(2.0 * self.duration as f32))),
+            ITerm::Pi(_, _) => Toner::new(sinesaw() * lerper(saw_hz(self.duration as f32))),
             ITerm::Bound(_) => Toner::new(square()),
             ITerm::Free(_) => Toner::new(sine()),
             ITerm::App(_, _) => Toner::new(saw()),
@@ -1079,6 +1086,7 @@ pub enum MelodySelector {
     F,
     /// Same melodies as B and C but exclusively as sines. See [imelody_oneinstr] and [cmelody_oneinstr].
     PureSine,
+    // PureSineF,
     // Concrete(ClipSelector),
 }
 
@@ -1093,8 +1101,7 @@ impl MelodySelector {
             MelodySelector::E => imelody5(term, depth),
             MelodySelector::F => imelody6(term, depth),
             MelodySelector::PureSine => imelody_oneinstr(sine(), term, depth),
-            // MelodySelector::Concrete(clip_selector) => SoundTree::sound(clip_selector.imelody(term, depth), term),
-            // _ => unimplemented!()
+            // MelodySelector::PureSineF => imelody7(term, depth),
         }
     }
 
@@ -1108,6 +1115,7 @@ impl MelodySelector {
             MelodySelector::E => cmelody5(term, depth),
             MelodySelector::F => cmelody6(term, depth),
             MelodySelector::PureSine => cmelody_oneinstr(sine(), term, depth),
+            // MelodySelector::PureSineF => cmelody7(term, depth),
             // MelodySelector::Concrete(clip_selector) => SoundTree::sound(clip_selector.cmelody(term, depth), term.clone()),
             // _ => unimplemented!()
         }
@@ -1313,17 +1321,43 @@ pub fn cmelody6(term: &CTerm, depth: usize) -> Melody {
     result
 }
 
+/// Melodies with some hints of dissonance & more texture
+// pub fn imelody7(term: &ITerm, depth: usize) -> Melody {
+//     let mut result = match term {
+//         ITerm::Ann(_, _) => Melody::new_even(sine(), &[A, D, F, A]),
+//         ITerm::Star => Melody::new_timed(sine(), &[(B, 0.5), (C, 0.5), (E, 3.0)]),
+//         ITerm::Pi(_, _) => Melody::new_even(sine(), &[E, C, A, C]),
+//         ITerm::Bound(_) => Melody::new_even(sine(), &[A, E, C, B]),
+//         ITerm::Free(_) => Melody::new_even(sine(), &[A, A, E, C]),
+//         ITerm::App(_, _) => Melody::new_timed(sine(), &[(B, 1.0), (A, 0.5), (E, 0.5), (C, 1.0), (B, 1.0)]),
+//         ITerm::Zero => Melody::new_timed(sine(), &[(E, 1.0), (F, 0.5), (E, 0.5), (C, 1.0), (A, 1.0)]),
+//         ITerm::Fin(_) => Melody::new_even(sine() * 1.1, &[A, A + 12, E, F]),
+//         _ => panic!("{term} not implemented")
+//     };
+//     result.adjust_depth(depth);
+//     result
+// }
+
+// pub fn cmelody7(term: &CTerm, depth: usize) -> Melody {
+//     let mut result = match term {
+//         CTerm::Lam(_) => Melody::new_even(sine(), &[D, F, E, C]),
+//         _ => Melody::new_even(sine(), &[G, G, G, G]),  //value will never be used, but we have to call this for ownership reasons
+//     };
+//     result.adjust_depth(depth);
+//     result
+// }
+
 /// Melodies with B, C, E, and G, all on the same instrument
 pub fn imelody_oneinstr(instrument: impl AudioUnit + 'static, term: &ITerm, depth: usize) -> Melody {
     let mut result = match term {
-        ITerm::Ann(_, _) => Melody::new_even(instrument, &[C, E, B, E]),
-        ITerm::Star => Melody::new_even(instrument, &[G, E, C, B]),
-        ITerm::Pi(_, _) => Melody::new_even(instrument, &[E, C, G, E]),
-        ITerm::Bound(_) => Melody::new_even(instrument, &[E, E, C, B]),
-        ITerm::Free(_) => Melody::new_even(instrument, &[B, B, E, G]),
-        ITerm::App(_, _) => Melody::new_even(instrument, &[B, C, G, E]),
-        ITerm::Zero => Melody::new_even(instrument, &[B, C, E, G]),
-        ITerm::Fin(_) => Melody::new_even(instrument, &[E, B, G, C]),
+        ITerm::Ann(_, _) => Melody::new_even(instrument, &[A, D, F, A]),
+        ITerm::Star => Melody::new_timed(instrument, &[(B, 0.5), (C, 0.5), (E, 3.0)]),
+        ITerm::Pi(_, _) => Melody::new_even(instrument, &[E, C, A, C]),
+        ITerm::Bound(_) => Melody::new_even(instrument, &[A, E, C, B]),
+        ITerm::Free(_) => Melody::new_even(instrument, &[A, A, E, C]),
+        ITerm::App(_, _) => Melody::new_timed(instrument, &[(B, 1.0), (A, 0.5), (E, 0.5), (C, 1.0), (B, 1.0)]),
+        ITerm::Zero => Melody::new_timed(instrument, &[(E, 1.0), (F, 0.5), (E, 0.5), (C, 1.0), (A, 1.0)]),
+        ITerm::Fin(_) => Melody::new_even(instrument, &[A, A + 12, E, F]),
         _ => panic!("{term} not implemented")
     };
     result.adjust_depth(depth);
@@ -1333,7 +1367,7 @@ pub fn imelody_oneinstr(instrument: impl AudioUnit + 'static, term: &ITerm, dept
 /// Melodies with B, C, E, and G, all on the same instrument
 pub fn cmelody_oneinstr(instrument: impl AudioUnit + 'static, term: &CTerm, depth: usize) -> Melody {
     let mut result = match term {
-        CTerm::Lam(_) => Melody::new_even(instrument, &[G, B, E, C]),
+        CTerm::Lam(_) => Melody::new_even(instrument, &[D, F, E, C]),
         _ => Melody::new_even(sine(), &[A, A, A, A]), //value will never be used, but we have to call this for ownership reasons
     };
     result.adjust_depth(depth);

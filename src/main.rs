@@ -392,13 +392,14 @@ pub fn tonegenerator(args: &Args) {
     use crate::term::std_env;
     println!("Starting tone generation at {:?}", Instant::now());
     let start_term = args.term();
-    let base_dur = 0.69;
+    let base_dur = 10.0;
     let mut content = ToneMaker::new(0.0, base_dur);
+    let changes = MelodySelector::PureSine.deepen();
     // let terms = [tau(), sigma(), delta(), omega(), lem0(), lem2(), lem3(), girard(), girard_reduced()];
     let mut steps = 0;
-    let limit = 100;
+    let limit = 10;
     if args.animate {
-        animate_term_steps(start_term.clone(), Silence, DivisionMethod::Weight, limit, 24.);
+        animate_term_steps(start_term.clone(), content.clone(), DivisionMethod::Even, limit, 1. / base_dur);
     }
     if args.draw_only {
         return;
@@ -407,27 +408,47 @@ pub fn tonegenerator(args: &Args) {
     let seq = Sequencer::new(false, 2);
     // let backend = Box::new(seq.backend());
     let mut cfg_seq = ConfigSequencer::new(seq, args.mode.live());
-    let mut current = Step::Cont(start_term);
+    let mut current = Step::new(start_term);
+    let mut prev_size = 1000.0;
     loop {
         steps += 1;
         // println!("starting at {}", content.start_time);
         println!("Translating for number {steps}...");
         let now = Instant::now();
-        let term = match &current {
-            Step::Cont(t) => t.clone(),
-            Step::Done(_) => break,
+        let (term, change) = match &current {
+            Step::Cont(t, v) => (t.clone(), v.clone()),
+            Step::Done(_, _) => break,
         };
-        let tree = type_translate(&term, content.clone()).unwrap();
-        println!("...done in {:?}, output size {}", now.elapsed(), tree.size());
         // let tree = make_tree(args.structure, args.content, &term);
-
-        content.start_time += base_dur;
-        let time = args.time.unwrap_or((tree.size() + 40) as f64);
-        println!("Sequencing over frequency range {time}...");
+        let dur = match change {
+            Some(change) => {
+                let change_tree = type_translate(&change, changes.clone()).unwrap();
+                // let dur = change_tree.size() as f64 / prev_size * base_dur;
+                let dur = base_dur;
+                println!("Change size: {} vs prev at: {}", change_tree.size(), change_tree.size() as f64 / prev_size);
+                change_tree.generate_with(
+                    &mut cfg_seq,
+                    content.start_time,
+                    dur,
+                    args.division,
+                    0.0
+                );
+                dur
+            },
+            None => base_dur,
+        };
+        println!("Duration: {dur}");
+        content.duration = dur;
         // draw_tree(&tree, args);
         // if args.draw_only {
         //     return;
         // }
+
+        let tree = type_translate(&term, content.clone()).unwrap();
+        prev_size = tree.size() as f64;
+        println!("...done in {:?}, output size {}", now.elapsed(), tree.size());
+        let time = args.time.unwrap_or((tree.size() + 40) as f64);
+        println!("Sequencing over frequency range {time}...");
         tree.generate_with(
             &mut cfg_seq,
             0.0,
@@ -435,6 +456,9 @@ pub fn tonegenerator(args: &Args) {
             args.division,
             0.0,
         );
+
+        
+        content.increment();
         println!("...adding up to {:?}", now.elapsed());
         current = current.step(Context::new(std_env()));
         println!("...and with stepping, {:?}", now.elapsed());

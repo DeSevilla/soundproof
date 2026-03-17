@@ -1,9 +1,17 @@
+use std::any::Any;
+
 use crate::{ast::*, lambdapi::term::quote0};
 
 #[derive(Debug, Clone)]
 pub enum Step<T: Stepper> {
-    Cont(T),
-    Done(T)
+    Cont(T, Option<ITerm>),
+    Done(T, Option<ITerm>)
+}
+
+impl<T: Stepper> Step<T> {
+    pub fn new(val: T) -> Self {
+        Self::Cont(val, None) 
+    }
 }
 
 pub struct StepOver<T: Stepper> {
@@ -16,8 +24,8 @@ impl<T: Stepper> Iterator for StepOver<T> {
     
     fn next(&mut self) -> Option<Self::Item> {
         match &self.tm {
-            Step::Done(_) => None,
-            Step::Cont(t) => {
+            Step::Done(_, _) => None,
+            Step::Cont(t, _) => {
                 let res = t.clone();
                 self.tm = t.clone().step(self.ctx.clone());
                 Some(res)
@@ -30,15 +38,15 @@ impl<T: Stepper> Step<T> {
     pub fn apply<X: Stepper>(self, f: impl FnOnce(T) -> X) -> Step<X> {
         use Step::*;
         match self {
-            Cont(t) => Cont(f(t)),
-            Done(t) => Done(f(t))
+            Cont(t, v) => Cont(f(t), v),
+            Done(t, v) => Done(f(t), v)
         }
     }
 
     pub fn step(self, ctx: Context) -> Self {
         match self {
-            Self::Cont(t) => t.step(ctx),
-            Step::Done(_) => self,
+            Self::Cont(t, _) => t.step(ctx),
+            Step::Done(_, _) => self,
         }
     }
 
@@ -48,17 +56,20 @@ impl<T: Stepper> Step<T> {
         loop {
             result = result.step(ctx.clone());
             match result {
-                Done(t) => return t,
-                Cont(_) => (),
+                Done(t, _) => return t,
+                Cont(_, _) => (),
             }
         }
     }
 }
+
 pub trait Stepper: Clone {
     fn step(self, ctx: Context) -> Step<Self> where Self: Sized;
 
+    // fn step_and(self, ctx: Context) -> (Step<Self>, Self) where Self:Sized;
+
     fn step_over(self, ctx: Context) -> StepOver<Self> where Self: Sized {
-        StepOver { tm: Step::Cont(self), ctx }
+        StepOver { tm: Step::Cont(self, None), ctx }
     }
 }
 
@@ -67,28 +78,31 @@ impl Stepper for ITerm {
         use Step::*;
         match self {
             ITerm::Ann(body, ty) => match ty.step(ctx.clone()) {
-                Cont(typ) => Cont(ITerm::Ann(body, typ)),
-                Done(typ) => body.step(ctx).apply(|ct| match ct {
+                Cont(typ, v) => Cont(ITerm::Ann(body, typ), v),
+                Done(typ, _) => body.step(ctx).apply(|ct| match ct {
                     CTerm::Inf(it) => *it,
                     _ => ITerm::Ann(ct, typ)
                 }),
             },
-            ITerm::Star => Done(ITerm::Star),
+            ITerm::Star => Done(ITerm::Star, None),
             ITerm::Pi(src, trg) => match src.clone().step(ctx) {
-                Cont(c) => Cont(ITerm::Pi(c, trg)),
-                Done(c) => {
-                    Done(ITerm::Pi(c, trg))
+                Cont(c, v) => Cont(ITerm::Pi(c, trg), v),
+                Done(c, v) => {
+                    Done(ITerm::Pi(c, trg), v)
                 }
             },
-            ITerm::Bound(nat) => Done(ITerm::Bound(nat)),
+            ITerm::Bound(nat) => Done(ITerm::Bound(nat), None),
             ITerm::Free(name) => match ctx.find_free(&name) {
-                Some((ty, Some(val))) => Cont(ITerm::Ann(quote0(val), quote0(ty))),
+                Some((ty, Some(val))) => {
+                    let v = ITerm::Ann(quote0(val), quote0(ty));
+                    Cont(v.clone(), Some(v))
+                },
                 _ => panic!("Attempted to evaluate free variable {name:?} without a definition in context"),
             },
             ITerm::App(func, arg) => {
                 match func.step(ctx.clone()) {
-                    Cont(f) => Cont(ITerm::App(Box::new(f), arg)),
-                    Done(f) => {
+                    Cont(f, v) => Cont(ITerm::App(Box::new(f), arg), v),
+                    Done(f, v) => {
                         match f {
                             ITerm::Ann(CTerm::Lam(body), CTerm::Inf(ty)) => {
                                 match *ty.clone() {
@@ -96,7 +110,7 @@ impl Stepper for ITerm {
                                         let tm = ITerm::Ann(arg, src);
                                         let resbody = body.subst(0, &tm);
                                         let resty = trg.subst(0, &tm);
-                                        Cont(ITerm::Ann(resbody, resty))
+                                        Cont(ITerm::Ann(resbody, resty), Some(tm))
                                     },
                                     _ => panic!("got malformed lambda type"),
                                 }
@@ -106,8 +120,8 @@ impl Stepper for ITerm {
                     }
                 }
             },
-            ITerm::Nat => Done(ITerm::Nat),
-            ITerm::Zero => Done(ITerm::Zero),
+            ITerm::Nat => Done(ITerm::Nat, None),
+            ITerm::Zero => Done(ITerm::Zero, None),
             ITerm::Succ(n) => n.step(ctx).apply(ITerm::Succ),
             ITerm::NatElim(cterm, cterm1, cterm2, cterm3) => todo!(),
             ITerm::Fin(nat) => nat.step(ctx).apply(ITerm::Fin),
@@ -126,7 +140,7 @@ impl Stepper for CTerm {
         use Step::*;
         match self {
             CTerm::Inf(iterm) => iterm.step(ctx).apply(|i| CTerm::Inf(Box::new(i))),
-            CTerm::Lam(_) => Done(self),
+            CTerm::Lam(_) => Done(self, None),
         }
     }
 }
@@ -135,17 +149,17 @@ impl Stepper for CTerm {
 fn eval_verify(tm: ITerm, ctx: Context) -> ITerm {
     use crate::lambdapi::term::std_env;
     tm.infer_type(ctx.clone()).unwrap();
-    let mut current = Step::Cont(tm);
+    let mut current = Step::Cont(tm, None);
     let mut steps = 0;
     loop {
         steps += 1;
         match current {
-            Step::Cont(t) => {
+            Step::Cont(t, _) => {
                 println!("{steps} {t:?}");
                 t.infer_type(ctx.clone()).unwrap();
                 current = t.step(ctx.clone());
             },
-            Step::Done(t) => return t
+            Step::Done(t, _) => return t
         }
     } 
 }

@@ -2,16 +2,20 @@ use std::path::Path;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use fundsp::hacker::{AudioUnit, Sequencer};
 use minifb::{Window, WindowOptions};
 use piet_common::*; //{Color, Device, DwriteFactory, FontFamily, ImageFormat, PietText, PietTextLayout, RenderContext, Text, TextLayoutBuilder};
 use piet_common::kurbo::{Circle, Line, Rect};
+use cpal::{self, FromSample, SizedSample, StreamConfig};
 
 use crate::lambdapi::ast::*;
 use crate::lambdapi::term::*;
 use crate::Selector;
+use crate::soundproof::select::ToneMaker;
 use crate::type_translate;
 use crate::eval2::*;
-use crate::soundproof::types::SoundTree;
+use crate::soundproof::types::{ConfigSequencer, SoundTree};
 use crate::DivisionMethod;
 
 // const WIDTH_PX: usize = 377 * 3;
@@ -60,8 +64,28 @@ pub fn draw(tree: &SoundTree, scaling: DivisionMethod, path: impl AsRef<Path>) {
 // }
 
 
-pub fn animate_term_steps(term: ITerm, meta: impl Selector, scaling: DivisionMethod, limit: usize, fps: f64) {
-    let mut device = Device::new().unwrap();
+
+fn write_data<T>(output: &mut [T], channels: usize, next_sample: &mut dyn FnMut() -> (f32, f32))
+where
+    T: SizedSample + FromSample<f32>,
+{
+    for frame in output.chunks_mut(channels) {
+        let sample = next_sample();
+        let left = T::from_sample(sample.0);
+        let right: T = T::from_sample(sample.1);
+
+        for (channel, sample) in frame.iter_mut().enumerate() {
+            if channel & 1 == 0 {
+                *sample = left;
+            } else {
+                *sample = right;
+            }
+        }
+    }
+}
+
+pub fn animate_term_steps(term: ITerm, mut meta: ToneMaker, scaling: DivisionMethod, limit: usize, fps: f64) {
+    let mut visual_device = Device::new().unwrap();
     let window_options = WindowOptions { borderless: true, ..Default::default() };
     // window_options.borderless = true;
     let mut window = Window::new("Hi", WIDTH_PX, HEIGHT_PX, window_options).unwrap();
@@ -69,17 +93,54 @@ pub fn animate_term_steps(term: ITerm, meta: impl Selector, scaling: DivisionMet
     let frame_time = Duration::new(0, (1e9 / fps as f64) as u32);
     // let frames = (duration * fps as f64).ceil() as usize;
     let ctx = Context::new(std_env());
+    let mut seq = Sequencer::new(false, 2);
+    let backend = Box::new(seq.backend());
+    let mut cfg_seq = ConfigSequencer::new(seq, true);
+    let host = cpal::default_host();
+    let audio_device = host
+        .default_output_device()
+        .expect("failed to find a default output device");
+    let config: StreamConfig = audio_device.default_output_config().unwrap().into();
+    let channels = config.channels as usize;
+    // let mut current = Step::Cont(start_term);
+    std::thread::spawn(move || {
+        let sample_rate = config.sample_rate.0 as f64;
+        // let mut sound = create_sound(pitch, volume, pitch_bend, control);
+        let mut sound = backend;
+        sound.set_sample_rate(sample_rate);
+
+        let mut next_value = move || sound.get_stereo();
+        let err_fn = |err| eprintln!("an error occurred on stream: {err}");
+        let stream = audio_device
+            .build_output_stream(
+                &config,
+                move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+                    write_data(data, channels, &mut next_value)
+                },
+                err_fn,
+                None,
+            )
+            .unwrap();
+
+        stream.play().unwrap();
+        loop {
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+    });
+    meta.increment();
     for (ii, tm) in term.step_over(ctx.clone()).enumerate() {
         if ii > limit {
             break;
         }
+        meta.increment();
         let tree = type_translate(&tm, meta.clone()).unwrap();
+        tree.generate_with(&mut cfg_seq, 0.0, 2000.0, DivisionMethod::Weight, 0.0);
         let frame_start = Instant::now();
         if !window.is_open() {
             println!("Window closed; quitting");
             break;
         }
-        let mut bitmap = device.bitmap_target(WIDTH_PX, HEIGHT_PX, DPI).unwrap();
+        let mut bitmap = visual_device.bitmap_target(WIDTH_PX, HEIGHT_PX, DPI).unwrap();
         let mut rc = bitmap.render_context();
         let rect = Rect::new(0.0, 0.0, WIDTH_IN, HEIGHT_IN);
         rc.fill(rect, &Color::BLACK);

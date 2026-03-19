@@ -660,6 +660,93 @@ impl Selector for FullStratifier {
     }
 }
 
+
+#[derive(Clone)]
+pub struct SineRhythmizer {
+    rhythm: Vec<f64>,
+    depth: usize,
+}
+
+impl SineRhythmizer {
+    pub fn new() -> Self {
+        let length = 4;
+        Self {
+            rhythm: vec![1.0 / length as f64; length],
+            depth: 0
+        }
+    }
+
+    pub fn imelody(&self, term: &ITerm) -> Melody {
+        let mut mel = match term {
+            ITerm::Ann(_, _) => Melody::new_even(sine(), &[A, D, F, A]),
+            ITerm::Star => Melody::new_even(sine(), &[B, C, E, E]),
+            ITerm::Pi(_, _) => Melody::new_even(sine(), &[E, C, A, C]),
+            ITerm::Bound(_) => Melody::new_even(sine(), &[A, E, C, B]),
+            ITerm::Free(_) => Melody::new_even(sine(), &[A, A, E, C]),
+            ITerm::App(_, _) => Melody::new_even(sine(), &[B, A, C, B]),
+            ITerm::Zero => Melody::new_even(sine(), &[E, F, C, A]),
+            ITerm::Fin(_) => Melody::new_even(sine(), &[A, A + 12, E, F]),
+            _ => panic!("{term} not implemented")
+        };
+        // let rhythm = self.rhythm.clone();
+        mel.map_indexed(|i, (n, _d)| (*n, self.rhythm[i]));
+        mel.adjust_depth(self.depth);
+        mel
+    }
+
+    pub fn cmelody(&self, term: &CTerm) -> Melody {
+        let mut mel = match term {
+            CTerm::Lam(_) => Melody::new_even(sine(), &[D, F, E, C]),
+            _ => unimplemented!()
+            // _ => Melody::new_even(sine(), &[G, G, G, G]),  //value will never be used, but we have to call this for ownership reasons
+        };
+        mel.map_indexed(|i, (n, _d)| (*n, self.rhythm[i]));
+        mel.adjust_depth(self.depth);
+        mel
+    }
+}
+
+impl Default for SineRhythmizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Selector for SineRhythmizer {
+    fn isound(&self, term: &ITerm) -> SoundTree {
+        let mel = self.imelody(term);
+        SoundTree::sound(mel, self.imeta(term))
+    }
+
+    fn csound(&self, term: &CTerm) -> SoundTree {
+        let mel = self.cmelody(term);
+        SoundTree::sound(mel, self.cmeta(term))
+    }
+
+    fn imerge(&self, term: &ITerm) -> Self {
+        let rhythm = match term {
+            ITerm::Ann(_, _) => vec![1.0, 0.5, 1.5, 1.0],
+            ITerm::Star => vec![0.0, 0.0, 0.0, -1.0],
+            ITerm::Pi(_, _) => vec![0.5, 1.5, 0.5, 1.5],
+            ITerm::Bound(_) => vec![0.0, 0.0, -1.0, 0.0],
+            ITerm::Free(_) => vec![3.0, 0.3, 0.3, 0.4],
+            ITerm::App(_, _) => vec![2.5, 0.5, 0.5, 0.5],
+            ITerm::Zero => vec![-1.0, 0.0, 0.0, 0.0],
+            ITerm::Fin(_) => vec![0.7, 0.7, 2.1, 0.5],
+            _ => unimplemented!()
+        };
+        Self { rhythm, depth: self.depth + 1 }
+    }
+
+    fn cmerge(&self, term: &CTerm) -> Self {
+        let rhythm = match term {
+            CTerm::Inf(_) => panic!("inf merge???"),
+            CTerm::Lam(_) => vec![1.5, 0.5, 1., 0.5],
+        };
+        Self { rhythm, depth: self.depth + 1 }
+    }
+}
+
 #[derive(Clone)]
 pub struct Rhythmizer {
     rhythm: Vec<f64>,

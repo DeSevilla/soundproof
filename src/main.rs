@@ -173,6 +173,8 @@ pub enum AudioSelectorOptions {
     Loop,
     /// Melody & instrument are determined by node, rhythm is determined by parent node.
     Rhythmized,
+    /// Melody determined by node, rhythm determined by parent node, all instruments are sines.
+    SineRhythm,
     /// Just plays sine tones, no melody.
     Bare,
     ToneMake,
@@ -311,6 +313,7 @@ pub fn make_tree(structure: Structure, content: AudioSelectorOptions, term: &ITe
         Mixed => structure_func(MixedOutput::new(), structure, term),
         Loop => structure_func(Looper::new(Rhythmizer::new()), structure, term),
         Rhythmized => structure_func(Rhythmizer::new(), structure, term),
+        SineRhythm => structure_func(SineRhythmizer::new(), structure, term),
         FullStratified => structure_func(FullStratifier::new(), structure, term),
         AsyncStratified => structure_func(AsyncStratifier::new(), structure, term),
         Bare => structure_func(Plain::new(), structure, term),
@@ -394,10 +397,10 @@ pub fn tonegenerator(args: &Args) {
     let start_term = args.term();
     let base_dur = 10.0;
     let mut content = ToneMaker::new(0.0, base_dur);
-    let changes = MelodySelector::PureSine.deepen();
+    let changes = SineRhythmizer::new();
     // let terms = [tau(), sigma(), delta(), omega(), lem0(), lem2(), lem3(), girard(), girard_reduced()];
     let mut steps = 0;
-    let limit = 10;
+    let limit = 100;
     if args.animate {
         animate_term_steps(start_term.clone(), content.clone(), DivisionMethod::Even, limit, 1. / base_dur);
     }
@@ -423,8 +426,8 @@ pub fn tonegenerator(args: &Args) {
         let dur = match change {
             Some(change) => {
                 let change_tree = type_translate(&change, changes.clone()).unwrap();
-                // let dur = change_tree.size() as f64 / prev_size * base_dur;
-                let dur = base_dur;
+                let dur = 1. + (change_tree.size() as f64 / prev_size).sqrt() * base_dur;
+                // let dur = base_dur;
                 println!("Change size: {} vs prev at: {}", change_tree.size(), change_tree.size() as f64 / prev_size);
                 change_tree.generate_with(
                     &mut cfg_seq,
@@ -471,7 +474,7 @@ pub fn tonegenerator(args: &Args) {
     // use crate::SIGN;
     // println!("Got this many events: {}", SIGN.load(std::sync::atomic::Ordering::SeqCst));
     let mut output = make_output(Box::new(cfg_seq.seq), args.filters);
-    save(&mut *output, steps as f64 * base_dur);
+    save(&mut *output, content.start_time);
     println!("Done.");
 }
 

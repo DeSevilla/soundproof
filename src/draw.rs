@@ -11,7 +11,7 @@ use cpal::{self, FromSample, SizedSample, StreamConfig};
 
 use crate::lambdapi::ast::*;
 use crate::lambdapi::term::*;
-use crate::Selector;
+// use crate::Selector;
 use crate::soundproof::select::ToneMaker;
 use crate::type_translate;
 use crate::eval2::*;

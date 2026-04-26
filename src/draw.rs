@@ -15,7 +15,7 @@ use crate::lambdapi::term::*;
 use crate::soundproof::select::ToneMaker;
 use crate::type_translate;
 use crate::eval2::*;
-use crate::soundproof::types::{ConfigSequencer, SoundTree};
+use crate::soundproof::types::{ConfigSequencer, SetOnce, SoundTree};
 use crate::DivisionMethod;
 
 // const WIDTH_PX: usize = 377 * 3;
@@ -90,52 +90,60 @@ pub fn animate_term_steps(term: ITerm, mut meta: ToneMaker, scaling: DivisionMet
     // window_options.borderless = true;
     let mut window = Window::new("Hi", WIDTH_PX, HEIGHT_PX, window_options).unwrap();
     // let mut elapsed = 0.0;
-    let frame_time = Duration::new(0, (1e9 / fps as f64) as u32);
+    let base_time = Duration::new(0, (1e9 / fps) as u32);
+    let mut base_size = SetOnce::new();
+    let mut frame_time = base_time;
+
+    println!("{frame_time:?}");
     // let frames = (duration * fps as f64).ceil() as usize;
     let ctx = Context::new(std_env());
-    let mut seq = Sequencer::new(false, 2);
-    let backend = Box::new(seq.backend());
-    let mut cfg_seq = ConfigSequencer::new(seq, true);
-    let host = cpal::default_host();
-    let audio_device = host
-        .default_output_device()
-        .expect("failed to find a default output device");
-    let config: StreamConfig = audio_device.default_output_config().unwrap().into();
-    let channels = config.channels as usize;
+    // let mut seq = Sequencer::new(false, 2);
+    // let backend = Box::new(seq.backend());
+    // let mut cfg_seq = ConfigSequencer::new(seq, true);
+    // let host = cpal::default_host();
+    // let audio_device = host
+    //     .default_output_device()
+    //     .expect("failed to find a default output device");
+    // let config: StreamConfig = audio_device.default_output_config().unwrap().into();
+    // let channels = config.channels as usize;
     // let mut current = Step::Cont(start_term);
-    std::thread::spawn(move || {
-        let sample_rate = config.sample_rate.0 as f64;
-        // let mut sound = create_sound(pitch, volume, pitch_bend, control);
-        let mut sound = backend;
-        sound.set_sample_rate(sample_rate);
+    // std::thread::spawn(move || {
+    //     let sample_rate = config.sample_rate.0 as f64;
+    //     // let mut sound = create_sound(pitch, volume, pitch_bend, control);
+    //     let mut sound = backend;
+    //     sound.set_sample_rate(sample_rate);
 
-        let mut next_value = move || sound.get_stereo();
-        let err_fn = |err| eprintln!("an error occurred on stream: {err}");
-        let stream = audio_device
-            .build_output_stream(
-                &config,
-                move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-                    write_data(data, channels, &mut next_value)
-                },
-                err_fn,
-                None,
-            )
-            .unwrap();
+    //     let mut next_value = move || sound.get_stereo();
+    //     let err_fn = |err| eprintln!("an error occurred on stream: {err}");
+    //     let stream = audio_device
+    //         .build_output_stream(
+    //             &config,
+    //             move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+    //                 write_data(data, channels, &mut next_value)
+    //             },
+    //             err_fn,
+    //             None,
+    //         )
+    //         .unwrap();
 
-        stream.play().unwrap();
-        loop {
-            std::thread::sleep(std::time::Duration::from_millis(1));
-        }
-    });
+    //     stream.play().unwrap();
+    //     loop {
+    //         std::thread::sleep(std::time::Duration::from_millis(1));
+    //     }
+    // });
     meta.increment();
     for (ii, tm) in term.step_over(ctx.clone()).enumerate() {
+        let frame_start = Instant::now();
         if ii > limit {
             break;
         }
         meta.increment();
         let tree = type_translate(&tm, meta.clone()).unwrap();
-        tree.generate_with(&mut cfg_seq, 0.0, 2000.0, DivisionMethod::Weight, 0.0);
-        let frame_start = Instant::now();
+        let size = tree.size();
+        // let ratio = size as f64 / base_size.get(size) as f64;
+        frame_time = base_time * size as u32 / base_size.get(size) as u32;
+        println!("Frame time: {frame_time:?}");
+        // tree.generate_with(&mut cfg_seq, 0.0, 2000.0, DivisionMethod::Weight, 0.0);
         if !window.is_open() {
             println!("Window closed; quitting");
             break;

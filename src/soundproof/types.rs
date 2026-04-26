@@ -17,6 +17,28 @@ use crate::music::stretch::{retime_pitch_wave, retime_wave};
 use crate::soundproof::select::FS_MEL_SIZE;
 use crate::DivisionMethod;
 
+pub struct SetOnce<T: Clone> {
+    body: Option<T>
+}
+
+impl<T: Clone> SetOnce<T> {
+    pub fn new() -> Self {
+        Self {
+            body: None
+        }
+    }
+
+    pub fn get(&mut self, default: T) -> T {
+        match &self.body {
+            Some(val) => val.clone(),
+            None => {
+                self.body = Some(default.clone());
+                default
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum SoundproofError {
     Mismatch
@@ -853,6 +875,81 @@ impl SoundTree {
         self.weight(exp).powf(exp)
     }
 
+    /// A general "induction" principle for logic that depends on the "horizontal" positioning and stereo of nodes in the tree.
+    /// Horizontal positioning is originally time but can be other things, like pitch.
+    /// Provide the starting info for positioning and range of the root node, plus handlers for the three SoundTree constructors.
+    /// Handlers have access to the node's metadata, position, range, and stereo lean, plus info on the children.
+    /// This function takes care of applying handlers and supplying that information to them.
+    /// Generally should be wrapped up in another function rather than used directly.
+    pub fn distribute<T>(
+        &self, start: f64, range: f64, scaling: DivisionMethod, lean: f32, 
+        base: &mut impl FnMut(&Arc<dyn SoundGenerator + Send + Sync>, &TreeMetadata, f64, f64, f32) -> T,
+        seq: &mut impl FnMut(Vec<T>, &TreeMetadata, f64, f64, f32) -> T,
+        simul: &mut impl FnMut(Vec<T>, &TreeMetadata, f64, f64, f32) -> T,
+    ) -> T {
+        match self {
+            SoundTree::Simul(sound_trees, meta) => {
+                let dir = 0.0;
+                // let scale = vec.len();
+                let scale = (self.size() - 1) as f32;
+                let base_lean = dir * scale / 2.0;
+                // for (ii, elem) in vec.iter().enumerate() {
+                let mut output = Vec::new();
+                for child in sound_trees {
+                    let local_lean = (base_lean - dir * child.size() as f32) * 0.8 / scale; // can't divide by 0 bc if scale is 0 vec is empty
+                    // println!("local lean: {local_lean}, {base_lean}, {scale}: {}, {}", self.size(), vec.len());
+                    // output.push((start_time, duration, scaling, lean + local_lean));
+                    output.push(child.distribute(start, range, scaling, lean + local_lean, base, seq, simul));
+                }
+                seq(output, meta, start, range, lean)
+            },
+            SoundTree::Seq(sound_trees, meta) => {
+                let mut output = Vec::new();
+                let mut elapsed = 0.0;
+                for child in sound_trees {
+                    let ratio = scaling.child_scale(child) / scaling.parent_scale(self);
+                    // let ratio = match scaling {
+                    //     Scaling::Linear => 1.0 / vec.len() as f64,
+                    //     Scaling::Weight => child.subtree_weight(Scaling::exponent()) / self.weight(Scaling::exponent()),
+                    //     // we do want scaling exponent to be an argument but for now...
+                    //     // Scaling::SizeAligned => round_by(child.size_factor() / self.size_adjusted(), segment),
+                    //     Scaling::Size => child.size() as f64 / self.size() as f64,
+                    // };
+                    let scaled = range * ratio;
+                    output.push(child.distribute(start + elapsed, scaled, scaling, lean, base, seq, simul));
+                    elapsed += scaled;
+                }
+                simul(output, meta, start, range, lean)
+            },
+            SoundTree::Sound(sound, meta) => base(sound, meta, start, range, lean),
+        }
+    }
+
+    pub fn generate_with2(&self, seq: &mut ConfigSequencer, range: f64, scaling: DivisionMethod) {
+        self.distribute(
+            0.0, range, scaling, 0.0,
+            &mut (|sound, _, s, r, l| sound.sequence(seq, s, r, l)),
+            &mut |_, _, _, _, _| {},
+            &mut |_, _, _, _, _| {},
+        )
+    }
+
+    pub fn sound_times2(&self, duration: f64, scaling: DivisionMethod) -> Vec<(Arc<dyn SoundGenerator + Send + Sync>, Timings, TreeMetadata)> {
+        self.distribute(
+            0.0, duration, scaling, 0.0,
+            &mut |sound, meta, s, d, l| {
+                let timings = Timings {
+                    start: s,
+                    duration: d,
+                    lean: l,
+                };
+                vec![(Arc::clone(sound), timings, meta.clone())]
+            },
+            &mut |children, _, _, _, _| children.concat(),
+            &mut |children, _, _, _, _| children.concat()
+        )
+    }
+
     pub fn sound_times(&self, sound_time: f64, duration: f64, scaling: DivisionMethod, lean: f32) -> Vec<(Arc<dyn SoundGenerator + Send + Sync>, Timings, TreeMetadata)> {
         if duration <= 2.0 / crate::music::SAMPLE_RATE as f64 {
             // println!("Warning! No duration from start time {start_time}");
@@ -913,51 +1010,51 @@ impl SoundTree {
         }
     }
 
-    /// Generate audio into a [Sequencer] for the tree, distributing subtree durations by the selected [scaling](Scaling).
-    pub fn generate_with(&self, seq: &mut ConfigSequencer, start_time: f64, duration: f64, scaling: DivisionMethod, lean: f32) {
-        if duration <= 2.0 / crate::music::SAMPLE_RATE as f64 {
-            // println!("Warning! No duration from start time {start_time}");
-            return;
-        }
-        // if duration > 10.0 {
-        //     println!("{}", self.metadata().name.len())
-        // }
-        // this function is mostly like Sequenceable.sequence but carries additional info around
-        // we could refactor to use the trait but then we'd have to carry scaling/lean in TreeMetadata instead
-        // setup would be tricky but could allow within-tree variation.... but we're not there yet.
-        match self {
-            SoundTree::Simul(vec, _) => {
-                // let val = SIGN.fetch_add(1, Ordering::Relaxed);
-                // let dir = if val % 2 == 0 { 1.0 } else { -1.0 };
-                let dir = 0.0;
-                // let scale = vec.len();
-                let scale = (self.size() - 1) as f32;
-                let base_lean = dir * scale / 2.0;
-                // for (ii, elem) in vec.iter().enumerate() {
-                for elem in vec {
-                    let local_lean = (base_lean - dir * elem.size() as f32) * 0.8 / scale; // can't divide by 0 bc if scale is 0 vec is empty
-                    // println!("local lean: {local_lean}, {base_lean}, {scale}: {}, {}", self.size(), vec.len());
-                    elem.generate_with(seq, start_time, duration, scaling, lean + local_lean);
-                }
-            },
-            SoundTree::Seq(vec, _) => {
-                // let child_count = vec.len();
-                let mut time_elapsed = 0.0;
-                for child in vec {
-                    let ratio = scaling.child_scale(child) / scaling.parent_scale(self);
-                    // let ratio = match scaling {
-                    //     Scaling::Linear => 1.0 / vec.len() as f64,
-                    //     Scaling::Weight => child.subtree_weight(Scaling::exponent()) / self.weight(Scaling::exponent()),
-                    //     // we do want scaling exponent to be an argument but for now...
-                    //     // Scaling::SizeAligned => round_by(child.size_factor() / self.size_adjusted(), segment),
-                    //     Scaling::Size => child.size() as f64 / self.size() as f64,
-                    // };
-                    let new_time = duration * ratio;
-                    child.generate_with(seq, start_time + time_elapsed, new_time, scaling, lean);
-                    time_elapsed += new_time;
-                }
-            },
-            SoundTree::Sound(sound, _) => sound.sequence(seq, start_time, duration, lean),
-        }
-    }
+    // /// Generate audio into a [Sequencer] for the tree, distributing subtree durations by the selected [scaling](Scaling).
+    // pub fn generate_with(&self, seq: &mut ConfigSequencer, start_time: f64, duration: f64, scaling: DivisionMethod, lean: f32) {
+    //     if duration <= 2.0 / crate::music::SAMPLE_RATE as f64 {
+    //         // println!("Warning! No duration from start time {start_time}");
+    //         return;
+    //     }
+    //     // if duration > 10.0 {
+    //     //     println!("{}", self.metadata().name.len())
+    //     // }
+    //     // this function is mostly like Sequenceable.sequence but carries additional info around
+    //     // we could refactor to use the trait but then we'd have to carry scaling/lean in TreeMetadata instead
+    //     // setup would be tricky but could allow within-tree variation.... but we're not there yet.
+    //     match self {
+    //         SoundTree::Simul(vec, _) => {
+    //             // let val = SIGN.fetch_add(1, Ordering::Relaxed);
+    //             // let dir = if val % 2 == 0 { 1.0 } else { -1.0 };
+    //             let dir = 0.0;
+    //             // let scale = vec.len();
+    //             let scale = (self.size() - 1) as f32;
+    //             let base_lean = dir * scale / 2.0;
+    //             // for (ii, elem) in vec.iter().enumerate() {
+    //             for elem in vec {
+    //                 let local_lean = (base_lean - dir * elem.size() as f32) * 0.8 / scale; // can't divide by 0 bc if scale is 0 vec is empty
+    //                 // println!("local lean: {local_lean}, {base_lean}, {scale}: {}, {}", self.size(), vec.len());
+    //                 elem.generate_with(seq, start_time, duration, scaling, lean + local_lean);
+    //             }
+    //         },
+    //         SoundTree::Seq(vec, _) => {
+    //             // let child_count = vec.len();
+    //             let mut time_elapsed = 0.0;
+    //             for child in vec {
+    //                 let ratio = scaling.child_scale(child) / scaling.parent_scale(self);
+    //                 // let ratio = match scaling {
+    //                 //     Scaling::Linear => 1.0 / vec.len() as f64,
+    //                 //     Scaling::Weight => child.subtree_weight(Scaling::exponent()) / self.weight(Scaling::exponent()),
+    //                 //     // we do want scaling exponent to be an argument but for now...
+    //                 //     // Scaling::SizeAligned => round_by(child.size_factor() / self.size_adjusted(), segment),
+    //                 //     Scaling::Size => child.size() as f64 / self.size() as f64,
+    //                 // };
+    //                 let new_time = duration * ratio;
+    //                 child.generate_with(seq, start_time + time_elapsed, new_time, scaling, lean);
+    //                 time_elapsed += new_time;
+    //             }
+    //         },
+    //         SoundTree::Sound(sound, _) => sound.sequence(seq, start_time, duration, lean),
+    //     }
+    // }
 }

@@ -2,12 +2,12 @@ use std::path::Path;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use fundsp::hacker::{AudioUnit, Sequencer};
+// use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+// use fundsp::hacker::{AudioUnit, Sequencer};
 use minifb::{Window, WindowOptions};
 use piet_common::*; //{Color, Device, DwriteFactory, FontFamily, ImageFormat, PietText, PietTextLayout, RenderContext, Text, TextLayoutBuilder};
 use piet_common::kurbo::{Circle, Line, Rect};
-use cpal::{self, FromSample, SizedSample, StreamConfig};
+// use cpal::{self, FromSample, SizedSample, StreamConfig};
 
 use crate::lambdapi::ast::*;
 use crate::lambdapi::term::*;
@@ -19,9 +19,11 @@ use crate::soundproof::types::{ConfigSequencer, SetOnce, SoundTree};
 use crate::DivisionMethod;
 
 // const WIDTH_PX: usize = 377 * 3;
-const WIDTH_PX: usize = 1920;
+// const WIDTH_PX: usize = 1920;
+const WIDTH_PX: usize = 3000;
 // const HEIGHT_PX: usize = 120 * 3;
-const HEIGHT_PX: usize = 1080;
+// const HEIGHT_PX: usize = 1080;
+const HEIGHT_PX: usize = 1800;
 const DPI: f64 = 96.;
 const WIDTH_IN: f64 = WIDTH_PX as f64 / DPI;
 const HEIGHT_IN: f64 = HEIGHT_PX as f64 / DPI;
@@ -35,7 +37,7 @@ pub fn draw(tree: &SoundTree, scaling: DivisionMethod, path: impl AsRef<Path>) {
     rc.fill(rect, &Color::BLACK);
     // rc.fill(rect, &Color::WHITE);
     let args = FixedDrawArgs::new(tree.metadata().max_depth, None, scaling);
-    drawtree(tree, &mut rc, args, 0.0, 1.0, 0);
+    drawtree(tree, &mut rc, args);
     rc.finish().unwrap();
     std::mem::drop(rc);
     bitmap.save_to_file(path).expect("should save file successfully");
@@ -65,24 +67,24 @@ pub fn draw(tree: &SoundTree, scaling: DivisionMethod, path: impl AsRef<Path>) {
 
 
 
-fn write_data<T>(output: &mut [T], channels: usize, next_sample: &mut dyn FnMut() -> (f32, f32))
-where
-    T: SizedSample + FromSample<f32>,
-{
-    for frame in output.chunks_mut(channels) {
-        let sample = next_sample();
-        let left = T::from_sample(sample.0);
-        let right: T = T::from_sample(sample.1);
+// fn write_data<T>(output: &mut [T], channels: usize, next_sample: &mut dyn FnMut() -> (f32, f32))
+// where
+//     T: SizedSample + FromSample<f32>,
+// {
+//     for frame in output.chunks_mut(channels) {
+//         let sample = next_sample();
+//         let left = T::from_sample(sample.0);
+//         let right: T = T::from_sample(sample.1);
 
-        for (channel, sample) in frame.iter_mut().enumerate() {
-            if channel & 1 == 0 {
-                *sample = left;
-            } else {
-                *sample = right;
-            }
-        }
-    }
-}
+//         for (channel, sample) in frame.iter_mut().enumerate() {
+//             if channel & 1 == 0 {
+//                 *sample = left;
+//             } else {
+//                 *sample = right;
+//             }
+//         }
+//     }
+// }
 
 pub fn animate_term_steps(term: ITerm, mut meta: ToneMaker, scaling: DivisionMethod, limit: usize, fps: f64) {
     let mut visual_device = Device::new().unwrap();
@@ -91,7 +93,7 @@ pub fn animate_term_steps(term: ITerm, mut meta: ToneMaker, scaling: DivisionMet
     let mut window = Window::new("Hi", WIDTH_PX, HEIGHT_PX, window_options).unwrap();
     // let mut elapsed = 0.0;
     let base_time = Duration::new(0, (1e9 / fps) as u32);
-    let mut base_size = SetOnce::new();
+    // let mut base_size = SetOnce::new();
     let mut frame_time = base_time;
 
     println!("{frame_time:?}");
@@ -140,9 +142,13 @@ pub fn animate_term_steps(term: ITerm, mut meta: ToneMaker, scaling: DivisionMet
         meta.increment();
         let tree = type_translate(&tm, meta.clone()).unwrap();
         let size = tree.size();
+        match tm {
+            ITerm::Ann(_, _) => println!("looped! after {ii} steps size {size}"),
+            _ => {}
+        }
         // let ratio = size as f64 / base_size.get(size) as f64;
-        frame_time = base_time * size as u32 / base_size.get(size) as u32;
-        println!("Frame time: {frame_time:?}");
+        // frame_time = base_time * size as u32 / base_size.get(size) as u32;
+        // println!("Frame time: {frame_time:?}");
         // tree.generate_with(&mut cfg_seq, 0.0, 2000.0, DivisionMethod::Weight, 0.0);
         if !window.is_open() {
             println!("Window closed; quitting");
@@ -153,7 +159,7 @@ pub fn animate_term_steps(term: ITerm, mut meta: ToneMaker, scaling: DivisionMet
         let rect = Rect::new(0.0, 0.0, WIDTH_IN, HEIGHT_IN);
         rc.fill(rect, &Color::BLACK);
         let args = FixedDrawArgs::new(tree.metadata().max_depth, None, scaling);
-        drawtree(&tree, &mut rc, args, 0.0, 1.0, 0);
+        drawtree(&tree, &mut rc, args);
         rc.finish().unwrap();
         std::mem::drop(rc);
         let a = bitmap.to_image_buf(ImageFormat::RgbaPremul).unwrap();
@@ -206,7 +212,7 @@ pub fn draw_anim(tree: &SoundTree, scaling: DivisionMethod, duration: f64, fps: 
         rc.stroke(dot, &Color::BLUE, 0.03);
         let line = Line::new(cursor_loc, (cursor_loc.0, HEIGHT_IN));
         rc.stroke(line, &Color::GRAY, 0.01);
-        drawtree(tree, &mut rc, args, 0.0, 1.0, 0);
+        drawtree(tree, &mut rc, args);
         rc.finish().unwrap();
         std::mem::drop(rc);
         let a = bitmap.to_image_buf(ImageFormat::RgbaPremul).unwrap();
@@ -242,7 +248,7 @@ struct FixedDrawArgs {
 impl FixedDrawArgs {
     pub fn new(max_depth: usize, current: Option<f64>, scaling: DivisionMethod) -> Self {
         // let depth_height = if max_depth != 0 { HEIGHT_IN * 0.9 / max_depth as f64 } else { 0.05 };
-        let depth_height = 0.2;
+        let depth_height = HEIGHT_IN / 40.;
         let text_bar = depth_height * 4.0;
         Self {
             max_depth,
@@ -258,38 +264,21 @@ fn drawtree(
     tree: &SoundTree,
     ctx: &mut impl RenderContext<TextLayout = PietTextLayout>,
     args: FixedDrawArgs,
-    start_time: f64,
-    fraction: f64,
-    depth: usize
 ) {
-    match tree {
-        SoundTree::Simul(vec, _) => {
-            for (ii, elem) in vec.iter().enumerate() {
-                drawtree(elem, ctx, args, start_time, fraction, depth + ii);
-            }
-        },
-        SoundTree::Seq(vec, _) => {
-            let mut time_elapsed = 0.0;
-            for child in vec {
-                let ratio = args.scaling.child_scale(child) / args.scaling.parent_scale(tree);
-                let new_time = fraction * ratio;
-                drawtree(child, ctx, args, start_time + time_elapsed, new_time, depth);
-                time_elapsed += new_time;
-            }
-        },
-        SoundTree::Sound(_, meta) => {
-            if fraction * WIDTH_IN <  0.1 / DPI {
+    tree.distribute(
+        0.0, 1.0, args.scaling, 0.0,
+        &mut |_, meta, start, frac, _| {
+            if frac * WIDTH_IN <  0.1 / DPI {
                 // println!("Too short: {duration} {:?}", meta.color);
                 return;
             }
 
-
-            let bottom = HEIGHT_IN - depth as f64 * args.depth_height;  // height is negative
+            let bottom = HEIGHT_IN - meta.max_depth as f64 * args.depth_height;  // height is negative
             let top = bottom - args.depth_height;
 
             let main_width = WIDTH_IN - if args.current.is_some() { args.text_bar } else { 0.0 };
-            let left = start_time * main_width;
-            let right = left + fraction * main_width;
+            let left = start * main_width;
+            let right = left + frac * main_width;
 
             let rect = Rect::new(
                 left,
@@ -297,7 +286,7 @@ fn drawtree(
                 right,
                 top,
             );
-            if args.current.is_some_and(|t| start_time <= t && t <= start_time + fraction) {
+            if args.current.is_some_and(|t| start <= t && t <= start + frac) {
                 // let mut text_manager = PietText::new_with_shared_fonts(DwriteFactory::new().unwrap(), None);
                 let mut text_manager = PietText::new();
                 let text = meta.name.to_owned();
@@ -317,5 +306,7 @@ fn drawtree(
                 ctx.stroke(rect, &Color::BLACK, border_width);
             }
         },
-    }
+        &mut |_, _, _, _, _| {},
+        &mut |_, _, _, _, _| {},
+    )
 }

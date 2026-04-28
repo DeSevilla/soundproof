@@ -200,11 +200,12 @@ impl Term {
 pub struct ToneMaker {
     pub start_time: f64,
     pub duration: f64,
+    pub depth: usize,
 }
 
 impl Default for ToneMaker {
     fn default() -> Self {
-        Self { start_time: 0.0, duration: 10.0 }
+        Self::new(0.0, 10.0)
     }
 }
 
@@ -212,7 +213,8 @@ impl ToneMaker {
     pub fn new(start_time: f64, duration: f64) -> Self {
         ToneMaker {
             start_time,
-            duration
+            duration,
+            depth: 0
         }
     }
 
@@ -263,13 +265,25 @@ impl Selector for ToneMaker {
     }
 
     fn imerge(&self, _term: &ITerm) -> Self {
-        // todo!()
-        self.clone()
+        Self { depth: self.depth + 1, ..self.clone() }
     }
 
     fn cmerge(&self, _term: &CTerm) -> Self {
-        // todo!()
-        self.clone()
+        Self { depth: self.depth + 1, ..self.clone() }
+    }
+
+    fn imeta(&self, term: &ITerm) -> TreeMetadata {
+        FullStratifier {
+            parent: Term::I(ITerm::Star),
+            depth: self.depth
+        }.imeta(term)
+    }
+
+    fn cmeta(&self, term: &CTerm) -> TreeMetadata {
+        FullStratifier {
+            parent: Term::I(ITerm::Star),
+            depth: self.depth
+        }.cmeta(term)
     }
 }
 

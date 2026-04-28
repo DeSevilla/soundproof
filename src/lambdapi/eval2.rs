@@ -140,7 +140,7 @@ impl Stepper for CTerm {
         use Step::*;
         match self {
             CTerm::Inf(iterm) => iterm.step(ctx).apply(|i| CTerm::Inf(Box::new(i))),
-            CTerm::Lam(_) => Done(self, None),
+            CTerm::Lam(_) => Done(self, None), // can't step w/i body w/o doing fancy var things
         }
     }
 }

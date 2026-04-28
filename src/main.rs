@@ -377,7 +377,7 @@ pub fn main_to_file(args: &Args) {
     let mut cfg_seq = ConfigSequencer::new(seq, false);
     // let backend = Box::new(seq.backend());
     let now = Instant::now();
-    tree.generate_with2(
+    tree.generate_with(
         &mut cfg_seq,
         time,
         args.division,
@@ -393,14 +393,14 @@ pub fn main_steps(args: &Args) {
     use crate::term::std_env;
     println!("Starting tone generation at {:?}", Instant::now());
     let start_term = args.term();
-    let base_dur = 0.2;
+    let base_dur = 0.05;
     let mut tones = ToneMaker::new(0.0, base_dur);
     let changes = Silence;
     // let changes = SineRhythmizer::new();
     let mut steps = 0;
-    let limit = 100;
+    let limit = 700;
     if args.animate {
-        animate_term_steps(start_term.clone(), ToneMaker::new(0.0, 0.2), DivisionMethod::Weight, limit, 1. / base_dur);
+        animate_term_steps(start_term.clone(), ToneMaker::new(0.0, 0.2), args.division, limit, 1. / base_dur);
     }
     if args.draw_only {
         return;
@@ -447,7 +447,7 @@ pub fn main_steps(args: &Args) {
 
         let freq_range = args.time.unwrap_or((tree.size() + 40) as f64);
         println!("Sequencing over frequency range {freq_range}...");
-        tree.generate_with2(
+        tree.generate_with(
             &mut cfg_seq,
             // 0.0,
             freq_range,

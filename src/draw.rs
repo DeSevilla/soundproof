@@ -15,7 +15,8 @@ use crate::lambdapi::term::*;
 use crate::soundproof::select::ToneMaker;
 use crate::type_translate;
 use crate::step::*;
-use crate::soundproof::types::{ConfigSequencer, SetOnce, SoundTree};
+// use crate::soundproof::types::{ConfigSequencer, SetOnce, SoundTree};
+use crate::soundproof::types::SoundTree;
 use crate::DivisionMethod;
 
 // const WIDTH_PX: usize = 377 * 3;
@@ -43,29 +44,7 @@ pub fn draw(tree: &SoundTree, scaling: DivisionMethod, path: impl AsRef<Path>) {
     bitmap.save_to_file(path).expect("should save file successfully");
 }
 
-// struct AnimationFrames<'a> {
-//     tree: &'a SoundTree,
-//     scaling: DivisionMethod,
-//     current: usize,
-//     max: usize,
-// }
-
-// impl<'a> SoundTree {
-//     pub fn animation_frames(&'a self) -> AnimationFrames<'a> {
-//         let mut device = Device::new().unwrap();
-//     }
-// }
-
-// impl<'a> Iterator for AnimationFrames<'a> {
-//     type Item = BitmapTarget<'a>;
-    
-//     fn next(&mut self) -> Option<Self::Item> {
-//         todo!()
-//     }
-    
-// }
-
-
+// TODO: maybe like, pregenerate animation frames for a tree somehow? idk
 
 // fn write_data<T>(output: &mut [T], channels: usize, next_sample: &mut dyn FnMut() -> (f32, f32))
 // where

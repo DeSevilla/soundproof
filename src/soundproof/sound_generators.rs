@@ -489,29 +489,6 @@ pub struct MelodyAsync {
     pub depth: usize,
 }
 
-// impl MelodyAsync {
-    // pub fn new(body: Melody, depth: usize) -> Self {
-    //     Self {
-    //         body: Arc::new(Mutex::new(body)),
-    //         depth
-    //     }
-    // }
-
-    // fn new(notes: [i32; FS_MEL_SIZE], timings: [f64; FS_MEL_SIZE], instrument: impl AudioUnit + 'static, effect: impl AudioUnit + 'static) -> Self {
-    //     Self {
-    //         notes: Arc::new(Mutex::new(notes)),
-    //         timings: Arc::new(Mutex::new(timings)),
-    //         instrument: Arc::new(Mutex::new(unit(Box::new(instrument)))),
-    //         effect: Arc::new(Mutex::new(unit(Box::new(effect)))),
-    //     }
-    //     // (notes, unit(Box::new(instrument)), unit(Box::new(effect)))
-    // }
-
-    // pub fn new_depth(body: Arc<Mutex<Melody>>, depth: usize) -> Self {
-    //     Self { body, depth }
-    // }
-// }
-
 impl SoundGenerator for MelodyAsync {
     fn sequence(&self, seq: &mut ConfigSequencer, start_time: f64, duration: f64, lean: f32) {
         // let x = self.body.lock().unwrap();

@@ -4,7 +4,7 @@ use std::rc::Rc;
 use fundsp::hacker32::sine;
 
 use crate::{
-    ast::*, music::notes::G, select::Selector, term::*, types::*
+    ast::*, music::notes::G, select::Selector, term::*, types::*, sound_generators::*,
 };
 
 /// Translates [ITerm]s into [SoundTree]s according to their type structure.

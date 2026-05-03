@@ -14,7 +14,7 @@ use crate::lambdapi::term::*;
 // use crate::Selector;
 use crate::soundproof::select::ToneMaker;
 use crate::type_translate;
-use crate::eval2::*;
+use crate::step::*;
 use crate::soundproof::types::{ConfigSequencer, SetOnce, SoundTree};
 use crate::DivisionMethod;
 
@@ -94,7 +94,7 @@ pub fn animate_term_steps(term: ITerm, mut meta: ToneMaker, scaling: DivisionMet
     // let mut elapsed = 0.0;
     let base_time = Duration::new(0, (1e9 / fps) as u32);
     // let mut base_size = SetOnce::new();
-    let mut frame_time = base_time;
+    let frame_time = base_time;
 
     println!("{frame_time:?}");
     // let frames = (duration * fps as f64).ceil() as usize;

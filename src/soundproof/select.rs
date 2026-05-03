@@ -9,6 +9,7 @@ use crate::{
     instruments::*,
     notes::*,
     types::*,
+    sound_generators::*,
 };
 
 const ORANGE: Color = Color::rgb8(0xCE, 0x5D, 0x00);
@@ -60,7 +61,7 @@ pub trait Selector: Clone {
         };
         TreeMetadata {
             name: format!("{:?}", term.tag()),
-            // tag: term.tag(),
+            tag: term.tag(),
             // parent: format!("{:?}", term.tag()),
             base_color,
             alt_color,
@@ -94,6 +95,7 @@ pub trait Selector: Clone {
             // CTerm::Lam(_) => TreeMetadata { name: format!("{:?}", term.tag()), color: Color::rgb8(0x18, 0x4D, 0x02) },
             CTerm::Lam(_) => TreeMetadata {
                 name: format!("{:?}", term.tag()),
+                tag: term.tag(),
                 base_color: BLUES.1, 
                 alt_color: BLUES.0,
                 max_depth: 0,
@@ -647,7 +649,7 @@ impl Selector for FullStratifier {
         };
         TreeMetadata {
             name: format!("{:?}", term.tag()),
-            // tag: term.tag(),
+            tag: term.tag(),
             // parent: format!("{:?}", term.tag()),
             base_color,
             alt_color,
@@ -665,6 +667,7 @@ impl Selector for FullStratifier {
             // CTerm::Lam(_) => TreeMetadata { name: format!("{:?}", term.tag()), color: Color::rgb8(0x18, 0x4D, 0x02) },
             CTerm::Lam(_) => TreeMetadata {
                 name: format!("{:?}", term.tag()),
+                tag: term.tag(),
                 base_color: BLUES.1, 
                 alt_color: BLUES.0,
                 max_depth: self.depth,

@@ -11,6 +11,7 @@ use soundproof::select::*;
 use soundproof::*;
 use translate::*;
 use types::*;
+use sound_generators::*;
 
 use crate::draw::animate_term_steps;
 // use crate::lambdapi::eval2::*;
@@ -389,18 +390,18 @@ pub fn main_to_file(args: &Args) {
 }
 
 pub fn main_steps(args: &Args) {
-    use crate::eval2::Step;
+    use crate::step::Step;
     use crate::term::std_env;
     println!("Starting tone generation at {:?}", Instant::now());
     let start_term = args.term();
-    let base_dur = 0.05;
+    let base_dur = 0.3;
     let mut tones = ToneMaker::new(0.0, base_dur);
     let changes = Silence;
     // let changes = SineRhythmizer::new();
     let mut steps = 0;
-    let limit = 700;
+    let limit = 300;
     if args.animate {
-        animate_term_steps(start_term.clone(), ToneMaker::new(0.0, 0.2), args.division, limit, 1. / base_dur);
+        animate_term_steps(start_term.clone(), ToneMaker::new(0.0, 0.2), args.division, limit, 200.);
     }
     if args.draw_only {
         return;
@@ -411,11 +412,11 @@ pub fn main_steps(args: &Args) {
     let mut cfg_seq = ConfigSequencer::new(seq, args.mode.live());
     let mut current = Step::new(start_term);
     // let mut prev_size = 1000.0;
-    let mut base_size = SetOnce::new().get(18056);
+    let mut base_size = SetOnce::new();
     loop {
         steps += 1;
         println!("Translating for number {steps}...");
-        let now = Instant::now();
+        let start = Instant::now();
         let (term, change) = match &current {
             Step::Cont(t, v) => (t.clone(), v.clone()),
             Step::Done(_, _) => break,
@@ -423,9 +424,9 @@ pub fn main_steps(args: &Args) {
         let dur = match change {
             Some(change) => {
                 let change_tree = type_translate(&change, changes.clone()).unwrap();
-                let dur = (1. + (change_tree.size() as f64 / base_size as f64).sqrt() * 5.) * base_dur;
+                let dur = (1. + (change_tree.size() as f64 / base_size.get(18000) as f64).sqrt() * 5.) * base_dur;
                 // let dur = base_dur;
-                println!("Change size: {} vs base at: {}", change_tree.size(), change_tree.size() as f64 / base_size as f64);
+                // println!("Change size: {} vs base at: {}", change_tree.size(), change_tree.size() as f64 / base_size as f64);
                 // change_tree.generate_with(
                 //     &mut cfg_seq,
                 //     tones.start_time,
@@ -442,24 +443,33 @@ pub fn main_steps(args: &Args) {
 
 
         let tree = type_translate(&term, tones.clone()).unwrap();
+        base_size.get(tree.size());
         // prev_size = tree.size() as f64;
-        println!("...done in {:?}, output size {}", now.elapsed(), tree.size());
+        println!("...done in {:?}, output size {}", start.elapsed(), tree.size());
 
         let freq_range = args.time.unwrap_or((tree.size() + 40) as f64);
         println!("Sequencing over frequency range {freq_range}...");
-        tree.generate_with(
-            &mut cfg_seq,
-            // 0.0,
-            freq_range,
-            args.division,
-            // 0.0,
-        );
+        const NUM_BUCKETS: usize = 512;
+        if tree.size() > NUM_BUCKETS * 8 {
+            let buckets: Buckets<NUM_BUCKETS> = Buckets::from_tree(&tree, freq_range as f32, args.division);
+            buckets.sequence(&mut cfg_seq, tones.start_time, tones.duration, 0.0); 
+        }
+        else {
+            tree.generate_with(
+                &mut cfg_seq,
+                // 0.0,
+                freq_range,
+                args.division,
+                // 0.0,
+            );
+        }
+
 
         
         tones.increment();
-        println!("...adding up to {:?}", now.elapsed());
+        println!("...adding up to {:?}", start.elapsed());
         current = current.step(Context::new(std_env()));
-        println!("...and with stepping, {:?}", now.elapsed());
+        println!("...and with stepping, {:?}", start.elapsed());
         if steps > limit {
             println!("Hit {limit} steps");
             break

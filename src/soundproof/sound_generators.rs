@@ -600,10 +600,12 @@ impl SoundGenerator for Toner {
 
 #[derive(Clone, Copy, Debug)]
 pub struct Weights {
-    body: [f32; 10]
+    body: [f32; Self::LENGTH]
 }
 
 impl Weights {
+    const LENGTH: usize = 10;
+
     pub fn instrument(&self) -> An<impl AudioNode<Inputs=U1, Outputs=U2>> {
         match self.body {
             [a, b, c, d, e, f, g, h, i, j] => { 
@@ -647,11 +649,12 @@ pub struct Buckets<const N: usize> {
 }
 
 impl<const N: usize> Buckets<N> {
-    const MIN_FREQ: f32 = 100.;
+    const MIN_FREQ: f32 = 40.;
+    // const N_INV: f32 = 1. / N as f32;
 
     pub fn from_tree(tree: &SoundTree, range: f32, scaling: DivisionMethod) -> Buckets<N> {
         let mut result = Buckets {
-            buckets: [Weights { body: [0.0; 10]}; N],
+            buckets: [Weights { body: [0.0; Weights::LENGTH]}; N],
             min_freq: Self::MIN_FREQ,
             max_freq: Self::MIN_FREQ + range
         };
@@ -672,12 +675,23 @@ impl<const N: usize> Buckets<N> {
         result
     }
 
+    pub fn reverse(mut self) -> Self {
+        let tmp = self.max_freq;
+        self.max_freq = self.min_freq;
+        self.min_freq = tmp;
+        self
+    }
+
+    pub fn is_reversed(&self) -> bool {
+        self.max_freq < self.min_freq
+    }
+
     pub fn iter_buckets(&self) -> impl Iterator<Item=(f32, Weights)> {
         let x = self.min_freq;
         let y = self.max_freq;
         self.buckets.into_iter()
             .enumerate()
-            .map(move |(ii, weights)| (lerp(x, y, ii as f32 / N as f32), weights))
+            .map(move |(ii, weights)| (2.0_f32.powf(lerp(x.log2(), y.log2(), ii as f32 / N as f32)), weights))
     } 
 }
 

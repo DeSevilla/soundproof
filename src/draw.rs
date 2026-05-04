@@ -118,13 +118,15 @@ pub fn animate_term_steps(term: ITerm, mut meta: ToneMaker, scaling: DivisionMet
         if ii > limit {
             break;
         }
-        meta.increment();
-        let tree = type_translate(&tm, meta.clone()).unwrap();
-        let size = tree.size();
         match tm {
-            ITerm::Ann(_, _) => println!("looped! after {ii} steps size {size}"),
+            ITerm::Ann(_, _) => println!("looped! after {ii} steps"),
             _ => {}
         }
+        // continue;
+        meta.increment();
+        let tree = type_translate(&tm, meta.clone()).unwrap();
+        // let size = tree.size();
+
         // let ratio = size as f64 / base_size.get(size) as f64;
         // frame_time = base_time * size as u32 / base_size.get(size) as u32;
         // println!("Frame time: {frame_time:?}");

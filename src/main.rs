@@ -134,7 +134,7 @@ impl NamedTerm {
     fn term_reduced(&self) -> ITerm {
         match self {
             NamedTerm::Girard => girard_reduced(),
-            _ => ireduce(self.term()).unwrap(), // can't fail because it's a named term
+            _ => ireduce(self.term()).expect("Named term can't fail to reduce"),
         }
     }
 }
@@ -269,11 +269,6 @@ impl Args {
     pub fn term(&self) -> ITerm {
         if self.reduce {
             self.value.term_reduced()
-            // for value in self.values {
-            // match self.value {
-            //     NamedTerm::Girard => girard_reduced(),
-            //     name => ireduce(name.term()).unwrap()
-            // }
         } else {
             self.value.term()
         }
@@ -392,14 +387,15 @@ pub fn main_to_file(args: &Args) {
 pub fn main_steps(args: &Args) {
     use crate::step::Step;
     use crate::term::std_env;
-    println!("Starting tone generation at {:?}", Instant::now());
+    let all_start = Instant::now();
+    println!("Starting tone generation at {all_start:?}");
     let start_term = args.term();
     let base_dur = 0.3;
     let mut tones = ToneMaker::new(0.0, base_dur);
     let changes = Silence;
     // let changes = SineRhythmizer::new();
     let mut steps = 0;
-    let limit = 300;
+    let limit = 262; // 155, 261, 406, 596, 837
     if args.animate {
         animate_term_steps(start_term.clone(), ToneMaker::new(0.0, 0.2), args.division, limit, 200.);
     }
@@ -416,7 +412,7 @@ pub fn main_steps(args: &Args) {
     loop {
         steps += 1;
         println!("Translating for number {steps}...");
-        let start = Instant::now();
+        let step_start = Instant::now();
         let (term, change) = match &current {
             Step::Cont(t, v) => (t.clone(), v.clone()),
             Step::Done(_, _) => break,
@@ -445,14 +441,16 @@ pub fn main_steps(args: &Args) {
         let tree = type_translate(&term, tones.clone()).unwrap();
         base_size.get(tree.size());
         // prev_size = tree.size() as f64;
-        println!("...done in {:?}, output size {}", start.elapsed(), tree.size());
+        println!("...done in {:?}, output size {}", step_start.elapsed(), tree.size());
 
         let freq_range = args.time.unwrap_or((tree.size() + 40) as f64);
         println!("Sequencing over frequency range {freq_range}...");
+        let seq_start = Instant::now();
         const NUM_BUCKETS: usize = 512;
         if tree.size() > NUM_BUCKETS * 8 {
             let buckets: Buckets<NUM_BUCKETS> = Buckets::from_tree(&tree, freq_range as f32, args.division);
-            buckets.sequence(&mut cfg_seq, tones.start_time, tones.duration, 0.0); 
+            buckets //.reverse()
+                .sequence(&mut cfg_seq, tones.start_time, tones.duration, 0.0);
         }
         else {
             tree.generate_with(
@@ -467,9 +465,9 @@ pub fn main_steps(args: &Args) {
 
         
         tones.increment();
-        println!("...adding up to {:?}", start.elapsed());
+        println!("...taking {:?}, adding up to {:?}", seq_start.elapsed(), step_start.elapsed());
         current = current.step(Context::new(std_env()));
-        println!("...and with stepping, {:?}", start.elapsed());
+        println!("...and with stepping, {:?}", step_start.elapsed());
         if steps > limit {
             println!("Hit {limit} steps");
             break
@@ -480,7 +478,7 @@ pub fn main_steps(args: &Args) {
     // println!("Got this many events: {}", SIGN.load(std::sync::atomic::Ordering::SeqCst));
     let mut output = make_output(Box::new(cfg_seq.seq), args.filters);
     save(&mut *output, tones.start_time);
-    println!("Done.");
+    println!("Done. Total time: {:?}", all_start.elapsed());
 }
 
 pub fn main() {

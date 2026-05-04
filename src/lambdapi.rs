@@ -217,10 +217,12 @@ pub fn girard() -> ITerm {
     iann(iapp(lem2(), lem3()), void())
 }
 
+/// Reduce an [ITerm] to a [CTerm].
 pub fn reduce(term: ITerm) -> CTerm {
     quote0(term.eval(Context::new(vec![])))
 }
 
+/// Reduce an [ITerm] to an [ITerm], annotating if necessary.
 pub fn ireduce(term: ITerm) -> Result<ITerm, String> {
     let ty = term.infer_type(Context::new(vec![]))?;
     let reduced = reduce(term);

@@ -149,36 +149,36 @@ impl CTerm {
 }
 
 /// Converts a Value into a term, under no binders.
-pub fn quote0(val: Value) -> CTerm {
+pub fn quote0(val: &Value) -> CTerm {
     quote(0, val)
 }
 
 /// Converts a Value into a term, under `i` binders.
-pub fn quote(i: usize, val: Value) -> CTerm {
+pub fn quote(i: usize, val: &Value) -> CTerm {
     match val {
-        Value::Lam(f) => CTerm::Lam(Box::new(quote(i + 1, f(vfree(Name::Quote(i)))))),
+        Value::Lam(f) => CTerm::Lam(Box::new(quote(i + 1, &f(vfree(Name::Quote(i)))))),
         Value::Neutral(n) => itoc(neutral_quote(i, n)),
         Value::Star => itoc(ITerm::Star),
-        Value::Pi(src, trg) => itoc(ITerm::Pi(quote(i, *src), quote(i + 1, trg(vfree(Name::Quote(i)))))),
+        Value::Pi(src, trg) => itoc(ITerm::Pi(quote(i, src), quote(i + 1, &trg(vfree(Name::Quote(i)))))),
         Value::Nat => itoc(ITerm::Nat),
         Value::Zero => itoc(ITerm::Zero),
-        Value::Succ(value) => itoc(ITerm::Succ(quote(i, *value))),
-        Value::Fin(value) => itoc(ITerm::Fin(quote(i, *value))),
-        Value::FZero(value) => itoc(ITerm::FZero(quote(i, *value))),
-        Value::FSucc(n, f) => itoc(ITerm::FSucc(quote(i, *n), quote(i, *f))),
-        Value::Eq(a, x, y) => itoc(ITerm::Eq(quote(i, *a), quote(i, *x), quote(i, *y))),
-        Value::Refl(a, x) => itoc(ITerm::Refl(quote(i, *a), quote(i, *x))),
+        Value::Succ(value) => itoc(ITerm::Succ(quote(i, value))),
+        Value::Fin(value) => itoc(ITerm::Fin(quote(i, value))),
+        Value::FZero(value) => itoc(ITerm::FZero(quote(i, value))),
+        Value::FSucc(n, f) => itoc(ITerm::FSucc(quote(i, n), quote(i, f))),
+        Value::Eq(a, x, y) => itoc(ITerm::Eq(quote(i, a), quote(i, x), quote(i, y))),
+        Value::Refl(a, x) => itoc(ITerm::Refl(quote(i, a), quote(i, x))),
     }
 }
 
 /// Converts a neutral term (containing free variable) into an ITerm.
-pub fn neutral_quote(i: usize, neutral: Neutral) -> ITerm {
+pub fn neutral_quote(i: usize, neutral: &Neutral) -> ITerm {
     match neutral {
-        Neutral::Free(x) => boundfree(i, x),
-        Neutral::App(f, x) => ITerm::App(Box::new(neutral_quote(i, *f)), quote(i, *x)),
-        Neutral::NatElim(motive, base, ind, k) => ITerm::NatElim(quote(i, *motive), quote(i, *base), quote(i, *ind), itoc(neutral_quote(i, *k))),
-        Neutral::FinElim(motive, base, ind, n, f) => ITerm::FinElim(quote(i, *motive), quote(i, *base), quote(i, *ind), quote(i, *n), itoc(neutral_quote(i, *f))),
-        Neutral::EqElim(ty, motive, base, x, y, eq) => ITerm::EqElim(quote(i, *ty), quote(i, *motive), quote(i, *base), quote(i, *x), quote(i, *y), itoc(neutral_quote(i, *eq)))
+        Neutral::Free(x) => boundfree(i, x.clone()),
+        Neutral::App(f, x) => ITerm::App(Box::new(neutral_quote(i, f)), quote(i, x)),
+        Neutral::NatElim(motive, base, ind, k) => ITerm::NatElim(quote(i, motive), quote(i, base), quote(i, ind), itoc(neutral_quote(i, k))),
+        Neutral::FinElim(motive, base, ind, n, f) => ITerm::FinElim(quote(i, motive), quote(i, base), quote(i, ind), quote(i, n), itoc(neutral_quote(i, f))),
+        Neutral::EqElim(ty, motive, base, x, y, eq) => ITerm::EqElim(quote(i, ty), quote(i, motive), quote(i, base), quote(i, x), quote(i, y), itoc(neutral_quote(i, eq)))
     }
 }
 
@@ -365,11 +365,11 @@ pub fn full_env() -> Vec<(Name, Type, Option<Value>)> {
 fn test_stdlib() {
     for (name, ty, val) in std_env() {
         println!("{name:?}");
-        let quoted = quote0(val.unwrap());
+        let quoted = quote0(&val.unwrap());
         quoted.check_type(Context::new(vec![]), ty.clone()).unwrap();
         let iterm = match quoted {
             CTerm::Inf(iterm) => *iterm,
-            CTerm::Lam(_) => iann(quoted, quote0(ty)),
+            CTerm::Lam(_) => iann(quoted, quote0(&ty)),
         };
         // let annotated = ;
         validate(&format!("{name:?}"), &iterm, Some(true));
@@ -476,7 +476,7 @@ fn test_girard() {
         ITerm::Free(Name::Global("lem2".to_owned())), 
         ITerm::Free(Name::Global("lem3".to_owned()))
     ).infer_type(ctx).unwrap();
-    let typ = quote0(typ);
+    let typ = quote0(&typ);
     if typ == CTerm::Inf(Box::new(ITerm::Fin(CTerm::Inf(Box::new(ITerm::Zero))))) {
         println!("yay!");
     }

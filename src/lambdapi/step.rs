@@ -96,7 +96,7 @@ impl Stepper for ITerm {
             ITerm::Free(name) => match ctx.find_free(&name) {
                 Some((ty, Some(val))) => {
                     println!("free");
-                    let v = ITerm::Ann(quote0(val), quote0(ty));
+                    let v = ITerm::Ann(quote0(&val), quote0(&ty));
                     Cont(v.clone(), Some(v))
                 },
                 _ => panic!("Attempted to evaluate free variable {name:?} without a definition in context"),
@@ -173,9 +173,9 @@ fn check_match(tm: ITerm) {
     use crate::lambdapi::std_env;
     println!("Base term: {tm:?}");
     let ctx = Context::new(std_env());
-    let u_eval1 = quote0(tm.eval(ctx.clone()));
+    let u_eval1 = quote0(&tm.eval(ctx.clone()));
     println!("Term 1: {u_eval1:?}");
-    let u_eval2 = quote0(eval_verify(tm, ctx.clone()).eval(ctx));
+    let u_eval2 = quote0(&eval_verify(tm, ctx.clone()).eval(ctx));
     println!("Term 2: {u_eval2:?}");
     assert!(u_eval1 == u_eval2);
 }

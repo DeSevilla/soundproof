@@ -219,7 +219,7 @@ pub fn girard() -> ITerm {
 
 /// Reduce an [ITerm] to a [CTerm].
 pub fn reduce(term: ITerm) -> CTerm {
-    quote0(term.eval(Context::new(vec![])))
+    quote0(&term.eval(Context::new(vec![])))
 }
 
 /// Reduce an [ITerm] to an [ITerm], annotating if necessary.
@@ -228,7 +228,7 @@ pub fn ireduce(term: ITerm) -> Result<ITerm, String> {
     let reduced = reduce(term);
     match reduced {
         CTerm::Inf(it) => Ok(*it),
-        CTerm::Lam(_) => Ok(iann(reduced, quote0(ty)))
+        CTerm::Lam(_) => Ok(iann(reduced, quote0(&ty)))
     }
 }
 
@@ -271,9 +271,9 @@ pub fn validate(name: &str, term: &ITerm, eval_preserve: Option<bool>) {
     let typ = term.infer_type(ctx.clone()).expect("Term should be well-typed");
     if let Some(preserve) = eval_preserve {
         let val = term.clone().eval(ctx.clone());
-        let qval = quote0(val);
+        let qval = quote0(&val);
         qval.check_type(ctx.clone(), typ.clone()).expect("Evaluation should preserve type");
-        let typ1 = quote0(typ);
+        let typ1 = quote0(&typ);
         println!("\t{term} has type {typ1}");
         // println!("Passed type checks!");
         let iqval = match qval {

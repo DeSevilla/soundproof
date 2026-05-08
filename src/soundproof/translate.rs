@@ -83,7 +83,7 @@ pub fn itype_translate(ctx: Context, term: &ITerm, meta: impl Selector) -> Resul
             // want to assign a melody to the name... randomization? fixed sequence? how do we associate?
             // maybe we put an environment of some sort in the Selector?
             let (ty, _) = ctx.find_free(name).ok_or(format!("free variable {name:?} not found"))?;
-            let tytree = ctype_translate(ctx.clone(), &quote0(ty.clone()), Value::Star, meta)?;
+            let tytree = ctype_translate(ctx.clone(), &quote0(&ty), Value::Star, meta)?;
             let tree = SoundTree::simul([node_melody, tytree]);
             Ok((ty.clone(), tree))
         },
@@ -237,8 +237,8 @@ pub fn ctype_translate(ctx: Context, term: &CTerm, ty: Type, meta: impl Selector
         CTerm::Inf(it) => {
             let i = ctx.bindings;
             let (ity, tree) = itype_translate(ctx, it, meta)?;
-            if quote0(ity.clone()) != quote0(ty.clone()) {
-                Err(format!("Expected {}, inferred {}, for term {}, level {i}", quote(i, ty), quote(i, ity), term))
+            if quote0(&ity) != quote0(&ty) {
+                Err(format!("Expected {}, inferred {}, for term {}, level {i}", quote(i, &ty), quote(i, &ity), term))
             }
             else {
                 Ok(tree)

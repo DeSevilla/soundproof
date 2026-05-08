@@ -44,7 +44,7 @@ impl ITerm {
                         x.check_type(ctx.clone(), *src)?;
                         Ok(trg(x.eval(ctx.clone())))
                     },
-                    _ => Err(format!("Tried to call function {f} with non-function type {:?}", quote(ctx.bindings, fty)))
+                    _ => Err(format!("Tried to call function {f} with non-function type {:?}", quote(ctx.bindings, &fty)))
                 }
             },
             ITerm::Nat => Ok(Value::Star),
@@ -194,8 +194,8 @@ impl CTerm {
             CTerm::Inf(it) => {
                 let ii = ctx.bindings;
                 let ity = it.infer_type(ctx)?;
-                let infer = quote(ii, ity.clone());
-                let expect = quote(ii, ty.clone());
+                let infer = quote(ii, &ity);
+                let expect = quote(ii, &ty);
                 if infer != expect {
                     Err(format!("Mismatch: Received from callsite {:?}, inferred from term {:?}, for term {self}={self:?}, level {ii}", expect, infer))
                 }

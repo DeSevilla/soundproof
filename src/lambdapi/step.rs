@@ -80,7 +80,8 @@ impl Stepper for ITerm {
             ITerm::Ann(body, ty) => match ty.step(ctx.clone()) {
                 Cont(typ, v) => Cont(ITerm::Ann(body, typ), v),
                 Done(typ, _) => body.step(ctx).apply(|ct| match ct {
-                    CTerm::Inf(it) => *it,
+                    // CTerm::Inf(it) => *it,
+                    CTerm::Inf(it) => {print!("ann dropping {:?} {}; ", typ.tag(), format!("{typ}").len()); *it},
                     _ => ITerm::Ann(ct, typ)
                 }),
             },
@@ -94,6 +95,7 @@ impl Stepper for ITerm {
             ITerm::Bound(nat) => Done(ITerm::Bound(nat), None),
             ITerm::Free(name) => match ctx.find_free(&name) {
                 Some((ty, Some(val))) => {
+                    println!("free");
                     let v = ITerm::Ann(quote0(val), quote0(ty));
                     Cont(v.clone(), Some(v))
                 },
@@ -107,9 +109,11 @@ impl Stepper for ITerm {
                             ITerm::Ann(CTerm::Lam(body), CTerm::Inf(ty)) => {
                                 match *ty.clone() {
                                     ITerm::Pi(src, trg) => {
+                                        print!("lam @ {:?} | {} <- {} => ", arg.tag(), format!("{body}").len(), format!("{arg}").len());
                                         let tm = ITerm::Ann(arg, src);
                                         let resbody = body.subst(0, &tm);
                                         let resty = trg.subst(0, &tm);
+                                        print!("{}; ", format!("{resbody}").len());
                                         Cont(ITerm::Ann(resbody, resty), Some(tm))
                                     },
                                     _ => panic!("got malformed lambda type"),

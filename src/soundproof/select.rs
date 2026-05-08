@@ -112,7 +112,19 @@ pub trait Selector: Clone {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct Silence;
+pub struct Silence {
+    depth: usize
+}
+
+impl Silence {
+    pub fn new() -> Self {
+        Silence { depth: 0 }
+    }
+
+    pub fn next(&self) -> Self {
+        Silence { depth: self.depth + 1 }
+    }
+}
 
 impl SoundGenerator for Silence {
     fn sequence(&self, _seq: &mut ConfigSequencer, _start_time: f64, _duration: f64, _lean: f32) {}
@@ -124,19 +136,33 @@ impl SoundGenerator for Silence {
 
 impl Selector for Silence {
     fn isound(&self, term: &ITerm) -> SoundTree {
-        SoundTree::sound(Silence, self.imeta(term))
+        SoundTree::sound(self.next(), self.imeta(term))
     }
 
     fn csound(&self, term: &CTerm) -> SoundTree {
-        SoundTree::sound(Silence, self.cmeta(term))
+        SoundTree::sound(self.next(), self.cmeta(term))
     }
 
     fn imerge(&self, _term: &ITerm) -> Self {
-        Silence
+        self.next()
     }
 
     fn cmerge(&self, _term: &CTerm) -> Self {
-        Silence
+        self.next()
+    }
+
+    fn imeta(&self, term: &ITerm) -> TreeMetadata {
+        FullStratifier {
+            parent: Term::I(ITerm::Star),
+            depth: self.depth + 1,
+        }.imeta(term)
+    }
+
+    fn cmeta(&self, term: &CTerm) -> TreeMetadata {
+        FullStratifier {
+            parent: Term::I(ITerm::Star),
+            depth: self.depth + 1
+        }.cmeta(term)
     }
 }
 
@@ -180,6 +206,20 @@ impl Selector for Plain {
         Plain {
             depth: self.depth + 1
         }
+    }
+
+    fn imeta(&self, term: &ITerm) -> TreeMetadata {
+        FullStratifier {
+            parent: Term::I(ITerm::Star),
+            depth: self.depth
+        }.imeta(term)
+    }
+
+    fn cmeta(&self, term: &CTerm) -> TreeMetadata {
+        FullStratifier {
+            parent: Term::I(ITerm::Star),
+            depth: self.depth
+        }.cmeta(term)
     }
 }
 

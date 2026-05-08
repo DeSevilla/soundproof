@@ -57,7 +57,7 @@ pub fn itype_translate(ctx: Context, term: &ITerm, meta: impl Selector) -> Resul
         ITerm::Ann(ct, cty) => {
             // should we modify something in this to present an annotation better? term-translate the type, maybe?
             let tytree = ctype_translate(ctx.clone(), cty, Value::Star, meta.clone())?;
-            let ty = cty.clone().eval(ctx.clone());
+            let ty = cty.eval(ctx.clone());
             let termtree = ctype_translate(ctx, ct, ty.clone(), meta)?;  // should we have the type and term at diff depths?
             let tree = SoundTree::simul([node_melody, SoundTree::seq([termtree, tytree])]);
             // let tree = SoundTree::simul(&[node_melody, SoundTree::seq(&[tytree, termtree])]);    //alt 1: swap term/ty
@@ -275,7 +275,7 @@ pub fn iterm_translate(term: &ITerm, meta: impl Selector) -> SoundTree {
         ]),
         ITerm::Star => base_mel,
         ITerm::Pi(cterm, cterm1) => SoundTree::simul([
-            base_mel, 
+            base_mel,
             SoundTree::seq([
                 cterm_translate(cterm, meta.clone()),
                 cterm_translate(cterm1, meta)

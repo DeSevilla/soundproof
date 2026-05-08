@@ -609,17 +609,21 @@ impl Weights {
     pub fn instrument(&self) -> An<impl AudioNode<Inputs=U1, Outputs=U2>> {
         match self.body {
             [a, b, c, d, e, f, g, h, i, j] => { 
-                split::<U10>() >>
-                    a * sine()
-                    + b * saw()
-                    + c * square()
-                    + d * sinesaw()
-                    + e * sine()
-                    + f * saw()
-                    + g * square()
-                    + h * sinesaw()
-                    + i * sine()
-                    + j * square()
+                split::<U4>() >>
+                    (a + e + i) * sine()
+                    + (b + f) * saw()
+                    + (d + h) * sinesaw()
+                    + (c + g + j) * square()
+                    // a * sine()
+                    // + b * saw()
+                    // + c * square()
+                    // + d * sinesaw()
+                    // + e * sine()
+                    // + f * saw()
+                    // + g * square()
+                    // + h * sinesaw()
+                    // + i * sine()
+                    // + j * square()
                     >> split()
             }
         }
@@ -649,7 +653,7 @@ pub struct Buckets<const N: usize> {
 }
 
 impl<const N: usize> Buckets<N> {
-    const MIN_FREQ: f32 = 40.;
+    const MIN_FREQ: f32 = 60.;
     // const N_INV: f32 = 1. / N as f32;
 
     pub fn from_tree(tree: &SoundTree, range: f32, scaling: DivisionMethod) -> Buckets<N> {
@@ -658,9 +662,6 @@ impl<const N: usize> Buckets<N> {
             min_freq: Self::MIN_FREQ,
             max_freq: Self::MIN_FREQ + range
         };
-        // for (ii, () in result.buckets.iter_mut().enumerate() {
-        //     *f = range as f32 / N as f32 * ii as f32
-        // }
         // need to distribute into buckets somehow
         // might not be able to be an array anymore but w/e
         tree.distribute(
@@ -691,7 +692,9 @@ impl<const N: usize> Buckets<N> {
         let y = self.max_freq;
         self.buckets.into_iter()
             .enumerate()
-            .map(move |(ii, weights)| (2.0_f32.powf(lerp(x.log2(), y.log2(), ii as f32 / N as f32)), weights))
+            // .map(move |(ii, weights)| (2.0_f32.powf(lerp(x.log2(), y.log2(), ii as f32 / N as f32)), weights))
+            // .map(move |(ii, weights)| (lerp(x.sqrt(), y.sqrt(), ii as f32 / N as f32).powi(2), weights))
+            .map(move |(ii, weights)| (lerp(x, y, ii as f32 / N as f32), weights))
     } 
 }
 

@@ -384,18 +384,38 @@ pub fn main_to_file(args: &Args) {
     println!("Done.")
 }
 
+pub fn run_steps(term: ITerm, limit: usize) {
+    let ctx = Context::new(term::std_env());
+    let mut prev = 0;
+    for (ii, tm) in step::Stepper::step_over(term, ctx.clone()).enumerate() {
+        if ii > limit {
+            break;
+        }
+        println!();
+        match tm {
+            ITerm::Ann(ref new, ref ty) =>{
+                println!("looped {ty}! after {ii} ({}) steps as: {:?} {}\n", ii - prev, new.tag(), format!("{tm}").len());
+                prev = ii;
+            },
+            _ => ()
+        }
+    }
+}
+
 pub fn main_steps(args: &Args) {
     use crate::step::Step;
     use crate::term::std_env;
     let all_start = Instant::now();
     println!("Starting tone generation at {all_start:?}");
     let start_term = args.term();
+    // run_steps(start_term, args.time.unwrap_or(1000.).floor() as usize);
+    // return;
     let base_dur = 0.3;
     let mut tones = ToneMaker::new(0.0, base_dur);
-    let changes = Silence;
+    let changes = Silence::new();
     // let changes = SineRhythmizer::new();
     let mut steps = 0;
-    let limit = 262; // 155, 261, 406, 596, 837
+    let limit = 261; // 155, 261, 406, 596, 837
     if args.animate {
         animate_term_steps(start_term.clone(), ToneMaker::new(0.0, 0.2), args.division, limit, 200.);
     }
@@ -417,11 +437,11 @@ pub fn main_steps(args: &Args) {
             Step::Cont(t, v) => (t.clone(), v.clone()),
             Step::Done(_, _) => break,
         };
+        // let dur = base_dur;
         let dur = match change {
             Some(change) => {
                 let change_tree = type_translate(&change, changes.clone()).unwrap();
                 let dur = (1. + (change_tree.size() as f64 / base_size.get(18000) as f64).sqrt() * 5.) * base_dur;
-                // let dur = base_dur;
                 // println!("Change size: {} vs base at: {}", change_tree.size(), change_tree.size() as f64 / base_size as f64);
                 // change_tree.generate_with(
                 //     &mut cfg_seq,
@@ -437,8 +457,8 @@ pub fn main_steps(args: &Args) {
         println!("Duration: {dur}");
         tones.duration = dur;
 
-
-        let tree = type_translate(&term, tones.clone()).unwrap();
+        // let tree = type_translate(&term, tones.clone()).unwrap();
+        let tree = type_translate(&term, Silence::new()).unwrap();
         base_size.get(tree.size());
         // prev_size = tree.size() as f64;
         println!("...done in {:?}, output size {}", step_start.elapsed(), tree.size());
@@ -449,7 +469,8 @@ pub fn main_steps(args: &Args) {
         const NUM_BUCKETS: usize = 512;
         if tree.size() > NUM_BUCKETS * 8 {
             let buckets: Buckets<NUM_BUCKETS> = Buckets::from_tree(&tree, freq_range as f32, args.division);
-            buckets //.reverse()
+            buckets
+                // .reverse()
                 .sequence(&mut cfg_seq, tones.start_time, tones.duration, 0.0);
         }
         else {

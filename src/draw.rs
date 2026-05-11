@@ -118,10 +118,10 @@ pub fn animate_term_steps(term: ITerm, mut meta: ToneMaker, scaling: DivisionMet
         if ii > limit {
             break;
         }
-        match tm {
-            ITerm::Ann(_, _) => println!("looped! after {ii} steps"),
-            _ => {}
-        }
+        // match tm {
+        //     ITerm::Ann(_, _) => println!("looped! after {ii} steps"),
+        //     _ => {}
+        // }
         // continue;
         meta.increment();
         let tree = type_translate(&tm, meta.clone()).unwrap();

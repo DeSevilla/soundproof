@@ -610,10 +610,6 @@ impl Weights {
         match self.body {
             [a, b, c, d, e, f, g, h, i, j] => { 
                 split::<U4>() >>
-                    (a + e + i) * sine()
-                    + (b + f) * saw()
-                    + (d + h) * sinesaw()
-                    + (c + g + j) * square()
                     // a * sine()
                     // + b * saw()
                     // + c * square()
@@ -624,6 +620,10 @@ impl Weights {
                     // + h * sinesaw()
                     // + i * sine()
                     // + j * square()
+                    (a + e + i) * sine()
+                    + (b + f) * saw()
+                    + (d + h) * sinesaw()
+                    + (c + g + j) * square()
                     >> split()
             }
         }

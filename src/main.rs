@@ -277,7 +277,7 @@ impl Args {
 
 pub fn async_tree(content: AsyncStratifier, term: &ITerm, ctx: Context) -> SoundTree {
     // type_translate(term, content)
-    itype_translate(ctx, term, content).unwrap().1
+    term.infer_translate(ctx, content).unwrap().1
 }
 
 pub fn make_tree(structure: Structure, content: AudioSelectorOptions, term: &ITerm) -> SoundTree {
@@ -392,12 +392,9 @@ pub fn run_steps(term: ITerm, limit: usize) {
             break;
         }
         println!();
-        match tm {
-            ITerm::Ann(ref new, ref ty) =>{
-                println!("looped {ty}! after {ii} ({}) steps as: {:?} {}\n", ii - prev, new.tag(), format!("{tm}").len());
-                prev = ii;
-            },
-            _ => ()
+        if let ITerm::Ann(ref new, ref ty) = tm {
+            println!("looped {ty}! after {ii} ({}) steps as: {:?} {}\n", ii - prev, new.tag(), format!("{tm}").len());
+            prev = ii;
         }
     }
 }
@@ -410,12 +407,12 @@ pub fn main_steps(args: &Args) {
     let start_term = args.term();
     // run_steps(start_term, args.time.unwrap_or(1000.).floor() as usize);
     // return;
-    let base_dur = 0.3;
+    let base_dur = 2.0;
     let mut tones = ToneMaker::new(0.0, base_dur);
     let changes = Silence::new();
     // let changes = SineRhythmizer::new();
     let mut steps = 0;
-    let limit = 261; // 155, 261, 406, 596, 837
+    let limit = 76; // 155, 261, 406, 596, 837
     if args.animate {
         animate_term_steps(start_term.clone(), ToneMaker::new(0.0, 0.2), args.division, limit, 200.);
     }

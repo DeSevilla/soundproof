@@ -126,6 +126,12 @@ impl Silence {
     }
 }
 
+impl Default for Silence {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SoundGenerator for Silence {
     fn sequence(&self, _seq: &mut ConfigSequencer, _start_time: f64, _duration: f64, _lean: f32) {}
 
@@ -1465,7 +1471,7 @@ pub fn cmelody6(term: &CTerm, depth: usize) -> Melody {
     result
 }
 
-/// Melodies with some hints of dissonance & more texture
+// /// Melodies with some hints of dissonance & more texture
 // pub fn imelody7(term: &ITerm, depth: usize) -> Melody {
 //     let mut result = match term {
 //         ITerm::Ann(_, _) => Melody::new_even(sine(), &[A, D, F, A]),

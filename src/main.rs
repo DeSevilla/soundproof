@@ -277,7 +277,7 @@ impl Args {
 
 pub fn async_tree(content: AsyncStratifier, term: &ITerm, ctx: Context) -> SoundTree {
     // type_translate(term, content)
-    term.infer_translate(ctx, content).unwrap().1
+    term.infer_translate(&ctx, content).unwrap().1
 }
 
 pub fn make_tree(structure: Structure, content: AudioSelectorOptions, term: &ITerm) -> SoundTree {
@@ -492,6 +492,7 @@ pub fn main_steps(args: &Args) {
         }
         // println!("Got this many events: {}", SIGN.load(std::sync::atomic::Ordering::SeqCst));
     }
+    println!("Translated in {:?}", all_start.elapsed());
     // use crate::SIGN;
     // println!("Got this many events: {}", SIGN.load(std::sync::atomic::Ordering::SeqCst));
     let mut output = make_output(Box::new(cfg_seq.seq), args.filters);

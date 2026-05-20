@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicU32, Ordering};
-use fundsp::hacker32::*;
+use fundsp::prelude32::*;
 use rand::seq::IndexedRandom;
 use rand::rng;
 
@@ -72,7 +72,7 @@ impl SoundGenerator for WaveClip {
         let scaled = retime_pitch_wave(&self.wave, duration, self.depth_factor());
         let wave_arc = Arc::new(scaled);
         // TODO incorporate lean
-        let instr = wavech(&wave_arc, 0, None)
+        let instr = playwave(&wave_arc, 0, None)
             >> split()
             >> (mul(2.0_f32.powf(lean)) | mul(2.0_f32.powf(-lean)));
         seq.push_duration(start_time, duration, Fade::Smooth, 0.0, 0.0, Box::new(instr));
@@ -87,7 +87,7 @@ impl SoundGenerator for Wave {
     fn sequence(&self, seq: &mut ConfigSequencer, start_time: f64, duration: f64, lean: f32) {
         let scaled = retime_wave(self, duration);
         let wave_arc = Arc::new(scaled);
-        let instr = wavech(&wave_arc, 0, None)
+        let instr = playwave(&wave_arc, 0, None)
             >> split()
             >> (mul(2.0_f32.powf(lean)) | mul(2.0_f32.powf(-lean)));
         seq.push_duration(start_time, duration, Fade::Smooth, 0.0, 0.0, Box::new(instr));
@@ -467,7 +467,7 @@ impl<T, X> SoundGenerator for EffectSeq<T, X>
 {
     fn sequence(&self, seq: &mut ConfigSequencer, start_time: f64, duration: f64, lean: f32) {
         // self.body.sequence(seq, start_time, duration, lean);
-        let mut new_seq = ConfigSequencer::new(Sequencer::new(false, 2), seq.live);
+        let mut new_seq = ConfigSequencer::new(Sequencer::new(0, 2, ReplayMode::None), seq.live);
         self.body.sequence(&mut new_seq, 0.0, duration, lean);
         let effected = unit::<U0, U2>(Box::new(new_seq.seq)) >> (self.effect.clone() | self.effect.clone());
         let fade_out = 1.0.min(duration * 0.2);
@@ -606,10 +606,12 @@ pub struct Weights {
 impl Weights {
     const LENGTH: usize = 10;
 
-    pub fn instrument(&self) -> An<impl AudioNode<Inputs=U1, Outputs=U2>> {
+    pub fn instrument(&self) -> An<impl AudioNode<Inputs=U2, Outputs=U2> + use<>> {
+        let phase: f32 = self.body.into_iter().sum();
+        let phase = phase / 5. % 0.5;
         match self.body {
-            [a, b, c, d, e, f, g, h, i, j] => { 
-                split::<U4>() >>
+            [a, b, c, d, e, f, g, h, i, j] => {
+                multisplit::<U2,U4>() >>
                     // a * sine()
                     // + b * saw()
                     // + c * square()
@@ -620,10 +622,10 @@ impl Weights {
                     // + h * sinesaw()
                     // + i * sine()
                     // + j * square()
-                    (a + e + i) * sine()
-                    + (b + f) * saw()
-                    + (d + h) * sinesaw()
-                    + (c + g + j) * square()
+                    (pass()   + saw().phase(phase)           >> (a + e + i) * sine())
+                    + (pass() + square().phase(phase * 0.5) >> (b + f) * saw())
+                    + (pass() + sine()                       >> (d + h) * sinesaw())
+                    + (pass() + sine().phase(1.5 * phase)    >> (c + g + j) * square())
                     >> split()
             }
         }
@@ -706,8 +708,8 @@ impl<const N: usize> SoundGenerator for Buckets<N> {
         // let factor = 8e-4;
         // let modified_instrument = (constant(freq) >> self.instrument.clone()) >> split::<U2>() * factor;
         for (freq, weights) in self.iter_buckets() {
-            let instr = constant(freq) >> weights.instrument();
-            let fade_duration = 0.;
+            let instr = (constant(freq) | constant(0.5)) >> weights.instrument();
+            let fade_duration = 0.05;
             seq.push_duration(start_time, duration, Fade::Power, fade_duration, fade_duration, Box::new(instr));
         }
     }

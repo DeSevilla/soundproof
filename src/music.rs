@@ -1,6 +1,6 @@
 use std::path::Path;
 use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, Device, FromSample, SampleFormat, SizedSample, StreamConfig};
-use fundsp::hacker32::*;
+use fundsp::prelude32::*;
 use sonogram::{ColourGradient, FrequencyScale, RGBAColour, SpecOptionsBuilder};
 
 /// Synth instruments. Many of these are unused currently, but kept around for tinkering.
@@ -141,7 +141,7 @@ fn run_synth<T: SizedSample + FromSample<f64>>(
 }
 
 /// Callback function to send the current sample to the speakers.
-fn write_data<T: SizedSample + FromSample<f64>>(
+pub fn write_data<T: SizedSample + FromSample<f64>>(
     output: &mut [T],
     channels: usize,
     next_sample: &mut dyn FnMut() -> (f32, f32),

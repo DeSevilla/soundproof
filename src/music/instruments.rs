@@ -1,4 +1,4 @@
-use fundsp::hacker32::*;
+use fundsp::prelude32::*;
 use std::f32::consts::{E, PI};
 
 use crate::music::{notes::BASE_HZ, sequences::onepress};
@@ -41,7 +41,7 @@ pub fn all_harmonics(adsrs: &[(f32, f32, f32, f32)]) -> Vec<(f32, f32, f32, f32,
     adsrs.iter().enumerate().map(|(i, (a, d, s, r))| (i as f32, *a, *d, *s, *r)).collect()
 }
 
-fn additive_array(instrument: An<impl AudioNode<Inputs=U1, Outputs=U1> + 'static>, incr: f32, adsrs: &[(f32, f32, f32, f32, f32)]) -> An<impl AudioNode<Inputs=U2, Outputs=U1>>  {
+fn additive_array<T: AudioNode<Inputs=U1, Outputs=U1> + 'static>(instrument: An<T>, incr: f32, adsrs: &[(f32, f32, f32, f32, f32)]) -> An<impl AudioNode<Inputs=U2, Outputs=U1> + use<T>> {
     let mut net = Net::wrap(Box::new((sink() | sink()) >> constant(0.0)));
     for (h, a, d, s, r) in adsrs.iter() {
         net = net & ((mul(*h) >> instrument.clone()) * adsr_live(*a * incr, *d * incr, *s, *r * incr))

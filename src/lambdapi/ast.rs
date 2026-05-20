@@ -144,13 +144,13 @@ impl Context {
     }
 
     pub fn add_free_iterm(&mut self, name: impl Into<String>, value: ITerm) -> Result<Name, String> {
-        let ty = value.infer_type(self.clone())?;
-        let val = value.eval(self.clone());
+        let ty = value.infer_type(self)?;
+        let val = value.eval(self);
         Ok(self.add_free(name, Some(val), ty))
     }
 
     pub fn assume_cterm(&mut self, name: impl Into<String>, typ: CTerm) -> Name {
-        let ty = typ.eval(self.clone());
+        let ty = typ.eval(self);
         self.add_free(name, None, ty)
     }
 

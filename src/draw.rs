@@ -2,21 +2,25 @@ use std::path::Path;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
-// use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-// use fundsp::hacker::{AudioUnit, Sequencer};
+// use fundsp::sequencer::ReplayMode;
+use fundsp::prelude::Sequencer;
+use fundsp::sequencer::ReplayMode;
 use minifb::{Window, WindowOptions};
 use piet_common::*; //{Color, Device, DwriteFactory, FontFamily, ImageFormat, PietText, PietTextLayout, RenderContext, Text, TextLayoutBuilder};
 use piet_common::kurbo::{Circle, Line, Rect};
-// use cpal::{self, FromSample, SizedSample, StreamConfig};
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use cpal::{self, StreamConfig};
 
 use crate::lambdapi::ast::*;
 use crate::lambdapi::term::*;
-// use crate::Selector;
+use crate::FilterOptions;
+use crate::music::write_data;
 use crate::soundproof::select::ToneMaker;
+use crate::soundproof::sound_generators::{Buckets, SoundGenerator};
 use crate::type_translate;
 use crate::step::*;
-// use crate::soundproof::types::{ConfigSequencer, SetOnce, SoundTree};
-use crate::soundproof::types::SoundTree;
+use crate::soundproof::types::{ConfigSequencer, SoundTree};
+// use crate::soundproof::types::SoundTree;
 use crate::DivisionMethod;
 
 // const WIDTH_PX: usize = 377 * 3;
@@ -75,54 +79,55 @@ pub fn animate_term_steps(term: ITerm, mut meta: ToneMaker, scaling: DivisionMet
     // let mut base_size = SetOnce::new();
     let frame_time = base_time;
 
-    println!("{frame_time:?}");
+    println!("frame time: {frame_time:?}");
     // let frames = (duration * fps as f64).ceil() as usize;
     let ctx = Context::new(std_env());
-    // let mut seq = Sequencer::new(false, 2);
-    // let backend = Box::new(seq.backend());
-    // let mut cfg_seq = ConfigSequencer::new(seq, true);
-    // let host = cpal::default_host();
-    // let audio_device = host
-    //     .default_output_device()
-    //     .expect("failed to find a default output device");
-    // let config: StreamConfig = audio_device.default_output_config().unwrap().into();
-    // let channels = config.channels as usize;
-    // let mut current = Step::Cont(start_term);
-    // std::thread::spawn(move || {
-    //     let sample_rate = config.sample_rate.0 as f64;
-    //     // let mut sound = create_sound(pitch, volume, pitch_bend, control);
-    //     let mut sound = backend;
-    //     sound.set_sample_rate(sample_rate);
+    let mut seq = Sequencer::new(0, 2, ReplayMode::None);
+    let backend = crate::make_output(Box::new(seq.backend()), FilterOptions::ClipLowpass);
+    let mut cfg_seq = ConfigSequencer::new(seq, true);
+    let host = cpal::default_host();
+    let audio_device = host
+        .default_output_device()
+        .expect("failed to find a default output device");
+    let config: StreamConfig = audio_device.default_output_config().unwrap().into();
+    let channels = config.channels as usize;
+    // let mut current = Step::Cont(start_term, None);
+    std::thread::spawn(move || {
+        let sample_rate = config.sample_rate.0 as f64;
+        // let mut sound = create_sound(pitch, volume, pitch_bend, control);
+        let mut sound = backend;
+        sound.set_sample_rate(sample_rate);
 
-    //     let mut next_value = move || sound.get_stereo();
-    //     let err_fn = |err| eprintln!("an error occurred on stream: {err}");
-    //     let stream = audio_device
-    //         .build_output_stream(
-    //             &config,
-    //             move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-    //                 write_data(data, channels, &mut next_value)
-    //             },
-    //             err_fn,
-    //             None,
-    //         )
-    //         .unwrap();
+        let mut next_value = move || sound.get_stereo();
+        let err_fn = |err| eprintln!("an error occurred on stream: {err}");
+        let stream = audio_device
+            .build_output_stream(
+                &config,
+                move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+                    write_data(data, channels, &mut next_value)
+                },
+                err_fn,
+                None,
+            )
+            .unwrap();
 
-    //     stream.play().unwrap();
-    //     loop {
-    //         std::thread::sleep(std::time::Duration::from_millis(1));
-    //     }
-    // });
+        stream.play().unwrap();
+        loop {
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+    });
     meta.increment();
+    let start_instant = Instant::now();
     for (ii, tm) in term.step_over(ctx.clone()).enumerate() {
         let frame_start = Instant::now();
+        println!("Frame {ii} started at {:?}", frame_start - start_instant);
         if ii > limit {
             break;
         }
-        // match tm {
-        //     ITerm::Ann(_, _) => println!("looped! after {ii} steps"),
-        //     _ => {}
-        // }
-        // continue;
+        if !window.is_open() {
+            println!("Window closed; quitting");
+            break;
+        }
         meta.increment();
         let tree = type_translate(&tm, meta.clone()).unwrap();
         // let size = tree.size();
@@ -131,10 +136,16 @@ pub fn animate_term_steps(term: ITerm, mut meta: ToneMaker, scaling: DivisionMet
         // frame_time = base_time * size as u32 / base_size.get(size) as u32;
         // println!("Frame time: {frame_time:?}");
         // tree.generate_with(&mut cfg_seq, 0.0, 2000.0, DivisionMethod::Weight, 0.0);
-        if !window.is_open() {
-            println!("Window closed; quitting");
-            break;
-        }
+        let frame_adjust = 0.2;
+        let buckets: Buckets<64> = Buckets::from_tree(&tree, 1000., DivisionMethod::Weight);
+        // let next_frame_start = (frame_start + frame_time - start_instant).as_secs_f64() + frame_adjust;
+        let next_frame_start = 0.0;
+        let sound_duration = frame_time.as_secs_f64() - 3. * frame_adjust;
+        // let sound_duration = frame_time.as_secs_f64() / 1.5;
+        println!("seq next frame: {next_frame_start} to {}, from {:?}", next_frame_start + sound_duration, Instant::now() - start_instant);
+        // cfg_seq.seq.reset();
+        buckets.sequence(&mut cfg_seq, next_frame_start, sound_duration, 0.0);
+
         let mut bitmap = visual_device.bitmap_target(WIDTH_PX, HEIGHT_PX, DPI).unwrap();
         let mut rc = bitmap.render_context();
         let rect = Rect::new(0.0, 0.0, WIDTH_IN, HEIGHT_IN);
@@ -158,11 +169,13 @@ pub fn animate_term_steps(term: ITerm, mut meta: ToneMaker, scaling: DivisionMet
         // elapsed += frame_time;
         let frame_end = Instant::now();
         let render_dur = frame_end - frame_start;
+        println!("Render: {render_dur:?} ending at {:?}", frame_end - start_instant);
         if render_dur < frame_time {
             sleep(frame_time - render_dur)
         }
+        println!("Updating window at {:?}", Instant::now() - start_instant);
     }
-    sleep(Duration::from_secs(10))
+    // sleep(Duration::from_secs(10))
 }
 
 pub fn draw_anim(tree: &SoundTree, scaling: DivisionMethod, duration: f64, fps: usize) {

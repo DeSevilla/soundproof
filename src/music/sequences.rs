@@ -1,4 +1,4 @@
-use fundsp::hacker32::*;
+use fundsp::prelude32::*;
 use crate::music::notes::note_hz;
 
 // various envelopes for synths, most of which aren't currently used

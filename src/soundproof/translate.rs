@@ -1,7 +1,7 @@
 // #![allow(unused)]
 use std::rc::Rc;
 
-use fundsp::hacker32::sine;
+use fundsp::prelude32::sine;
 
 use crate::{
     ast::*, music::notes::G, select::Selector, term::*, types::*, sound_generators::*,
@@ -37,7 +37,7 @@ impl ITerm {
             ITerm::Ann(ct, cty) => {
                 // should we modify something in this to present an annotation better? term-translate the type, maybe?
                 let tytree = cty.check_translate(ctx, &Value::Star, meta.clone())?;
-                let ty = cty.eval(ctx.clone());
+                let ty = cty.eval(ctx);
                 let termtree = ct.check_translate(ctx, &ty, meta)?;  // should we have the type and term at diff depths?
                 let tree = SoundTree::simul([node_melody, SoundTree::seq([termtree, tytree])]);
                 // let tree = SoundTree::simul(&[node_melody, SoundTree::seq(&[tytree, termtree])]);    //alt 1: swap term/ty
@@ -47,7 +47,7 @@ impl ITerm {
             ITerm::Star => Ok((Value::Star, node_melody)),
             ITerm::Pi(src, trg) => {
                 let srctree = src.check_translate(ctx, &Value::Star, meta.clone())?;
-                let ty = src.eval(ctx.clone());
+                let ty = src.eval(ctx);
                 let mut new_ctx = ctx.clone();
                 let name = new_ctx.bind_type(ty);
                 let trgtree = trg.clone().subst(0, &ITerm::Free(name)).check_translate(
@@ -72,7 +72,7 @@ impl ITerm {
                     Value::Pi(src, trg) => {
                         let xtree = x.check_translate(ctx, &src, meta)?;
                         Ok((
-                            trg(x.eval(ctx.clone())),
+                            trg(x.eval(ctx)),
                             SoundTree::simul([node_melody, SoundTree::seq([ftree, xtree])])
                         ))
                     },
@@ -90,7 +90,7 @@ impl ITerm {
             },
             ITerm::NatElim(motive, base, ind, k) => {
                 let mtree = motive.check_translate(ctx, &Value::Pi(Box::new(Value::Nat), Rc::new(|_| Value::Star)), meta.clone())?;
-                let m_val = motive.eval(ctx.clone());
+                let m_val = motive.eval(ctx);
                 let m_val1 = m_val.clone();
                 let bctree = base.check_translate(ctx, &vapp(m_val.clone(), Value::Zero), meta.clone())?;
                 let indtree = ind.check_translate(
@@ -103,7 +103,7 @@ impl ITerm {
                     meta.clone()
                 )?;
                 let ktree = k.check_translate(ctx, &Value::Nat, meta)?;
-                let k_val = k.eval(ctx.clone());
+                let k_val = k.eval(ctx);
                 Ok((vapp(m_val, k_val), SoundTree::simul([node_melody, SoundTree::seq([mtree, bctree, indtree, ktree])])))
             },
             ITerm::Fin(n) => {
@@ -113,12 +113,12 @@ impl ITerm {
             },
             ITerm::FZero(n) => {
                 let subtree = n.check_translate(ctx, &Value::Nat, meta)?;
-                let n_val = n.eval(ctx.clone());
+                let n_val = n.eval(ctx);
                 Ok((Value::Fin(Box::new(Value::Succ(Box::new(n_val)))), SoundTree::simul([node_melody, subtree])))
             },
             ITerm::FSucc(n, fp) => {
                 let ntree = n.check_translate(ctx, &Value::Nat, meta.clone())?;
-                let n_val = n.eval(ctx.clone());
+                let n_val = n.eval(ctx);
                 match &n_val {
                     Value::Succ(m) => {
                         let fptree = fp.check_translate(ctx, &Value::Fin(m.clone()), meta)?;
@@ -133,8 +133,8 @@ impl ITerm {
                     Value::Pi(Box::new(Value::Fin(Box::new(k))), Rc::new(|_| Value::Star))
                 )), meta.clone())?;
                 let ntree = n.check_translate(ctx, &Value::Nat, meta.clone())?;
-                let motive_val = motive.eval(ctx.clone()); //we'll need NameEnv instead of just ctx if we want more parsing etc.
-                let n_val = n.eval(ctx.clone());
+                let motive_val = motive.eval(ctx); //we'll need NameEnv instead of just ctx if we want more parsing etc.
+                let n_val = n.eval(ctx);
                 let motive_val2 = motive_val.clone(); //jeez
                 let bctree = base.check_translate(ctx, &Value::Pi(Box::new(Value::Nat), Rc::new(
                     move |k| vapp(vapp(motive_val.clone(), Value::Succ(Box::new(k.clone()))), Value::FZero(Box::new(k)))
@@ -155,13 +155,13 @@ impl ITerm {
                     }
                 )), meta.clone())?;
                 let ftree = f.check_translate(ctx, &Value::Fin(Box::new(n_val.clone())), meta)?;
-                let f_val = f.eval(ctx.clone());
+                let f_val = f.eval(ctx);
                 let tree = SoundTree::simul([node_melody, SoundTree::seq([mtree, bctree, indtree, ftree, ntree])]);
                 Ok((vapp(vapp(motive_val2, n_val), f_val), tree))
             },
             ITerm::Eq(a, x, y) => {
                 let atree = a.check_translate(ctx, &Value::Star, meta.clone())?;
-                let a_val = a.eval(ctx.clone());
+                let a_val = a.eval(ctx);
                 let xtree = x.check_translate(ctx, &a_val, meta.clone())?;
                 let ytree = y.check_translate(ctx, &a_val, meta)?;
                 let tree = SoundTree::simul([node_melody, SoundTree::seq([atree, xtree, ytree])]);
@@ -169,15 +169,15 @@ impl ITerm {
             },
             ITerm::Refl(a, x) => {
                 let atree = a.check_translate(ctx, &Value::Star, meta.clone())?;
-                let a_val = a.eval(ctx.clone());
+                let a_val = a.eval(ctx);
                 let xtree = x.check_translate(ctx, &a_val, meta.clone())?;
-                let x_val = x.eval(ctx.clone());
+                let x_val = x.eval(ctx);
                 let tree = SoundTree::simul([node_melody, SoundTree::seq([atree, xtree])]);
                 Ok((Value::Eq(Box::new(a_val), Box::new(x_val.clone()), Box::new(x_val)), tree))
             },
             ITerm::EqElim(a, motive, base, x, y, eq) => {
                 let atree = a.check_translate(ctx, &Value::Star, meta.clone())?;
-                let a_val = a.eval(ctx.clone());
+                let a_val = a.eval(ctx);
                 let a_val1 = a_val.clone();
                 let mtree = motive.check_translate(ctx, 
                     &vpi(a_val1.clone(), move |x|
@@ -187,7 +187,7 @@ impl ITerm {
                     )})), meta.clone()
                 )?;
                 let a_val1 = a_val.clone();
-                let m_val = motive.eval(ctx.clone());
+                let m_val = motive.eval(ctx);
                 let m_val1 = m_val.clone();
                 let btree = base.check_translate(ctx, 
                     &vpi(a_val1.clone(), move |x| {
@@ -195,14 +195,14 @@ impl ITerm {
                     }), meta.clone()
                 )?;
                 let xtree = x.check_translate(ctx, &a_val, meta.clone())?;
-                let x_val = x.eval(ctx.clone());
+                let x_val = x.eval(ctx);
                 let ytree = y.check_translate(ctx, &a_val, meta.clone())?;
-                let y_val = y.eval(ctx.clone());
+                let y_val = y.eval(ctx);
                 let eqtree = eq.check_translate(ctx, 
                     &Value::Eq(Box::new(a_val), Box::new(x_val.clone()), Box::new(y_val.clone())), 
                     meta
                 )?;
-                let eq_val = eq.eval(ctx.clone());
+                let eq_val = eq.eval(ctx);
                 let tree = SoundTree::simul([node_melody, SoundTree::seq([atree, mtree, btree, xtree, ytree, eqtree])]);
                 Ok((vapp(vapp(vapp(m_val, x_val), y_val), eq_val), tree))
             }

@@ -2,7 +2,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use fundsp::hacker32::*;
+use fundsp::prelude32::*;
 use piet_common::Color;
 
 
@@ -48,8 +48,33 @@ pub struct ConfigSequencer {
 
 impl ConfigSequencer {
     pub fn new(seq: Sequencer, live: bool) -> Self {
-        // should probably start this when we first push
+        // start time is set on push
         Self { seq, start_time: None, live }
+    }
+
+    pub fn push_relative(
+        &mut self,
+        start_time: f64,
+        end_time: f64,
+        fade_ease: Fade,
+        fade_in_time: f64,
+        fade_out_time: f64,
+        unit: Box<dyn AudioUnit>,
+    ) -> EventId {
+        if self.live {
+            let now = Instant::now();
+            let start_time = match self.start_time {
+                None => {
+                    self.start_time = Some(now);
+                    start_time
+                },
+                Some(_) => start_time,
+            };
+            self.seq.push_relative(start_time, end_time, fade_ease, fade_in_time, fade_out_time, unit)
+        }
+        else {
+            self.seq.push_relative(start_time, end_time, fade_ease, fade_in_time, fade_out_time, unit)
+        }
     }
 
     pub fn push_duration(
@@ -72,7 +97,6 @@ impl ConfigSequencer {
                     start_time - (st - now).as_secs_f64()
                 }
             };
-            // let gap = ;
             self.seq.push_relative(start_time, start_time + duration, fade_ease, fade_in_time, fade_out_time, unit)
         }
         else {

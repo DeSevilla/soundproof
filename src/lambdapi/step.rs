@@ -80,8 +80,8 @@ impl Stepper for ITerm {
             ITerm::Ann(body, ty) => match ty.step(ctx.clone()) {
                 Cont(typ, v) => Cont(ITerm::Ann(body, typ), v),
                 Done(typ, _) => body.step(ctx).apply(|ct| match ct {
-                    // CTerm::Inf(it) => *it,
-                    CTerm::Inf(it) => {print!("ann dropping {:?} {}; ", typ.tag(), format!("{typ}").len()); *it},
+                    CTerm::Inf(it) => *it,
+                    // CTerm::Inf(it) => {print!("ann dropping {:?} {}; ", typ.tag(), format!("{typ}").len()); *it},
                     _ => ITerm::Ann(ct, typ)
                 }),
             },
@@ -95,7 +95,7 @@ impl Stepper for ITerm {
             ITerm::Bound(nat) => Done(ITerm::Bound(nat), None),
             ITerm::Free(name) => match ctx.find_free(&name) {
                 Some((ty, Some(val))) => {
-                    println!("free");
+                    // println!("free");
                     let v = ITerm::Ann(quote0(&val), quote0(&ty));
                     Cont(v.clone(), Some(v))
                 },
@@ -109,11 +109,11 @@ impl Stepper for ITerm {
                             ITerm::Ann(CTerm::Lam(body), CTerm::Inf(ty)) => {
                                 match *ty.clone() {
                                     ITerm::Pi(src, trg) => {
-                                        print!("lam @ {:?} | {} <- {} => ", arg.tag(), format!("{body}").len(), format!("{arg}").len());
+                                        // print!("lam @ {:?} | {} <- {} => ", arg.tag(), format!("{body}").len(), format!("{arg}").len());
                                         let tm = ITerm::Ann(arg, src);
                                         let resbody = body.subst(0, &tm);
                                         let resty = trg.subst(0, &tm);
-                                        print!("{}; ", format!("{resbody}").len());
+                                        // print!("{}; ", format!("{resbody}").len());
                                         Cont(ITerm::Ann(resbody, resty), Some(tm))
                                     },
                                     _ => panic!("got malformed lambda type"),
@@ -152,7 +152,7 @@ impl Stepper for CTerm {
 #[cfg(test)]
 fn eval_verify(tm: ITerm, ctx: Context) -> ITerm {
     use crate::lambdapi::term::std_env;
-    tm.infer_type(ctx.clone()).unwrap();
+    tm.infer_type(&ctx).unwrap();
     let mut current = Step::Cont(tm, None);
     let mut steps = 0;
     loop {
@@ -160,7 +160,7 @@ fn eval_verify(tm: ITerm, ctx: Context) -> ITerm {
         match current {
             Step::Cont(t, _) => {
                 println!("{steps} {t:?}");
-                t.infer_type(ctx.clone()).unwrap();
+                t.infer_type(&ctx).unwrap();
                 current = t.step(ctx.clone());
             },
             Step::Done(t, _) => return t
@@ -173,9 +173,9 @@ fn check_match(tm: ITerm) {
     use crate::lambdapi::std_env;
     println!("Base term: {tm:?}");
     let ctx = Context::new(std_env());
-    let u_eval1 = quote0(&tm.eval(ctx.clone()));
+    let u_eval1 = quote0(&tm.eval(&ctx));
     println!("Term 1: {u_eval1:?}");
-    let u_eval2 = quote0(&eval_verify(tm, ctx.clone()).eval(ctx));
+    let u_eval2 = quote0(&eval_verify(tm, ctx.clone()).eval(&ctx));
     println!("Term 2: {u_eval2:?}");
     assert!(u_eval1 == u_eval2);
 }

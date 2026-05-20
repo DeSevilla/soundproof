@@ -1,5 +1,5 @@
 use clap::*;
-use fundsp::hacker32::*;
+use fundsp::prelude32::*;
 
 use std::fs;
 use std::time::Instant;
@@ -352,7 +352,7 @@ pub fn make_output(sound: Box<impl AudioUnit + 'static>, filters: FilterOptions)
         FilterOptions::ClipLowpass => Box::new(
             unit::<U0, U2>(sound)
                 >> stacki::<U2, _, _>(
-                    |_| shape(Adaptive::new(0.1, Tanh(0.5))) >> lowpass_hz(2500.0, 1.0) >> mul(0.4), // >> mul(10.0)
+                    |_| shape(Adaptive::new(0.1, Tanh(0.1))) >> lowpass_hz(3500.0, 1.0) >> mul(0.4), // >> mul(10.0)
                 ),
         ),
         FilterOptions::Quiet => Box::new(unit::<U0, U2>(sound) >> (mul(0.05) | mul(0.05))),
@@ -369,7 +369,7 @@ pub fn main_to_file(args: &Args) {
     // draw_tree(&tree, args);
     
     println!("Sequencing over {time} seconds...");
-    let seq = Sequencer::new(false, 2);
+    let seq = Sequencer::new(0, 2, ReplayMode::None);
     let mut cfg_seq = ConfigSequencer::new(seq, false);
     // let backend = Box::new(seq.backend());
     let now = Instant::now();
@@ -388,15 +388,16 @@ pub fn run_steps(term: ITerm, limit: usize) {
     let ctx = Context::new(term::std_env());
     let mut prev = 0;
     for (ii, tm) in step::Stepper::step_over(term, ctx.clone()).enumerate() {
+        // println!();
         if ii > limit {
             break;
         }
-        println!();
         if let ITerm::Ann(ref new, ref ty) = tm {
             println!("looped {ty}! after {ii} ({}) steps as: {:?} {}\n", ii - prev, new.tag(), format!("{tm}").len());
             prev = ii;
         }
     }
+    // println!()
 }
 
 pub fn main_steps(args: &Args) {
@@ -412,19 +413,20 @@ pub fn main_steps(args: &Args) {
     let changes = Silence::new();
     // let changes = SineRhythmizer::new();
     let mut steps = 0;
-    let limit = 76; // 155, 261, 406, 596, 837
+    let limit = args.time.unwrap_or(130.).floor() as usize; // 155, 261, 406, 596, 837
     if args.animate {
-        animate_term_steps(start_term.clone(), ToneMaker::new(0.0, 0.2), args.division, limit, 200.);
+        animate_term_steps(start_term.clone(), ToneMaker::new(0.0, 0.2), args.division, limit, 0.333);
     }
     if args.draw_only {
         return;
     }
 
-    let seq = Sequencer::new(false, 2);
+    let seq = Sequencer::new(0, 2, ReplayMode::None);
     // let backend = Box::new(seq.backend());
     let mut cfg_seq = ConfigSequencer::new(seq, args.mode.live());
     let mut current = Step::new(start_term);
     // let mut prev_size = 1000.0;
+    let freq_range = 2000.; //args.time.unwrap_or((tree.size() + 40) as f64);
     let mut base_size = SetOnce::new();
     loop {
         steps += 1;
@@ -451,17 +453,15 @@ pub fn main_steps(args: &Args) {
             },
             None => base_dur,
         };
-        println!("Duration: {dur}");
         tones.duration = dur;
 
         // let tree = type_translate(&term, tones.clone()).unwrap();
         let tree = type_translate(&term, Silence::new()).unwrap();
         base_size.get(tree.size());
         // prev_size = tree.size() as f64;
-        println!("...done in {:?}, output size {}", step_start.elapsed(), tree.size());
+        println!("\t{:?}, output size {}", step_start.elapsed(), tree.size());
 
-        let freq_range = args.time.unwrap_or((tree.size() + 40) as f64);
-        println!("Sequencing over frequency range {freq_range}...");
+        println!("Sequencing over frequency range {freq_range} for duration {dur}...");
         let seq_start = Instant::now();
         const NUM_BUCKETS: usize = 512;
         if tree.size() > NUM_BUCKETS * 8 {
@@ -480,12 +480,10 @@ pub fn main_steps(args: &Args) {
             );
         }
 
-
-        
         tones.increment();
-        println!("...taking {:?}, adding up to {:?}", seq_start.elapsed(), step_start.elapsed());
+        println!("\t{:?}, adding up to {:?}", seq_start.elapsed(), step_start.elapsed());
         current = current.step(Context::new(std_env()));
-        println!("...and with stepping, {:?}", step_start.elapsed());
+        println!("\t{:?} with stepping", step_start.elapsed());
         if steps > limit {
             println!("Hit {limit} steps");
             break

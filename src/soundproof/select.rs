@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use piet_common::Color;
-use fundsp::hacker32::*;
+use fundsp::prelude32::*;
 use crate::{
     ast::*,
     instruments::*,

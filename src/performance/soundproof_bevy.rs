@@ -1,5 +1,5 @@
 use bevy_procedural_audio::{prelude::{DspGraph, DspManager, DspSource, SourceType}, DspAppExt};
-use fundsp::{hacker32::*, realseq::SequencerBackend};
+use fundsp::{prelude32::*, realseq::SequencerBackend};
 use bevy::{core_pipeline::bloom::Bloom, input::keyboard::{Key, KeyboardInput}, prelude::*};
 use rand::Rng;
 

@@ -191,7 +191,7 @@ pub fn boundfree(i: usize, name: Name) -> ITerm {
 }
 
 fn ite(name: &str, term: ITerm) -> (&str, Type, Value) {
-    (name, term.infer_type(Context::new(vec![])).unwrap(), term.eval(Context::new(vec![])))
+    (name, term.infer_type(&Context::new(vec![])).unwrap(), term.eval(&Context::new(vec![])))
 }
 
 pub fn std_env() -> Vec<(Name, Type, Option<Value>)> {
@@ -226,7 +226,7 @@ pub fn std_env() -> Vec<(Name, Type, Option<Value>)> {
                     )
                 })
             ),
-            clam(clam(clam(clam(ITerm::NatElim(ITerm::Bound(3).into(), ITerm::Bound(2).into(), ITerm::Bound(1).into(), ITerm::Bound(0).into()))))).eval(Context::new(vec![])),
+            clam(clam(clam(clam(ITerm::NatElim(ITerm::Bound(3).into(), ITerm::Bound(2).into(), ITerm::Bound(1).into(), ITerm::Bound(0).into()))))).eval(&Context::new(vec![])),
             // vlam(|)
         ),
         ("FZero", vpi(Nat, |n| Fin(Box::new(Succ(Box::new(n))))), vlam(|n| FZero(Box::new(n)))),
@@ -252,7 +252,7 @@ pub fn std_env() -> Vec<(Name, Type, Option<Value>)> {
                 // the fin
                 ITerm::Fin(bnd(0).into()),
                 iapp(iapp(bnd(4), bnd(1)), bnd(0))
-            ))))).eval(Context::new(vec![])),
+            ))))).eval(&Context::new(vec![])),
             // vpi(
             //     vpi(Nat, |n| vpi(Fin(Box::new(n)), |_| Star)), move |m| { let m1 = m.clone(); vpi(
             //     vpi(Nat, move |n| vapp(vapp(m.clone(), Succ(Box::new(n.clone()))), FZero(Box::new(n.clone())))), move |_| { let m = m1.clone(); vpi(
@@ -276,7 +276,7 @@ pub fn std_env() -> Vec<(Name, Type, Option<Value>)> {
             // })})})})}), 
             clam(clam(clam(clam(clam(ITerm::FinElim(
                 ITerm::Bound(4).into(), ITerm::Bound(3).into(), ITerm::Bound(2).into(), ITerm::Bound(1).into(), ITerm::Bound(0).into()
-            )))))).eval(Context::new(vec![]))
+            )))))).eval(&Context::new(vec![]))
         ),
         ("False", Value::Star, Value::Fin(Box::new(Value::Zero))),
         ("Void", Value::Star, Value::Fin(Box::new(Value::Zero))),
@@ -302,7 +302,7 @@ pub fn std_env() -> Vec<(Name, Type, Option<Value>)> {
                 bnd(3), ipi( // y
                 ITerm::Eq(bnd(4).into(), bnd(1).into(), bnd(0).into()), // eq
                 iapps(bnd(4), [bnd(2), bnd(1), bnd(0)])
-            )))))).eval(Context::new(vec![])),
+            )))))).eval(&Context::new(vec![])),
             // vpi(
             //     Value::Star, move |a| {let a1 = a.clone(); vpi(
             //     vpi(a1.clone(), move |x| {
@@ -328,7 +328,7 @@ pub fn std_env() -> Vec<(Name, Type, Option<Value>)> {
                 bnd(2).into(),
                 bnd(1).into(),
                 bnd(0).into()
-            ))))))).eval(Context::new(vec![]))
+            ))))))).eval(&Context::new(vec![]))
             // clam(todo!()).eval(Context::new(vec![]))
         ),
         // ("girard", Value::Fin(Box::new(Value::Zero)), Some(girard_reduced())),
@@ -366,7 +366,7 @@ fn test_stdlib() {
     for (name, ty, val) in std_env() {
         println!("{name:?}");
         let quoted = quote0(&val.unwrap());
-        quoted.check_type(Context::new(vec![]), ty.clone()).unwrap();
+        quoted.check_type(&Context::new(vec![]), ty.clone()).unwrap();
         let iterm = match quoted {
             CTerm::Inf(iterm) => *iterm,
             CTerm::Lam(_) => iann(quoted, quote0(&ty)),
@@ -475,7 +475,7 @@ fn test_girard() {
     let typ = iapp(
         ITerm::Free(Name::Global("lem2".to_owned())), 
         ITerm::Free(Name::Global("lem3".to_owned()))
-    ).infer_type(ctx).unwrap();
+    ).infer_type(&ctx).unwrap();
     let typ = quote0(&typ);
     if typ == CTerm::Inf(Box::new(ITerm::Fin(CTerm::Inf(Box::new(ITerm::Zero))))) {
         println!("yay!");

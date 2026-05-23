@@ -1,10 +1,10 @@
 use std::rc::Rc;
 
-use crate::term::{vapp, vpi, vlam};
+use crate::term::{vapp, vlam, vpi};
 
 // LambdaPi was originally written for Haskell and I translated it to rust.
 // Certain design choices (bidirectional typing, a term/value split, higher-order abstract syntax)
-// are more natural in Haskell than Rust, but they work out alright -- just requires a fair amount of 
+// are more natural in Haskell than Rust, but they work out alright -- just requires a fair amount of
 // cloning to deal with ownership and Boxes to make types finitely-sized.
 
 /// Term whose type can be inferred. Types are included, as their type is always Star.
@@ -13,7 +13,7 @@ pub enum ITerm {
     /// Type annotation. (term, type)
     Ann(CTerm, CTerm),
     /// Type of types.
-    Star, 
+    Star,
     /// Dependent function type. (parameter type, body type)
     Pi(CTerm, CTerm),
     /// Bound variable. (de Bruijn index)
@@ -40,7 +40,7 @@ pub enum ITerm {
     FinElim(CTerm, CTerm, CTerm, CTerm, CTerm),
     Eq(CTerm, CTerm, CTerm),
     Refl(CTerm, CTerm),
-    EqElim(CTerm, CTerm, CTerm, CTerm, CTerm, CTerm)
+    EqElim(CTerm, CTerm, CTerm, CTerm, CTerm, CTerm),
 }
 
 /// Term whose type can be checked.
@@ -101,7 +101,14 @@ pub enum Neutral {
     NatElim(Box<Value>, Box<Value>, Box<Value>, Box<Neutral>),
     /// Finite type eliminator. (motive, base case, successor case, size of type, value to fill into motive)
     FinElim(Box<Value>, Box<Value>, Box<Value>, Box<Value>, Box<Neutral>),
-    EqElim(Box<Value>, Box<Value>, Box<Value>, Box<Value>, Box<Value>, Box<Neutral>),
+    EqElim(
+        Box<Value>,
+        Box<Value>,
+        Box<Value>,
+        Box<Value>,
+        Box<Value>,
+        Box<Neutral>,
+    ),
 }
 
 /// Environment containing values of local variables for evaluation of de Bruijn indices.
@@ -121,7 +128,7 @@ impl Context {
         Self {
             bound: vec![],
             free: free_vars,
-            bindings: 0
+            bindings: 0,
         }
     }
 
@@ -143,7 +150,11 @@ impl Context {
         name
     }
 
-    pub fn add_free_iterm(&mut self, name: impl Into<String>, value: ITerm) -> Result<Name, String> {
+    pub fn add_free_iterm(
+        &mut self,
+        name: impl Into<String>,
+        value: ITerm,
+    ) -> Result<Name, String> {
         let ty = value.infer_type(self)?;
         let val = value.eval(self);
         Ok(self.add_free(name, Some(val), ty))
@@ -155,7 +166,10 @@ impl Context {
     }
 
     pub fn find_free(&self, name: &Name) -> Option<(Type, Option<Value>)> {
-        self.free.iter().find(|x| x.0 == *name).map(|x| (x.1.clone(), x.2.clone()))
+        self.free
+            .iter()
+            .find(|x| x.0 == *name)
+            .map(|x| (x.1.clone(), x.2.clone()))
     }
 
     pub fn get_bound(&self, ii: usize) -> Value {
@@ -164,7 +178,12 @@ impl Context {
     }
 
     pub fn info_string(&self) -> String {
-        format!("Context:[{}({});{}]", self.bound.len(), self.bindings, self.free.len())
+        format!(
+            "Context:[{}({});{}]",
+            self.bound.len(),
+            self.bindings,
+            self.free.len()
+        )
     }
 }
 
@@ -216,18 +235,7 @@ pub enum Tag {
 impl Tag {
     pub fn all() -> Vec<Tag> {
         use Tag::*;
-        vec![
-            Ann,
-            Type,
-            Pi,
-            App,
-            Bound,
-            Free,
-            Zero,
-            Nat,
-            Finite,
-            Lambda
-        ]
+        vec![Ann, Type, Pi, App, Bound, Free, Zero, Nat, Finite, Lambda]
     }
 }
 
@@ -253,7 +261,10 @@ impl ITerm {
             ITerm::Zero => Zero,
             ITerm::Nat => Nat,
             ITerm::Fin(_) => Finite,
-            _ => {println!("{self:?}"); unimplemented!()}
+            _ => {
+                println!("{self:?}");
+                unimplemented!()
+            }
         }
     }
 }

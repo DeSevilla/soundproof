@@ -5,7 +5,6 @@ use std::time::Instant;
 use fundsp::prelude32::*;
 use piet_common::Color;
 
-
 #[cfg(feature = "perform")]
 use bevy::prelude::*;
 
@@ -14,14 +13,12 @@ use crate::lambdapi::ast::Tag;
 use crate::sound_generators::SoundGenerator;
 
 pub struct SetOnce<T: Clone> {
-    body: Option<T>
+    body: Option<T>,
 }
 
 impl<T: Clone> SetOnce<T> {
     pub fn new() -> Self {
-        Self {
-            body: None
-        }
+        Self { body: None }
     }
 
     pub fn get(&mut self, default: T) -> T {
@@ -37,7 +34,7 @@ impl<T: Clone> SetOnce<T> {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum SoundproofError {
-    Mismatch
+    Mismatch,
 }
 
 pub struct ConfigSequencer {
@@ -49,7 +46,11 @@ pub struct ConfigSequencer {
 impl ConfigSequencer {
     pub fn new(seq: Sequencer, live: bool) -> Self {
         // start time is set on push
-        Self { seq, start_time: None, live }
+        Self {
+            seq,
+            start_time: None,
+            live,
+        }
     }
 
     pub fn push_relative(
@@ -67,13 +68,26 @@ impl ConfigSequencer {
                 None => {
                     self.start_time = Some(now);
                     start_time
-                },
+                }
                 Some(_) => start_time,
             };
-            self.seq.push_relative(start_time, end_time, fade_ease, fade_in_time, fade_out_time, unit)
-        }
-        else {
-            self.seq.push_relative(start_time, end_time, fade_ease, fade_in_time, fade_out_time, unit)
+            self.seq.push_relative(
+                start_time,
+                end_time,
+                fade_ease,
+                fade_in_time,
+                fade_out_time,
+                unit,
+            )
+        } else {
+            self.seq.push_relative(
+                start_time,
+                end_time,
+                fade_ease,
+                fade_in_time,
+                fade_out_time,
+                unit,
+            )
         }
     }
 
@@ -92,22 +106,32 @@ impl ConfigSequencer {
                 None => {
                     self.start_time = Some(now);
                     start_time
-                },
-                Some(st) => {
-                    start_time - (st - now).as_secs_f64()
                 }
+                Some(st) => start_time - (st - now).as_secs_f64(),
             };
-            self.seq.push_relative(start_time, start_time + duration, fade_ease, fade_in_time, fade_out_time, unit)
-        }
-        else {
+            self.seq.push_relative(
+                start_time,
+                start_time + duration,
+                fade_ease,
+                fade_in_time,
+                fade_out_time,
+                unit,
+            )
+        } else {
             // note: relative isn't *bad* even for rendering to files but if we can do absolute let's do absolute
             // self.seq.push_relative(start_time, start_time + duration, fade_ease, fade_in_time, fade_out_time, unit)
             // self.seq.push(start_time, start_time + duration, fade_ease, fade_in_time, fade_out_time, unit)
-            self.seq.push_duration(start_time, duration, fade_ease, fade_in_time, fade_out_time, unit)
+            self.seq.push_duration(
+                start_time,
+                duration,
+                fade_ease,
+                fade_in_time,
+                fade_out_time,
+                unit,
+            )
         }
     }
 }
-
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "perform", derive(Component))]
@@ -127,7 +151,7 @@ pub enum SoundTree {
     /// Subtrees will play sequentially.
     Seq(Vec<SoundTree>, TreeMetadata),
     /// Plays a predefined sound-pattern.
-    Sound(Arc<dyn SoundGenerator + Send + Sync>, TreeMetadata)
+    Sound(Arc<dyn SoundGenerator + Send + Sync>, TreeMetadata),
 }
 
 // #[derive(Clone, Debug, PartialEq, Component)]
@@ -151,7 +175,7 @@ impl SoundTree {
     }
 
     /// Constructs a SoundTree which plays its subtrees one after another.
-    pub fn seq(subtrees: impl IntoIterator<Item=SoundTree>) -> Self {
+    pub fn seq(subtrees: impl IntoIterator<Item = SoundTree>) -> Self {
         // avoids nested Seqs; this can affect duration assignments.
         // subject to change but I think I like it
         let mut result = Vec::new();
@@ -160,7 +184,7 @@ impl SoundTree {
         let mut max_depth = 0;
         for val in subtrees {
             match val.clone() {
-                SoundTree::Seq(mut trees, meta) => { 
+                SoundTree::Seq(mut trees, meta) => {
                     // names += &meta.name;
                     // names += ";";
                     if meta.max_depth > max_depth {
@@ -175,28 +199,30 @@ impl SoundTree {
                         max_depth = other.metadata().max_depth
                     }
                     result.push(other);
-                },
+                }
             }
         }
         if result.len() == 1 {
             result.pop().unwrap()
-        }
-        else {
-            Self::Seq(result, TreeMetadata { 
-                name: "".to_owned(),
-                tag: Tag::Free,
-                // parent: "".to_owned(),
-                base_color: Color::MAROON, 
-                alt_color: Color::MAROON, 
-                max_depth,
-                // dspthing: None,
-            })
+        } else {
+            Self::Seq(
+                result,
+                TreeMetadata {
+                    name: "".to_owned(),
+                    tag: Tag::Free,
+                    // parent: "".to_owned(),
+                    base_color: Color::MAROON,
+                    alt_color: Color::MAROON,
+                    max_depth,
+                    // dspthing: None,
+                },
+            )
         }
         // names += "]";
     }
 
     /// Constructs a SoundTree which plays its subtrees simultaneously.
-    pub fn simul(subtrees: impl IntoIterator<Item=SoundTree>) -> Self {
+    pub fn simul(subtrees: impl IntoIterator<Item = SoundTree>) -> Self {
         // avoids redundant nested Simuls; this cannot affect the resulting audio
         let mut result = Vec::new();
         // let mut names = "{".to_owned();
@@ -210,7 +236,6 @@ impl SoundTree {
                         max_depth = meta.max_depth
                     }
                     result.append(&mut trees);
-                    
                 }
                 other => {
                     // names += &other.metadata().name;
@@ -225,17 +250,19 @@ impl SoundTree {
         // names += "}";
         if result.len() == 1 {
             result.pop().unwrap()
-        }
-        else {
-            Self::Simul(result, TreeMetadata { 
-                name: "".to_owned(),
-                tag: Tag::Free,
-                // parent: "".to_owned(),
-                base_color: Color::MAROON,
-                alt_color: Color::MAROON,
-                max_depth,
-                // dspthing: None,
-            })
+        } else {
+            Self::Simul(
+                result,
+                TreeMetadata {
+                    name: "".to_owned(),
+                    tag: Tag::Free,
+                    // parent: "".to_owned(),
+                    base_color: Color::MAROON,
+                    alt_color: Color::MAROON,
+                    max_depth,
+                    // dspthing: None,
+                },
+            )
         }
     }
 
@@ -279,7 +306,13 @@ impl SoundTree {
     /// The weight of the tree for duration scaling.
     pub fn weight(&self, exp: f64) -> f64 {
         match self {
-            SoundTree::Simul(vec, _) => 1.0 + vec.iter().map(|x| x.subtree_weight(exp)).reduce(f64::max).unwrap_or(0.0),
+            SoundTree::Simul(vec, _) => {
+                1.0 + vec
+                    .iter()
+                    .map(|x| x.subtree_weight(exp))
+                    .reduce(f64::max)
+                    .unwrap_or(0.0)
+            }
             SoundTree::Seq(vec, _) => vec.iter().map(|x| x.subtree_weight(exp)).sum::<f64>(),
             SoundTree::Sound(_, _) => 1.0,
         }
@@ -297,7 +330,11 @@ impl SoundTree {
     /// This function takes care of applying handlers and supplying that information to them.
     /// Generally should be wrapped up in another function rather than used directly.
     pub fn distribute<T>(
-        &self, start: f64, range: f64, scaling: DivisionMethod, lean: f32, 
+        &self,
+        start: f64,
+        range: f64,
+        scaling: DivisionMethod,
+        lean: f32,
         base: &mut impl FnMut(&Arc<dyn SoundGenerator + Send + Sync>, &TreeMetadata, f64, f64, f32) -> T,
         seq: &mut impl FnMut(Vec<T>, &TreeMetadata, f64, f64, f32) -> T,
         simul: &mut impl FnMut(Vec<T>, &TreeMetadata, f64, f64, f32) -> T,
@@ -313,37 +350,63 @@ impl SoundTree {
                     let local_lean = (base_lean - dir * child.size() as f32) * 0.8 / scale; // can't div by 0; if scale is 0, sound_trees is empty
                     // println!("local lean: {local_lean}, {base_lean}, {scale}: {}, {}", self.size(), vec.len());
                     // output.push((start_time, duration, scaling, lean + local_lean));
-                    output.push(child.distribute(start, range, scaling, lean + local_lean, base, seq, simul));
+                    output.push(child.distribute(
+                        start,
+                        range,
+                        scaling,
+                        lean + local_lean,
+                        base,
+                        seq,
+                        simul,
+                    ));
                 }
                 seq(output, meta, start, range, lean)
-            },
+            }
             SoundTree::Seq(sound_trees, meta) => {
                 let mut output = Vec::new();
                 let mut elapsed = 0.0;
                 for child in sound_trees {
                     let ratio = scaling.child_scale(child) / scaling.parent_scale(self);
                     let scaled = range * ratio;
-                    output.push(child.distribute(start + elapsed, scaled, scaling, lean, base, seq, simul));
+                    output.push(child.distribute(
+                        start + elapsed,
+                        scaled,
+                        scaling,
+                        lean,
+                        base,
+                        seq,
+                        simul,
+                    ));
                     elapsed += scaled;
                 }
                 simul(output, meta, start, range, lean)
-            },
+            }
             SoundTree::Sound(sound, meta) => base(sound, meta, start, range, lean),
         }
     }
 
     pub fn generate_with(&self, seq: &mut ConfigSequencer, range: f64, scaling: DivisionMethod) {
         self.distribute(
-            0.0, range, scaling, 0.0,
+            0.0,
+            range,
+            scaling,
+            0.0,
             &mut (|sound, _, s, r, l| sound.sequence(seq, s, r, l)),
             &mut |_, _, _, _, _| {},
             &mut |_, _, _, _, _| {},
         )
     }
 
-    pub fn sound_times(&self, duration: f64, scaling: DivisionMethod) -> Vec<(Arc<dyn SoundGenerator + Send + Sync>, Timings, TreeMetadata)> {
+    pub fn sound_times(
+        &self,
+        duration: f64,
+        scaling: DivisionMethod,
+    ) -> Vec<(Arc<dyn SoundGenerator + Send + Sync>, Timings, TreeMetadata)> {
         self.distribute(
-            0.0, duration, scaling, 0.0,
+            0.0,
+            duration,
+            scaling,
+            0.0,
             &mut |sound, meta, s, d, l| {
                 let timings = Timings {
                     start: s,
@@ -353,7 +416,7 @@ impl SoundTree {
                 vec![(Arc::clone(sound), timings, meta.clone())]
             },
             &mut |children, _, _, _, _| children.concat(),
-            &mut |children, _, _, _, _| children.concat()
+            &mut |children, _, _, _, _| children.concat(),
         )
     }
 }

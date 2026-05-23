@@ -5,12 +5,12 @@ use crate::{ast::*, lambdapi::term::quote0};
 #[derive(Debug, Clone)]
 pub enum Step<T: Stepper> {
     Cont(T, Option<ITerm>),
-    Done(T, Option<ITerm>)
+    Done(T, Option<ITerm>),
 }
 
 impl<T: Stepper> Step<T> {
     pub fn new(val: T) -> Self {
-        Self::Cont(val, None) 
+        Self::Cont(val, None)
     }
 }
 
@@ -21,7 +21,7 @@ pub struct StepOver<T: Stepper> {
 
 impl<T: Stepper> Iterator for StepOver<T> {
     type Item = T;
-    
+
     fn next(&mut self) -> Option<Self::Item> {
         match &self.tm {
             Step::Done(_, _) => None,
@@ -29,7 +29,7 @@ impl<T: Stepper> Iterator for StepOver<T> {
                 let res = t.clone();
                 self.tm = t.clone().step(self.ctx.clone());
                 Some(res)
-            } 
+            }
         }
     }
 }
@@ -39,7 +39,7 @@ impl<T: Stepper> Step<T> {
         use Step::*;
         match self {
             Cont(t, v) => Cont(f(t), v),
-            Done(t, v) => Done(f(t), v)
+            Done(t, v) => Done(f(t), v),
         }
     }
 
@@ -64,12 +64,20 @@ impl<T: Stepper> Step<T> {
 }
 
 pub trait Stepper: Clone {
-    fn step(self, ctx: Context) -> Step<Self> where Self: Sized;
+    fn step(self, ctx: Context) -> Step<Self>
+    where
+        Self: Sized;
 
     // fn step_and(self, ctx: Context) -> (Step<Self>, Self) where Self:Sized;
 
-    fn step_over(self, ctx: Context) -> StepOver<Self> where Self: Sized {
-        StepOver { tm: Step::Cont(self, None), ctx }
+    fn step_over(self, ctx: Context) -> StepOver<Self>
+    where
+        Self: Sized,
+    {
+        StepOver {
+            tm: Step::Cont(self, None),
+            ctx,
+        }
     }
 }
 
@@ -82,15 +90,13 @@ impl Stepper for ITerm {
                 Done(typ, _) => body.step(ctx).apply(|ct| match ct {
                     CTerm::Inf(it) => *it,
                     // CTerm::Inf(it) => {print!("ann dropping {:?} {}; ", typ.tag(), format!("{typ}").len()); *it},
-                    _ => ITerm::Ann(ct, typ)
+                    _ => ITerm::Ann(ct, typ),
                 }),
             },
             ITerm::Star => Done(ITerm::Star, None),
             ITerm::Pi(src, trg) => match src.clone().step(ctx) {
                 Cont(c, v) => Cont(ITerm::Pi(c, trg), v),
-                Done(c, v) => {
-                    Done(ITerm::Pi(c, trg), v)
-                }
+                Done(c, v) => Done(ITerm::Pi(c, trg), v),
             },
             ITerm::Bound(nat) => Done(ITerm::Bound(nat), None),
             ITerm::Free(name) => match ctx.find_free(&name) {
@@ -98,8 +104,10 @@ impl Stepper for ITerm {
                     // println!("free");
                     let v = ITerm::Ann(quote0(&val), quote0(&ty));
                     Cont(v.clone(), Some(v))
-                },
-                _ => panic!("Attempted to evaluate free variable {name:?} without a definition in context"),
+                }
+                _ => panic!(
+                    "Attempted to evaluate free variable {name:?} without a definition in context"
+                ),
             },
             ITerm::App(func, arg) => {
                 match func.step(ctx.clone()) {
@@ -115,7 +123,7 @@ impl Stepper for ITerm {
                                         let resty = trg.subst(0, &tm);
                                         // print!("{}; ", format!("{resbody}").len());
                                         Cont(ITerm::Ann(resbody, resty), Some(tm))
-                                    },
+                                    }
                                     _ => panic!("got malformed lambda type"),
                                 }
                             }
@@ -123,7 +131,7 @@ impl Stepper for ITerm {
                         }
                     }
                 }
-            },
+            }
             ITerm::Nat => Done(ITerm::Nat, None),
             ITerm::Zero => Done(ITerm::Zero, None),
             ITerm::Succ(n) => n.step(ctx).apply(ITerm::Succ),
@@ -162,10 +170,10 @@ fn eval_verify(tm: ITerm, ctx: Context) -> ITerm {
                 println!("{steps} {t:?}");
                 t.infer_type(&ctx).unwrap();
                 current = t.step(ctx.clone());
-            },
-            Step::Done(t, _) => return t
+            }
+            Step::Done(t, _) => return t,
         }
-    } 
+    }
 }
 
 #[cfg(test)]
@@ -197,6 +205,3 @@ fn check_lem2() {
     use crate::lem2;
     check_match(lem2());
 }
-
-
-

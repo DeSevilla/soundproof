@@ -1,14 +1,17 @@
-use std::path::Path;
-use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, Device, FromSample, SampleFormat, SizedSample, StreamConfig};
+use cpal::{
+    Device, FromSample, SampleFormat, SizedSample, StreamConfig,
+    traits::{DeviceTrait, HostTrait, StreamTrait},
+};
 use fundsp::prelude32::*;
 use sonogram::{ColourGradient, FrequencyScale, RGBAColour, SpecOptionsBuilder};
+use std::path::Path;
 
 /// Synth instruments. Many of these are unused currently, but kept around for tinkering.
 pub mod instruments;
-/// Synth envelopes for controlling key presses. Many of these are unused currently, but kept around for tinkering.
-pub mod sequences;
 /// Constants and functions for twelve-tone equal temperament notes and converting them to frequencies.
 pub mod notes;
+/// Synth envelopes for controlling key presses. Many of these are unused currently, but kept around for tinkering.
+pub mod sequences;
 /// Code for stretching audio clips. May be revised as needed
 pub mod stretch;
 
@@ -20,8 +23,10 @@ pub fn make_spectrograph(input_wav: &Path, output_png: &Path) {
     println!("Computing spectrograph...");
     let mut spectrograph = SpecOptionsBuilder::new(2.pow(12))
         // .scale(10.)
-        .load_data_from_file(input_wav).unwrap()
-        .build().unwrap();
+        .load_data_from_file(input_wav)
+        .unwrap()
+        .build()
+        .unwrap();
     let mut spectrograph = spectrograph.compute();
     let mut gradient = ColourGradient::new();
     gradient.add_colour(RGBAColour::new(0, 0, 0, 255)); // Black
@@ -46,12 +51,9 @@ pub fn make_spectrograph(input_wav: &Path, output_png: &Path) {
     gradient.add_colour(RGBAColour::new(255, 255, 255, 255)); // White
     gradient.add_colour(RGBAColour::new(255, 255, 255, 255)); // White
     println!("Saving image...");
-    spectrograph.to_png(output_png,
-        FrequencyScale::Log,
-        &mut gradient, 
-        4096, 2048
-    ).expect("Could not save as PNG");
-
+    spectrograph
+        .to_png(output_png, FrequencyScale::Log, &mut gradient, 4096, 2048)
+        .expect("Could not save as PNG");
 }
 
 /// Render an [AudioUnit] (in practice this is a [Sequencer]) to a WAV file and generate a spectrograph for it.
@@ -83,7 +85,6 @@ pub fn run_live(sound: Box<dyn AudioUnit>) {
     // println!("Closing connection");
 }
 
-
 /// This function figures out the sample format and calls `run_synth()` accordingly.
 fn run_output(sound: Box<dyn AudioUnit>) {
     let host = cpal::default_host();
@@ -92,19 +93,12 @@ fn run_output(sound: Box<dyn AudioUnit>) {
         .expect("failed to find a default output device");
     let config = device.default_output_config().unwrap();
     match config.sample_format() {
-        SampleFormat::F32 => {
-            run_synth::<f32>(sound, device, config.into())
-        }
-        SampleFormat::I16 => {
-            run_synth::<i16>(sound, device, config.into())
-        }
-        SampleFormat::U16 => {
-            run_synth::<u16>(sound, device, config.into())
-        }
+        SampleFormat::F32 => run_synth::<f32>(sound, device, config.into()),
+        SampleFormat::I16 => run_synth::<i16>(sound, device, config.into()),
+        SampleFormat::U16 => run_synth::<u16>(sound, device, config.into()),
         _ => panic!("Unsupported format"),
     }
 }
-
 
 /// This function is where the sound is created and played. Once the sound is playing, it loops
 /// infinitely, allowing the `shared()` objects to shape the sound in response to MIDI events.

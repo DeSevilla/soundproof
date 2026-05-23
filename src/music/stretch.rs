@@ -1,5 +1,5 @@
-use signalsmith_stretch::Stretch;
 use fundsp::wave::Wave;
+use signalsmith_stretch::Stretch;
 
 pub struct Interleave<'a> {
     wave: &'a Wave,
@@ -10,7 +10,11 @@ pub struct Interleave<'a> {
 impl<'a> Interleave<'a> {
     pub fn new(wave: &'a Wave) -> Interleave<'a> {
         // let positions = vec![0; wave.channels()];
-        Interleave { wave, position: 0, channel: 0 }
+        Interleave {
+            wave,
+            position: 0,
+            channel: 0,
+        }
     }
 }
 
@@ -28,7 +32,8 @@ impl Iterator for Interleave<'_> {
 fn deinterleave(input: impl AsRef<[f32]>, channels: usize, sample_rate: f64) -> Wave {
     let mut wave = Wave::new(0, sample_rate);
     for channel in 0..channels {
-        let input_channel: Vec<f32> = input.as_ref()
+        let input_channel: Vec<f32> = input
+            .as_ref()
             .iter()
             .skip(channel)
             .copied()
@@ -50,7 +55,7 @@ pub fn stretch_wave(mut stretch: Stretch, wave: &Wave, time: f64) -> Wave {
 
 pub fn retime_wave(wave: &Wave, time: f64) -> Wave {
     // should we calculate block length, interval & transpose factor from size? how do they vary?
-    retime_pitch_wave(wave, time, 0.5) 
+    retime_pitch_wave(wave, time, 0.5)
 }
 
 pub fn retime_pitch_wave(wave: &Wave, time: f64, pitch_factor: f32) -> Wave {

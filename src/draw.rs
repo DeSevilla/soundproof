@@ -3,23 +3,23 @@ use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 // use fundsp::sequencer::ReplayMode;
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use cpal::{self, StreamConfig};
 use fundsp::prelude::Sequencer;
 use fundsp::sequencer::ReplayMode;
 use minifb::{Window, WindowOptions};
-use piet_common::*; //{Color, Device, DwriteFactory, FontFamily, ImageFormat, PietText, PietTextLayout, RenderContext, Text, TextLayoutBuilder};
 use piet_common::kurbo::{Circle, Line, Rect};
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{self, StreamConfig};
+use piet_common::*; //{Color, Device, DwriteFactory, FontFamily, ImageFormat, PietText, PietTextLayout, RenderContext, Text, TextLayoutBuilder};
 
+use crate::FilterOptions;
 use crate::lambdapi::ast::*;
 use crate::lambdapi::term::*;
-use crate::FilterOptions;
 use crate::music::write_data;
 use crate::soundproof::select::Silence;
 use crate::soundproof::sound_generators::{Buckets, SoundGenerator};
-use crate::type_translate;
-use crate::step::*;
 use crate::soundproof::types::{ConfigSequencer, SoundTree};
+use crate::step::*;
+use crate::type_translate;
 // use crate::soundproof::types::SoundTree;
 use crate::DivisionMethod;
 
@@ -45,7 +45,9 @@ pub fn draw(tree: &SoundTree, scaling: DivisionMethod, path: impl AsRef<Path>) {
     drawtree(tree, &mut rc, args);
     rc.finish().unwrap();
     std::mem::drop(rc);
-    bitmap.save_to_file(path).expect("should save file successfully");
+    bitmap
+        .save_to_file(path)
+        .expect("should save file successfully");
 }
 
 // TODO: maybe like, pregenerate animation frames for a tree somehow? idk
@@ -72,7 +74,10 @@ pub fn draw(tree: &SoundTree, scaling: DivisionMethod, path: impl AsRef<Path>) {
 pub fn animate_term_steps(term: ITerm, scaling: DivisionMethod, limit: usize, frame_secs: f64) {
     let meta = Silence::new();
     let mut visual_device = Device::new().unwrap();
-    let window_options = WindowOptions { borderless: true, ..Default::default() };
+    let window_options = WindowOptions {
+        borderless: true,
+        ..Default::default()
+    };
     let mut window = Window::new("Hi", WIDTH_PX, HEIGHT_PX, window_options).unwrap();
     let base_time = Duration::new(0, (1e9 * frame_secs) as u32);
     // let mut base_size = SetOnce::new();
@@ -133,7 +138,10 @@ pub fn animate_term_steps(term: ITerm, scaling: DivisionMethod, limit: usize, fr
 
         // println!("Frame time: {frame_time:?}");
         // tree.generate_with(&mut cfg_seq, 0.0, 2000.0, DivisionMethod::Weight, 0.0);
+
         let buckets: Buckets<64> = Buckets::from_tree(&tree, 1000., DivisionMethod::Weight);
+        // let mut buckets: Buckets<64> = Buckets::empty();
+        // buckets.just_fill(&tree, 666., 32, 32.0);
 
         // let next_frame_start = (frame_start + frame_time - start_instant).as_secs_f64() + frame_adjust;
         let frame_adjust = (frame_time / 15).as_secs_f64();
@@ -142,7 +150,9 @@ pub fn animate_term_steps(term: ITerm, scaling: DivisionMethod, limit: usize, fr
         // println!("seq next frame: {next_frame_start} to {}, from {:?}", next_frame_start + sound_duration, Instant::now() - start_instant);
         buckets.sequence(&mut cfg_seq, 0.0, sound_duration, 0.0);
 
-        let mut bitmap = visual_device.bitmap_target(WIDTH_PX, HEIGHT_PX, DPI).unwrap();
+        let mut bitmap = visual_device
+            .bitmap_target(WIDTH_PX, HEIGHT_PX, DPI)
+            .unwrap();
         let mut rc = bitmap.render_context();
         let rect = Rect::new(0.0, 0.0, WIDTH_IN, HEIGHT_IN);
         rc.fill(rect, &Color::BLACK);
@@ -151,12 +161,15 @@ pub fn animate_term_steps(term: ITerm, scaling: DivisionMethod, limit: usize, fr
         rc.finish().unwrap();
         std::mem::drop(rc);
         let a = bitmap.to_image_buf(ImageFormat::RgbaPremul).unwrap();
-        let buf: Vec<u32> = a.raw_pixels()
+        let buf: Vec<u32> = a
+            .raw_pixels()
             .chunks_exact(4)
             .map(|s| s.try_into().unwrap())
             .map(|[r, g, b, _a]: [u8; 4]| ((r as u32) << 16) | ((g as u32) << 8) | b as u32)
             .collect();
-        window.update_with_buffer(&buf, WIDTH_PX, HEIGHT_PX).unwrap();
+        window
+            .update_with_buffer(&buf, WIDTH_PX, HEIGHT_PX)
+            .unwrap();
 
         let frame_end = Instant::now();
         let render_dur = frame_end - frame_start;
@@ -170,7 +183,10 @@ pub fn animate_term_steps(term: ITerm, scaling: DivisionMethod, limit: usize, fr
 
 pub fn draw_anim(tree: &SoundTree, scaling: DivisionMethod, duration: f64, fps: usize) {
     let mut device = Device::new().unwrap();
-    let window_options = WindowOptions { borderless: true, ..Default::default() };
+    let window_options = WindowOptions {
+        borderless: true,
+        ..Default::default()
+    };
     // window_options.borderless = true;
     let mut window = Window::new("Hi", WIDTH_PX, HEIGHT_PX, window_options).unwrap();
     // let mut elapsed = 0.0;
@@ -200,12 +216,15 @@ pub fn draw_anim(tree: &SoundTree, scaling: DivisionMethod, duration: f64, fps: 
         rc.finish().unwrap();
         std::mem::drop(rc);
         let a = bitmap.to_image_buf(ImageFormat::RgbaPremul).unwrap();
-        let buf: Vec<u32> = a.raw_pixels()
+        let buf: Vec<u32> = a
+            .raw_pixels()
             .chunks_exact(4)
             .map(|s| s.try_into().unwrap())
             .map(|[r, g, b, _a]: [u8; 4]| ((r as u32) << 16) | ((g as u32) << 8) | b as u32)
             .collect();
-        window.update_with_buffer(&buf, WIDTH_PX, HEIGHT_PX).unwrap();
+        window
+            .update_with_buffer(&buf, WIDTH_PX, HEIGHT_PX)
+            .unwrap();
         // let digits = frames.ilog10() as usize + 1;
         // bitmap.save_to_file(path.as_ref().join(format!("{:0digits$}.png", ii))).expect("should save file successfully");
         // if ii % log_margin == 0 {
@@ -239,7 +258,7 @@ impl FixedDrawArgs {
             depth_height,
             text_bar,
             current,
-            scaling
+            scaling,
         }
     }
 }
@@ -250,39 +269,46 @@ fn drawtree(
     args: FixedDrawArgs,
 ) {
     tree.distribute(
-        0.0, 1.0, args.scaling, 0.0,
+        0.0,
+        1.0,
+        args.scaling,
+        0.0,
         &mut |_, meta, start, frac, _| {
-            if frac * WIDTH_IN <  0.1 / DPI {
+            if frac * WIDTH_IN < 0.1 / DPI {
                 // println!("Too short: {duration} {:?}", meta.color);
                 return;
             }
 
-            let bottom = HEIGHT_IN - meta.max_depth as f64 * args.depth_height;  // height is negative
+            let bottom = HEIGHT_IN - meta.max_depth as f64 * args.depth_height; // height is negative
             let top = bottom - args.depth_height;
 
-            let main_width = WIDTH_IN - if args.current.is_some() { args.text_bar } else { 0.0 };
+            let main_width = WIDTH_IN
+                - if args.current.is_some() {
+                    args.text_bar
+                } else {
+                    0.0
+                };
             let left = start * main_width;
             let right = left + frac * main_width;
 
-            let rect = Rect::new(
-                left,
-                bottom,
-                right,
-                top,
-            );
-            if args.current.is_some_and(|t| start <= t && t <= start + frac) {
+            let rect = Rect::new(left, bottom, right, top);
+            if args
+                .current
+                .is_some_and(|t| start <= t && t <= start + frac)
+            {
                 // let mut text_manager = PietText::new_with_shared_fonts(DwriteFactory::new().unwrap(), None);
                 let mut text_manager = PietText::new();
                 let text = meta.name.to_owned();
-                let text_layout = text_manager.new_text_layout(text)
+                let text_layout = text_manager
+                    .new_text_layout(text)
                     .max_width(args.text_bar)
                     .font(FontFamily::SANS_SERIF, args.depth_height * 0.6)
                     .text_color(meta.alt_color)
-                    .build().unwrap();
+                    .build()
+                    .unwrap();
                 ctx.draw_text(&text_layout, (main_width + 0.05 * args.text_bar, top));
                 ctx.fill(rect, &meta.alt_color);
-            }
-            else {
+            } else {
                 ctx.fill(rect, &meta.base_color);
             };
             let border_width = ((right - left).min(args.depth_height) * 0.5).min(0.1);

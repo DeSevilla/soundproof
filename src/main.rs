@@ -7,16 +7,15 @@ use std::time::Instant;
 use lambdapi::ast::*;
 use lambdapi::*;
 use music::*;
+use sound_generators::*;
 use soundproof::select::*;
 use soundproof::*;
 use translate::*;
 use types::*;
-use sound_generators::*;
 
 use crate::draw::animate_term_steps;
 // use crate::lambdapi::eval2::*;
 // use crate::lambdapi::term::std_env;
-
 
 /// The "proof" side. Implementation of a simple dependently-typed lambda calculus,
 /// translated from Löh, McBride, and Swierstra's [LambdaPi](https://www.andres-loeh.de/LambdaPi/LambdaPi.pdf)
@@ -25,11 +24,11 @@ use crate::draw::animate_term_steps;
 pub mod lambdapi;
 /// The "sound" side. Synths and utilities for generating audio.
 pub mod music;
-/// Translation from LambdaPi to music.
-pub mod soundproof;
 /// The live performance
 #[cfg(feature = "perform")]
 pub mod performance;
+/// Translation from LambdaPi to music.
+pub mod soundproof;
 
 pub mod draw;
 pub mod parse;
@@ -200,7 +199,7 @@ pub enum FilterOptions {
 #[derive(PartialEq, Eq, Clone, Copy, Debug, ValueEnum)]
 pub enum RunMode {
     /// Generates a file for a single proof term
-    Term,  
+    Term,
     /// Generates a file for a proof term's evolution as it reduces
     Steps,
     /// Live performance mode
@@ -231,7 +230,7 @@ impl RunMode {
 #[command(version, about, long_about=None)]
 pub struct Args {
     /// Run the live performance mode. If set, all other options have no effect.
-    #[arg(short, long, default_value="term")]
+    #[arg(short, long, default_value = "term")]
     mode: RunMode,
     /// Predefined terms of the dependently typed lambda calculus.
     #[arg(short, long, default_value = "girard")]
@@ -313,12 +312,11 @@ pub fn make_tree(structure: Structure, content: AudioSelectorOptions, term: &ITe
         FullStratified => structure_func(FullStratifier::new(), structure, term),
         AsyncStratified => structure_func(AsyncStratifier::new(), structure, term),
         Bare => structure_func(Plain::new(), structure, term),
-        ToneMake => structure_func(ToneMaker::new(0.0, 10.0), structure, term)
+        ToneMake => structure_func(ToneMaker::new(0.0, 10.0), structure, term),
     };
     println!("...done in {:?}", now.elapsed());
     tree
 }
-
 
 pub fn draw_tree(tree: &SoundTree, args: &Args) {
     println!("Drawing...");
@@ -346,13 +344,18 @@ pub fn draw_tree(tree: &SoundTree, args: &Args) {
     }
 }
 
-pub fn make_output(sound: Box<impl AudioUnit + 'static>, filters: FilterOptions) -> Box<dyn AudioUnit> {
+pub fn make_output(
+    sound: Box<impl AudioUnit + 'static>,
+    filters: FilterOptions,
+) -> Box<dyn AudioUnit> {
     match filters {
         FilterOptions::None => sound,
         FilterOptions::ClipLowpass => Box::new(
             unit::<U0, U2>(sound)
                 >> stacki::<U2, _, _>(
-                    |_| shape(Adaptive::new(0.1, Tanh(0.25))) >> lowpass_hz(2500.0, 1.0) >> mul(0.5), // >> mul(10.0)
+                    |_| {
+                        shape(Adaptive::new(0.1, Tanh(0.25))) >> lowpass_hz(2500.0, 1.0) >> mul(0.5)
+                    }, // >> mul(10.0)
                 ),
         ),
         FilterOptions::Quiet => Box::new(unit::<U0, U2>(sound) >> (mul(0.05) | mul(0.05))),
@@ -367,17 +370,13 @@ pub fn main_to_file(args: &Args) {
     let tree = make_tree(args.structure, args.content, &args.term());
     let time = args.time.unwrap_or(tree.size() as f64);
     // draw_tree(&tree, args);
-    
+
     println!("Sequencing over {time} seconds...");
     let seq = Sequencer::new(0, 2, ReplayMode::None);
     let mut cfg_seq = ConfigSequencer::new(seq, false);
     // let backend = Box::new(seq.backend());
     let now = Instant::now();
-    tree.generate_with(
-        &mut cfg_seq,
-        time,
-        args.division,
-    );
+    tree.generate_with(&mut cfg_seq, time, args.division);
     println!("...done in {:?}", now.elapsed());
     let mut output = make_output(Box::new(cfg_seq.seq), args.filters);
     save(&mut *output, time);
@@ -393,7 +392,12 @@ pub fn run_steps(term: ITerm, limit: usize) {
             break;
         }
         if let ITerm::Ann(ref new, ref ty) = tm {
-            println!("looped {ty}! after {ii} ({}) steps as: {:?} {}\n", ii - prev, new.tag(), format!("{tm}").len());
+            println!(
+                "looped {ty}! after {ii} ({}) steps as: {:?} {}\n",
+                ii - prev,
+                new.tag(),
+                format!("{tm}").len()
+            );
             prev = ii;
         }
     }
@@ -440,7 +444,9 @@ pub fn main_steps(args: &Args) {
         let dur = match change {
             Some(change) => {
                 let change_tree = type_translate(&change, changes.clone()).unwrap();
-                let dur = (1. + (change_tree.size() as f64 / base_size.get(18000) as f64).sqrt() * 5.) * base_dur;
+                let dur = (1.
+                    + (change_tree.size() as f64 / base_size.get(18000) as f64).sqrt() * 5.)
+                    * base_dur;
                 // println!("Change size: {} vs base at: {}", change_tree.size(), change_tree.size() as f64 / base_size as f64);
                 // change_tree.generate_with(
                 //     &mut cfg_seq,
@@ -450,7 +456,7 @@ pub fn main_steps(args: &Args) {
                 //     0.0
                 // );
                 dur
-            },
+            }
             None => base_dur,
         };
         tones.duration = dur;
@@ -464,29 +470,34 @@ pub fn main_steps(args: &Args) {
         println!("Sequencing over frequency range {freq_range} for duration {dur}...");
         let seq_start = Instant::now();
         const NUM_BUCKETS: usize = 512;
-        if tree.size() > NUM_BUCKETS * 8 {
+        // if tree.size() > NUM_BUCKETS * 8 {
+            // let mut buckets: Buckets<NUM_BUCKETS> = Buckets::empty();
+            // buckets.just_fill(&tree, freq_range as f32 / 2., NUM_BUCKETS / 2, NUM_BUCKETS as f32);
             let buckets: Buckets<NUM_BUCKETS> = Buckets::from_tree(&tree, freq_range as f32, args.division);
             buckets
                 // .reverse()
                 .sequence(&mut cfg_seq, tones.start_time, tones.duration, 0.0);
-        }
-        else {
-            tree.generate_with(
-                &mut cfg_seq,
-                // 0.0,
-                freq_range,
-                args.division,
-                // 0.0,
-            );
-        }
+        // } else {
+        //     tree.generate_with(
+        //         &mut cfg_seq,
+        //         // 0.0,
+        //         freq_range,
+        //         args.division,
+        //         // 0.0,
+        //     );
+        // }
 
         tones.increment();
-        println!("\t{:?}, adding up to {:?}", seq_start.elapsed(), step_start.elapsed());
+        println!(
+            "\t{:?}, adding up to {:?}",
+            seq_start.elapsed(),
+            step_start.elapsed()
+        );
         current = current.step(Context::new(std_env()));
         println!("\t{:?} with stepping", step_start.elapsed());
         if steps > limit {
             println!("Hit {limit} steps");
-            break
+            break;
         }
         // println!("Got this many events: {}", SIGN.load(std::sync::atomic::Ordering::SeqCst));
     }

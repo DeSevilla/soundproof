@@ -1,8 +1,7 @@
 pub mod soundproof_bevy;
 use bevy::prelude::*;
-use bevy_procedural_audio::prelude::DspPlugin;
 use bevy::window::WindowMode;
-
+use bevy_procedural_audio::prelude::DspPlugin;
 
 pub fn main_live() {
     App::new()

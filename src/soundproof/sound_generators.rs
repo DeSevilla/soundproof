@@ -886,7 +886,7 @@ impl<const N: usize> Buckets<N> {
 
     pub fn just_fill(&mut self, tree: &SoundTree, center: f32, position: usize, width: f32) {
         // if position != 256 {
-            // println!("Filling in {position} width {width} freq {center}");
+        // println!("Filling in {position} width {width} freq {center}");
         // }
         match tree {
             SoundTree::Simul(children, _) => {
@@ -906,9 +906,10 @@ impl<const N: usize> Buckets<N> {
                     // let s1 = (ii as f32 - count as f32 * 0.5);
                     // println!("s1 {s1}");
                     // println!("s2 {}", s1 / count as f32 * width);
-                    let shift = ((ii as f32 - count as f32 * 0.5) / count as f32 * width * 0.5).floor() as isize;
+                    let shift = ((ii as f32 - count as f32 * 0.5) / count as f32 * width * 0.5)
+                        .floor() as isize;
                     // if shift != 0 {
-                        // println!("shift: {shift}");
+                    // println!("shift: {shift}");
                     // }
                     let new_pos = position as isize + shift;
                     if new_pos < 0 || new_pos > 512 {

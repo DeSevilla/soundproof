@@ -471,12 +471,13 @@ pub fn main_steps(args: &Args) {
         let seq_start = Instant::now();
         const NUM_BUCKETS: usize = 512;
         // if tree.size() > NUM_BUCKETS * 8 {
-            // let mut buckets: Buckets<NUM_BUCKETS> = Buckets::empty();
-            // buckets.just_fill(&tree, freq_range as f32 / 2., NUM_BUCKETS / 2, NUM_BUCKETS as f32);
-            let buckets: Buckets<NUM_BUCKETS> = Buckets::from_tree(&tree, freq_range as f32, args.division);
-            buckets
-                // .reverse()
-                .sequence(&mut cfg_seq, tones.start_time, tones.duration, 0.0);
+        // let mut buckets: Buckets<NUM_BUCKETS> = Buckets::empty();
+        // buckets.just_fill(&tree, freq_range as f32 / 2., NUM_BUCKETS / 2, NUM_BUCKETS as f32);
+        let buckets: Buckets<NUM_BUCKETS> =
+            Buckets::from_tree(&tree, freq_range as f32, args.division);
+        buckets
+            // .reverse()
+            .sequence(&mut cfg_seq, tones.start_time, tones.duration, 0.0);
         // } else {
         //     tree.generate_with(
         //         &mut cfg_seq,

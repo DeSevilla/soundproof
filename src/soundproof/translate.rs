@@ -190,7 +190,7 @@ impl ITerm {
                 let m_val = motive.eval(ctx);
                 let m_val1 = m_val.clone();
                 let btree = base.check_translate(ctx, 
-                    &vpi(a_val1.clone(), move |x| {
+                    &vpi(&a_val, move |x| {
                         vapp(vapp(vapp(m_val1.clone(), x.clone()), x.clone()), Value::Refl(Box::new(a_val1.clone()), Box::new(x)))
                     }), meta.clone()
                 )?;

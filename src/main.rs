@@ -352,7 +352,7 @@ pub fn make_output(sound: Box<impl AudioUnit + 'static>, filters: FilterOptions)
         FilterOptions::ClipLowpass => Box::new(
             unit::<U0, U2>(sound)
                 >> stacki::<U2, _, _>(
-                    |_| shape(Adaptive::new(0.1, Tanh(0.1))) >> lowpass_hz(3500.0, 1.0) >> mul(0.4), // >> mul(10.0)
+                    |_| shape(Adaptive::new(0.1, Tanh(0.25))) >> lowpass_hz(2500.0, 1.0) >> mul(0.5), // >> mul(10.0)
                 ),
         ),
         FilterOptions::Quiet => Box::new(unit::<U0, U2>(sound) >> (mul(0.05) | mul(0.05))),
@@ -415,7 +415,7 @@ pub fn main_steps(args: &Args) {
     let mut steps = 0;
     let limit = args.time.unwrap_or(130.).floor() as usize; // 155, 261, 406, 596, 837
     if args.animate {
-        animate_term_steps(start_term.clone(), ToneMaker::new(0.0, 0.2), args.division, limit, 0.333);
+        animate_term_steps(start_term.clone(), args.division, limit, 1.0);
     }
     if args.draw_only {
         return;

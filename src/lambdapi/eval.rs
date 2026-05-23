@@ -76,7 +76,8 @@ impl CTerm {
             CTerm::Lam(e) => {
                 let e = e.clone();
                 let ctx = ctx.clone();
-                Value::Lam(Rc::new(move |x| e.clone().eval(&{let mut ctx = ctx.clone(); ctx.bind_value(x); ctx})))}
+                Value::Lam(Rc::new(move |x| e.clone().eval(&{let mut ctx = ctx.clone(); ctx.bind_value(x); ctx})))
+            }
         }
     }
 }

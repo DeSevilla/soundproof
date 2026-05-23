@@ -15,7 +15,7 @@ use crate::lambdapi::ast::*;
 use crate::lambdapi::term::*;
 use crate::FilterOptions;
 use crate::music::write_data;
-use crate::soundproof::select::ToneMaker;
+use crate::soundproof::select::Silence;
 use crate::soundproof::sound_generators::{Buckets, SoundGenerator};
 use crate::type_translate;
 use crate::step::*;
@@ -69,13 +69,12 @@ pub fn draw(tree: &SoundTree, scaling: DivisionMethod, path: impl AsRef<Path>) {
 //     }
 // }
 
-pub fn animate_term_steps(term: ITerm, mut meta: ToneMaker, scaling: DivisionMethod, limit: usize, fps: f64) {
+pub fn animate_term_steps(term: ITerm, scaling: DivisionMethod, limit: usize, frame_secs: f64) {
+    let meta = Silence::new();
     let mut visual_device = Device::new().unwrap();
     let window_options = WindowOptions { borderless: true, ..Default::default() };
-    // window_options.borderless = true;
     let mut window = Window::new("Hi", WIDTH_PX, HEIGHT_PX, window_options).unwrap();
-    // let mut elapsed = 0.0;
-    let base_time = Duration::new(0, (1e9 / fps) as u32);
+    let base_time = Duration::new(0, (1e9 * frame_secs) as u32);
     // let mut base_size = SetOnce::new();
     let frame_time = base_time;
 
@@ -91,10 +90,8 @@ pub fn animate_term_steps(term: ITerm, mut meta: ToneMaker, scaling: DivisionMet
         .expect("failed to find a default output device");
     let config: StreamConfig = audio_device.default_output_config().unwrap().into();
     let channels = config.channels as usize;
-    // let mut current = Step::Cont(start_term, None);
     std::thread::spawn(move || {
         let sample_rate = config.sample_rate.0 as f64;
-        // let mut sound = create_sound(pitch, volume, pitch_bend, control);
         let mut sound = backend;
         sound.set_sample_rate(sample_rate);
 
@@ -116,35 +113,34 @@ pub fn animate_term_steps(term: ITerm, mut meta: ToneMaker, scaling: DivisionMet
             std::thread::sleep(std::time::Duration::from_millis(1));
         }
     });
-    meta.increment();
-    let start_instant = Instant::now();
+    // meta.increment();
+    // let start_instant = Instant::now();
     for (ii, tm) in term.step_over(ctx.clone()).enumerate() {
-        let frame_start = Instant::now();
-        println!("Frame {ii} started at {:?}", frame_start - start_instant);
+        if !window.is_open() {
+            println!("Window closed; quitting");
+            return;
+        }
         if ii > limit {
             break;
         }
-        if !window.is_open() {
-            println!("Window closed; quitting");
-            break;
-        }
-        meta.increment();
-        let tree = type_translate(&tm, meta.clone()).unwrap();
+        let frame_start = Instant::now();
+        // println!("Frame {ii} started at {:?}", frame_start - start_instant);
+        // meta.increment();
+        let tree = type_translate(&tm, meta).unwrap();
         // let size = tree.size();
-
         // let ratio = size as f64 / base_size.get(size) as f64;
         // frame_time = base_time * size as u32 / base_size.get(size) as u32;
+
         // println!("Frame time: {frame_time:?}");
         // tree.generate_with(&mut cfg_seq, 0.0, 2000.0, DivisionMethod::Weight, 0.0);
-        let frame_adjust = 0.2;
         let buckets: Buckets<64> = Buckets::from_tree(&tree, 1000., DivisionMethod::Weight);
+
         // let next_frame_start = (frame_start + frame_time - start_instant).as_secs_f64() + frame_adjust;
-        let next_frame_start = 0.0;
-        let sound_duration = frame_time.as_secs_f64() - 3. * frame_adjust;
-        // let sound_duration = frame_time.as_secs_f64() / 1.5;
-        println!("seq next frame: {next_frame_start} to {}, from {:?}", next_frame_start + sound_duration, Instant::now() - start_instant);
-        // cfg_seq.seq.reset();
-        buckets.sequence(&mut cfg_seq, next_frame_start, sound_duration, 0.0);
+        let frame_adjust = (frame_time / 15).as_secs_f64();
+        let sound_duration = frame_time.as_secs_f64() - frame_adjust;
+        // let sound_duration = frame_time.as_secs_f64();
+        // println!("seq next frame: {next_frame_start} to {}, from {:?}", next_frame_start + sound_duration, Instant::now() - start_instant);
+        buckets.sequence(&mut cfg_seq, 0.0, sound_duration, 0.0);
 
         let mut bitmap = visual_device.bitmap_target(WIDTH_PX, HEIGHT_PX, DPI).unwrap();
         let mut rc = bitmap.render_context();
@@ -161,21 +157,15 @@ pub fn animate_term_steps(term: ITerm, mut meta: ToneMaker, scaling: DivisionMet
             .map(|[r, g, b, _a]: [u8; 4]| ((r as u32) << 16) | ((g as u32) << 8) | b as u32)
             .collect();
         window.update_with_buffer(&buf, WIDTH_PX, HEIGHT_PX).unwrap();
-        // let digits = frames.ilog10() as usize + 1;
-        // bitmap.save_to_file(path.as_ref().join(format!("{:0digits$}.png", ii))).expect("should save file successfully");
-        // if ii % log_margin == 0 {
-        //     println!("Completed {ii}/{frames} frames in {:?}", Instant::now() - start);
-        // }
-        // elapsed += frame_time;
+
         let frame_end = Instant::now();
         let render_dur = frame_end - frame_start;
-        println!("Render: {render_dur:?} ending at {:?}", frame_end - start_instant);
+        // println!("Render: {render_dur:?} ending at {:?}", frame_end - start_instant);
         if render_dur < frame_time {
             sleep(frame_time - render_dur)
         }
-        println!("Updating window at {:?}", Instant::now() - start_instant);
     }
-    // sleep(Duration::from_secs(10))
+    sleep(frame_time)
 }
 
 pub fn draw_anim(tree: &SoundTree, scaling: DivisionMethod, duration: f64, fps: usize) {

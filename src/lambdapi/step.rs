@@ -135,7 +135,7 @@ impl Stepper for ITerm {
             ITerm::Nat => Done(ITerm::Nat, None),
             ITerm::Zero => Done(ITerm::Zero, None),
             ITerm::Succ(n) => n.step(ctx).apply(ITerm::Succ),
-            ITerm::NatElim(cterm, cterm1, cterm2, cterm3) => todo!(),
+            ITerm::NatElim(cterm, cterm1, cterm2, cterm3) => todo!(),  // these aren't used in the paradox
             ITerm::Fin(nat) => nat.step(ctx).apply(ITerm::Fin),
             ITerm::FZero(nat) => nat.step(ctx).apply(ITerm::FZero),
             ITerm::FSucc(cterm, cterm1) => todo!(),

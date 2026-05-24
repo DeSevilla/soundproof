@@ -276,7 +276,7 @@ impl Args {
 
 pub fn async_tree(content: AsyncStratifier, term: &ITerm, ctx: Context) -> SoundTree {
     // type_translate(term, content)
-    term.infer_translate(&ctx, content).unwrap().1
+    term.infer_translate(&ctx, content, false).unwrap().2
 }
 
 pub fn make_tree(structure: Structure, content: AudioSelectorOptions, term: &ITerm) -> SoundTree {

@@ -313,7 +313,8 @@ fn drawtree(
             };
             let border_width = ((right - left).min(args.depth_height) * 0.5).min(0.1);
             if border_width > 1.0 / DPI {
-                ctx.stroke(rect, &Color::BLACK, border_width);
+                let border_color = if meta.will_step { Color::WHITE } else { Color::BLACK };
+                ctx.stroke(rect, &border_color, border_width);
             }
         },
         &mut |_, _, _, _, _| {},

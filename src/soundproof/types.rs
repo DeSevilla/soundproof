@@ -154,6 +154,12 @@ pub enum SoundTree {
     Sound(Arc<dyn SoundGenerator + Send + Sync>, TreeMetadata),
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Highlight {
+    One,
+    Two
+}
+
 // #[derive(Clone, Debug, PartialEq, Component)]
 #[cfg_attr(feature = "perform", derive(Component))]
 #[derive(Clone, Debug, PartialEq)]
@@ -164,7 +170,7 @@ pub struct TreeMetadata {
     pub base_color: Color,
     pub alt_color: Color,
     pub max_depth: usize,
-    pub will_step: bool,
+    pub will_step: Option<Highlight>,
     // pub dspthing: Option<Uuid>,
     // pub lean: f32,
 }
@@ -183,7 +189,7 @@ impl SoundTree {
         // let mut names = "".to_owned();
         // let mut names = "[".to_owned();
         let mut max_depth = 0;
-        let mut will_step = false;
+        let will_step = None;
         for val in subtrees {
             match val.clone() {
                 SoundTree::Seq(mut trees, meta) => {
@@ -192,7 +198,7 @@ impl SoundTree {
                     if meta.max_depth > max_depth {
                         max_depth = meta.max_depth
                     }
-                    will_step &= meta.will_step;
+                    // will_step = will_step.and(meta.will_step);
                     result.append(&mut trees);
                 }
                 other => {
@@ -202,7 +208,7 @@ impl SoundTree {
                     if meta.max_depth > max_depth {
                         max_depth = meta.max_depth
                     }
-                    will_step &= meta.will_step;
+                    // will_step = will_step.and(meta.will_step);
                     result.push(other);
                 }
             }
@@ -233,7 +239,7 @@ impl SoundTree {
         let mut result = Vec::new();
         // let mut names = "{".to_owned();
         let mut max_depth = 0;
-        let mut will_step = false;
+        let will_step = None;
         for val in subtrees {
             match val.clone() {
                 SoundTree::Simul(mut trees, meta) => {
@@ -242,7 +248,7 @@ impl SoundTree {
                     if meta.max_depth > max_depth {
                         max_depth = meta.max_depth
                     }
-                    will_step &= meta.will_step;
+                    // will_step &= meta.will_step;
                     result.append(&mut trees);
                 }
                 other => {
@@ -251,7 +257,7 @@ impl SoundTree {
                     if other.metadata().max_depth > max_depth {
                         max_depth = other.metadata().max_depth
                     }
-                    will_step &= other.metadata().will_step;
+                    // will_step &= other.metadata().will_step;
                     result.push(other)
                 }
             }

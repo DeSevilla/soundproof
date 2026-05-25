@@ -17,7 +17,7 @@ use crate::lambdapi::term::*;
 use crate::music::write_data;
 use crate::soundproof::select::Silence;
 use crate::soundproof::sound_generators::{Buckets, SoundGenerator};
-use crate::soundproof::types::{ConfigSequencer, SoundTree};
+use crate::soundproof::types::{ConfigSequencer, Highlight, SoundTree};
 use crate::step::*;
 use crate::type_translate;
 // use crate::soundproof::types::SoundTree;
@@ -139,12 +139,14 @@ pub fn animate_term_steps(term: ITerm, scaling: DivisionMethod, limit: usize, fr
         // println!("Frame time: {frame_time:?}");
         // tree.generate_with(&mut cfg_seq, 0.0, 2000.0, DivisionMethod::Weight, 0.0);
 
-        let buckets: Buckets<64> = Buckets::from_tree(&tree, 1000., DivisionMethod::Weight);
+        let buckets: Buckets<64> = Buckets::from_tree(&tree, 1500., DivisionMethod::Weight)
+            .reverse();
         // let mut buckets: Buckets<64> = Buckets::empty();
         // buckets.just_fill(&tree, 666., 32, 32.0);
 
         // let next_frame_start = (frame_start + frame_time - start_instant).as_secs_f64() + frame_adjust;
-        let frame_adjust = (frame_time / 15).as_secs_f64();
+        // let frame_adjust = (frame_time / 15).as_secs_f64();
+        let frame_adjust = 0.;
         let sound_duration = frame_time.as_secs_f64() - frame_adjust;
         // let sound_duration = frame_time.as_secs_f64();
         // println!("seq next frame: {next_frame_start} to {}, from {:?}", next_frame_start + sound_duration, Instant::now() - start_instant);
@@ -290,8 +292,16 @@ fn drawtree(
                 };
             let left = start * main_width;
             let right = left + frac * main_width;
+            let border_width = ((right - left).min(args.depth_height) * 0.5).min(0.1);
+            let rect_base = Rect::new(left, bottom, right, top);
+            let rect = if border_width > 1.0 / DPI {
+                let adjust = border_width * 0.5;
+                Rect::new(left + adjust, bottom - adjust, right - adjust, top + adjust)
+            }
+            else {
+                rect_base
+            };
 
-            let rect = Rect::new(left, bottom, right, top);
             if args
                 .current
                 .is_some_and(|t| start <= t && t <= start + frac)
@@ -310,11 +320,20 @@ fn drawtree(
                 ctx.fill(rect, &meta.alt_color);
             } else {
                 ctx.fill(rect, &meta.base_color);
+                // if meta.will_step {
+                //     ctx.fill(rect, &meta.base_color);
+                // }
+                // else {
+                //     ctx.fill(rect, &meta.alt_color);
+                // }
             };
-            let border_width = ((right - left).min(args.depth_height) * 0.5).min(0.1);
-            if border_width > 1.0 / DPI {
-                let border_color = if meta.will_step { Color::WHITE } else { Color::BLACK };
-                ctx.stroke(rect, &border_color, border_width);
+            // let adjust = border_width * 0.5;
+            if let Some(w) = meta.will_step && border_width > 1.0 / DPI {
+                let border_color = match w {
+                    Highlight::One => Color::WHITE,
+                    Highlight::Two => Color::RED,
+                };
+                ctx.stroke(rect_base, &border_color, border_width);
             }
         },
         &mut |_, _, _, _, _| {},

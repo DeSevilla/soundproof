@@ -64,7 +64,7 @@ pub trait Selector: Clone {
             base_color,
             alt_color,
             max_depth: 0,
-            will_step: false,
+            will_step: None,
             // dspthing: None,
         }
         // let color = match term {
@@ -99,7 +99,7 @@ pub trait Selector: Clone {
                 base_color: BLUES.1,
                 alt_color: BLUES.0,
                 max_depth: 0,
-                will_step: false
+                will_step: None, 
                 // dspthing: None,
             },
         }
@@ -783,7 +783,7 @@ impl Selector for FullStratifier {
             base_color,
             alt_color,
             max_depth: self.depth,
-            will_step: false,
+            will_step: None,
             // dspthing: None,
         }
     }
@@ -802,7 +802,7 @@ impl Selector for FullStratifier {
                 base_color: BLUES.1,
                 alt_color: BLUES.0,
                 max_depth: self.depth,
-                will_step: false,
+                will_step: None,
                 // dspthing: None,
             },
         }

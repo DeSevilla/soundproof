@@ -331,7 +331,7 @@ impl ITerm {
                 let (termtree, tmstep) = ct.check_translate(ctx, &ty, meta, may_step)?; // should we have the type and term at diff depths?
                 let stepped = stepped || tmstep;
                 if may_step && let CTerm::Inf(_) = ct {
-                    tytree.pervade_metadata(&|m| m.will_step = true);
+                    tytree.pervade_metadata(&|m| m.will_step = Some(Highlight::Two));
                 };
                 let tree = SoundTree::simul([node_melody, SoundTree::seq([termtree, tytree])]);
                 // let tree = SoundTree::simul(&[node_melody, SoundTree::seq(&[tytree, termtree])]);    //alt 1: swap term/ty
@@ -373,7 +373,7 @@ impl ITerm {
                         let may_step = may_step && !stepped;
                         let mut tree = SoundTree::simul([node_melody, SoundTree::seq([ftree, xtree])]);
                         if may_step {
-                            tree.pervade_metadata(&|t| t.will_step = true);
+                            tree.pervade_metadata(&|t| t.will_step = Some(Highlight::One));
                             stepped = true
                         }
                         Ok((

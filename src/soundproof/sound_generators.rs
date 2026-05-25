@@ -876,7 +876,13 @@ impl<const N: usize> Buckets<N> {
             0.0,
             &mut |_, meta, s, r, _| {
                 let position = s + r / 2.0;
-                result.buckets[position.floor() as usize].insert(meta.tag)
+                let bucket = &mut result.buckets[position.floor() as usize];
+                bucket.insert(meta.tag);
+                if meta.will_step.is_some() {
+                    bucket.insert(meta.tag);
+                    bucket.insert(meta.tag);
+                    // bucket.insert(meta.tag);
+                }
             },
             &mut |_, _, _, _, _| {},
             &mut |_, _, _, _, _| {},

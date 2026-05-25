@@ -85,6 +85,15 @@ impl Stepper for ITerm {
     fn step(self, ctx: Context) -> Step<ITerm> {
         use Step::*;
         match self {
+            // note: alternative way of running Ann-step means False annotations are never removed
+            // also breaks will_step somewhat
+            // ITerm::Ann(body, ty) => match body.step(ctx.clone()) {
+            //     Cont(b, v) => Cont(ITerm::Ann(b, ty), v),
+            //     Done(b, v) => match b {
+            //         CTerm::Inf(it) => Cont(*it, v),
+            //         _ => ty.step(ctx).apply(|typ| ITerm::Ann(b, typ))
+            //     },
+            // },
             ITerm::Ann(body, ty) => match ty.step(ctx.clone()) {
                 Cont(typ, v) => Cont(ITerm::Ann(body, typ), v),
                 Done(typ, _) => body.step(ctx).apply(|ct| match ct {

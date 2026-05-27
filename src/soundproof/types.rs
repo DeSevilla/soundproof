@@ -157,7 +157,8 @@ pub enum SoundTree {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Highlight {
     One,
-    Two
+    Two,
+    Three
 }
 
 // #[derive(Clone, Debug, PartialEq, Component)]

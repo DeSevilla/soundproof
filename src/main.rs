@@ -383,7 +383,8 @@ pub fn main_to_file(args: &Args) {
     println!("Done.")
 }
 
-pub fn run_steps(term: ITerm, limit: usize) {
+#[allow(unused)]
+fn run_steps(term: ITerm, limit: usize) {
     let ctx = Context::new(term::std_env());
     let mut prev = 0;
     for (ii, tm) in step::Stepper::step_over(term, ctx.clone()).enumerate() {
@@ -419,7 +420,7 @@ pub fn main_steps(args: &Args) {
     let mut steps = 0;
     let limit = args.time.unwrap_or(130.).floor() as usize; // 155, 261, 406, 596, 837
     if args.animate {
-        animate_term_steps(start_term.clone(), args.division, limit, 1.0);
+        animate_term_steps(start_term.clone(), args.division, limit, 2.0);
     }
     if args.draw_only {
         return;

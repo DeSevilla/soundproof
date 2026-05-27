@@ -139,8 +139,9 @@ pub fn animate_term_steps(term: ITerm, scaling: DivisionMethod, limit: usize, fr
         // println!("Frame time: {frame_time:?}");
         // tree.generate_with(&mut cfg_seq, 0.0, 2000.0, DivisionMethod::Weight, 0.0);
 
-        let buckets: Buckets<64> = Buckets::from_tree(&tree, 1500., DivisionMethod::Weight)
-            .reverse();
+        let buckets: Buckets<64> = Buckets::from_tree(&tree, 500., DivisionMethod::Weight)
+            ;
+            // .reverse();
         // let mut buckets: Buckets<64> = Buckets::empty();
         // buckets.just_fill(&tree, 666., 32, 32.0);
 
@@ -332,6 +333,7 @@ fn drawtree(
                 let border_color = match w {
                     Highlight::One => Color::WHITE,
                     Highlight::Two => Color::RED,
+                    Highlight::Three => Color::BLUE,
                 };
                 ctx.stroke(rect_base, &border_color, border_width);
             }

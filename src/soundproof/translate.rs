@@ -320,7 +320,7 @@ impl ITerm {
     ) -> Result<(Type, bool, SoundTree), String> {
         // the process for defining the sounds is fairly subjective - there's no one correct answer,
         // we just want something that sounds good and represents the structure.
-        let node_melody = meta.isound(self);
+        let mut node_melody = meta.isound(self);
         let meta = meta.imerge(self);
         match self {
             ITerm::Ann(ct, cty) => {
@@ -364,18 +364,20 @@ impl ITerm {
                 Ok((ty, false, tree))
             }
             ITerm::App(f, x) => {
-                let (fty, stepped, ftree) = f.infer_translate(ctx, meta.clone(), may_step)?;
+                let (fty, stepped, mut ftree) = f.infer_translate(ctx, meta.clone(), may_step)?;
                 let may_step = may_step && !stepped;
                 match fty {
                     Value::Pi(src, trg) => {
-                        let (xtree, xstep) = x.check_translate(ctx, &src, meta, may_step)?;
+                        let (mut xtree, xstep) = x.check_translate(ctx, &src, meta, may_step)?;
                         let mut stepped = stepped || xstep;
                         let may_step = may_step && !stepped;
-                        let mut tree = SoundTree::simul([node_melody, SoundTree::seq([ftree, xtree])]);
                         if may_step {
-                            tree.pervade_metadata(&|t| t.will_step = Some(Highlight::One));
+                            node_melody.pervade_metadata(&|t| t.will_step = Some(Highlight::One));
+                            ftree.pervade_metadata(&|t| t.will_step = Some(Highlight::One));
+                            xtree.pervade_metadata(&|t| t.will_step = Some(Highlight::Three));
                             stepped = true
                         }
+                        let tree = SoundTree::simul([node_melody, SoundTree::seq([ftree, xtree])]);
                         Ok((
                             trg(x.eval(ctx)),
                             stepped,

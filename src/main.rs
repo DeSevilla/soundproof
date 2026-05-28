@@ -413,14 +413,14 @@ pub fn main_steps(args: &Args) {
     let start_term = args.term();
     // run_steps(start_term, args.time.unwrap_or(1000.).floor() as usize);
     // return;
-    let base_dur = 2.0;
+    let base_dur = 5.;
     let mut tones = ToneMaker::new(0.0, base_dur);
     let changes = Silence::new();
     // let changes = SineRhythmizer::new();
     let mut steps = 0;
     let limit = args.time.unwrap_or(130.).floor() as usize; // 155, 261, 406, 596, 837
     if args.animate {
-        animate_term_steps(start_term.clone(), args.division, limit, 2.0);
+        animate_term_steps(start_term.clone(), args.division, limit, 1.0);
     }
     if args.draw_only {
         return;
@@ -431,39 +431,39 @@ pub fn main_steps(args: &Args) {
     let mut cfg_seq = ConfigSequencer::new(seq, args.mode.live());
     let mut current = Step::new(start_term);
     // let mut prev_size = 1000.0;
-    let freq_range = 2000.; //args.time.unwrap_or((tree.size() + 40) as f64);
+    let freq_range = 1500.; //args.time.unwrap_or((tree.size() + 40) as f64);
     let mut base_size = SetOnce::new();
     loop {
         steps += 1;
         println!("Translating for number {steps}...");
         let step_start = Instant::now();
-        let (term, change) = match &current {
+        let (term, _) = match &current {
             Step::Cont(t, v) => (t.clone(), v.clone()),
             Step::Done(_, _) => break,
         };
-        // let dur = base_dur;
-        let dur = match change {
-            Some(change) => {
-                let change_tree = type_translate(&change, changes.clone()).unwrap();
-                let dur = (1.
-                    + (change_tree.size() as f64 / base_size.get(18000) as f64).sqrt() * 5.)
-                    * base_dur;
-                // println!("Change size: {} vs base at: {}", change_tree.size(), change_tree.size() as f64 / base_size as f64);
-                // change_tree.generate_with(
-                //     &mut cfg_seq,
-                //     tones.start_time,
-                //     dur,
-                //     args.division,
-                //     0.0
-                // );
-                dur
-            }
-            None => base_dur,
-        };
+        let dur = base_dur;
+        // let dur = match change {
+        //     Some(change) => {
+        //         let change_tree = type_translate(&change, changes.clone()).unwrap();
+        //         let dur = (1.
+        //             + (change_tree.size() as f64 / base_size.get(18000) as f64).sqrt() * 5.)
+        //             * base_dur;
+        //         // println!("Change size: {} vs base at: {}", change_tree.size(), change_tree.size() as f64 / base_size as f64);
+        //         // change_tree.generate_with(
+        //         //     &mut cfg_seq,
+        //         //     tones.start_time,
+        //         //     dur,
+        //         //     args.division,
+        //         //     0.0
+        //         // );
+        //         base_dur
+        //     }
+        //     None => base_dur,
+        // };
         tones.duration = dur;
 
         // let tree = type_translate(&term, tones.clone()).unwrap();
-        let tree = type_translate(&term, Silence::new()).unwrap();
+        let tree = type_translate(&term, changes).unwrap();
         base_size.get(tree.size());
         // prev_size = tree.size() as f64;
         println!("\t{:?}, output size {}", step_start.elapsed(), tree.size());
@@ -477,7 +477,7 @@ pub fn main_steps(args: &Args) {
         let buckets: Buckets<NUM_BUCKETS> =
             Buckets::from_tree(&tree, freq_range as f32, args.division);
         buckets
-            // .reverse()
+            .reverse()
             .sequence(&mut cfg_seq, tones.start_time, tones.duration, 0.0);
         // } else {
         //     tree.generate_with(

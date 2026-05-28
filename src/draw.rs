@@ -120,6 +120,8 @@ pub fn animate_term_steps(term: ITerm, scaling: DivisionMethod, limit: usize, fr
     });
     // meta.increment();
     // let start_instant = Instant::now();
+    let mut freq_range = 1500.;
+    let mut scaling = scaling;
     for (ii, tm) in term.step_over(ctx.clone()).enumerate() {
         if !window.is_open() {
             println!("Window closed; quitting");
@@ -139,9 +141,9 @@ pub fn animate_term_steps(term: ITerm, scaling: DivisionMethod, limit: usize, fr
         // println!("Frame time: {frame_time:?}");
         // tree.generate_with(&mut cfg_seq, 0.0, 2000.0, DivisionMethod::Weight, 0.0);
 
-        let buckets: Buckets<64> = Buckets::from_tree(&tree, 500., DivisionMethod::Weight)
-            ;
-            // .reverse();
+        let buckets: Buckets<64> = Buckets::from_tree(&tree, freq_range, scaling)
+            // ;
+            .reverse();
         // let mut buckets: Buckets<64> = Buckets::empty();
         // buckets.just_fill(&tree, 666., 32, 32.0);
 
@@ -174,6 +176,20 @@ pub fn animate_term_steps(term: ITerm, scaling: DivisionMethod, limit: usize, fr
             .update_with_buffer(&buf, WIDTH_PX, HEIGHT_PX)
             .unwrap();
 
+        scaling = match scaling {
+            DivisionMethod::Even => DivisionMethod::Weight,
+            DivisionMethod::Weight => DivisionMethod::Size,
+            DivisionMethod::Size => DivisionMethod::Even,
+        };
+
+        freq_range = match freq_range {
+            1500. => 900.,
+            900. => 2500.,
+            2500. => 1200.,
+            1200. => 6000.,
+            6000. => 60.,
+            _ => 1500.
+        };
         let frame_end = Instant::now();
         let render_dur = frame_end - frame_start;
         // println!("Render: {render_dur:?} ending at {:?}", frame_end - start_instant);

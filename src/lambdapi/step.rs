@@ -87,21 +87,18 @@ impl Stepper for ITerm {
         match self {
             // note: alternative way of running Ann-step means False annotations are never removed
             // also breaks will_step somewhat
-            // ITerm::Ann(body, ty) => match body.step(ctx.clone()) {
-            //     Cont(b, v) => Cont(ITerm::Ann(b, ty), v),
-            //     Done(b, v) => match b {
-            //         CTerm::Inf(it) => Cont(*it, v),
-            //         _ => ty.step(ctx).apply(|typ| ITerm::Ann(b, typ))
-            //     },
-            // },
-            ITerm::Ann(body, ty) => match ty.step(ctx.clone()) {
-                Cont(typ, v) => Cont(ITerm::Ann(body, typ), v),
-                Done(typ, _) => body.step(ctx).apply(|ct| match ct {
-                    CTerm::Inf(it) => *it,
-                    // CTerm::Inf(it) => {print!("ann dropping {:?} {}; ", typ.tag(), format!("{typ}").len()); *it},
-                    _ => ITerm::Ann(ct, typ),
-                }),
+            ITerm::Ann(body, ty) => match body {
+                CTerm::Inf(it) => Cont(*it, Some(ITerm::Ann(ty, CTerm::Inf(Box::new(ITerm::Star))))),
+                CTerm::Lam(_) => ty.step(ctx).apply(|typ| ITerm::Ann(body, typ)) //lam doesn't step
             },
+            // ITerm::Ann(body, ty) => match ty.step(ctx.clone()) {
+            //     Cont(typ, v) => Cont(ITerm::Ann(body, typ), v),
+            //     Done(typ, _) => body.step(ctx).apply(|ct| match ct {
+            //         CTerm::Inf(it) => *it,
+            //         // CTerm::Inf(it) => {print!("ann dropping {:?} {}; ", typ.tag(), format!("{typ}").len()); *it},
+            //         _ => ITerm::Ann(ct, typ),
+            //     }),
+            // },
             ITerm::Star => Done(ITerm::Star, None),
             ITerm::Pi(src, trg) => match src.clone().step(ctx) {
                 Cont(c, v) => Cont(ITerm::Pi(c, trg), v),
@@ -121,22 +118,25 @@ impl Stepper for ITerm {
             ITerm::App(func, arg) => {
                 match func.step(ctx.clone()) {
                     Cont(f, v) => Cont(ITerm::App(Box::new(f), arg), v),
-                    Done(f, v) => {
-                        match f {
-                            ITerm::Ann(CTerm::Lam(body), CTerm::Inf(ty)) => {
-                                match *ty.clone() {
-                                    ITerm::Pi(src, trg) => {
-                                        // print!("lam @ {:?} | {} <- {} => ", arg.tag(), format!("{body}").len(), format!("{arg}").len());
-                                        let tm = ITerm::Ann(arg, src);
-                                        let resbody = body.subst(0, &tm);
-                                        let resty = trg.subst(0, &tm);
-                                        // print!("{}; ", format!("{resbody}").len());
-                                        Cont(ITerm::Ann(resbody, resty), Some(tm))
+                    Done(f, _) => {
+                        match arg.step(ctx.clone()) {
+                            Cont(a, v) => Cont(ITerm::App(Box::new(f), a), v),
+                            Done(a, _) => match f {
+                                ITerm::Ann(CTerm::Lam(body), CTerm::Inf(ty)) => {
+                                    match *ty.clone() {
+                                        ITerm::Pi(src, trg) => {
+                                            // print!("lam @ {:?} | {} <- {} => ", arg.tag(), format!("{body}").len(), format!("{arg}").len());
+                                            let tm = ITerm::Ann(a, src);
+                                            let resbody = body.subst(0, &tm);
+                                            let resty = trg.subst(0, &tm);
+                                            // print!("{}; ", format!("{resbody}").len());
+                                            Cont(ITerm::Ann(resbody, resty), Some(tm))
+                                        }
+                                        _ => panic!("got malformed lambda type"),
                                     }
-                                    _ => panic!("got malformed lambda type"),
                                 }
+                                _ => panic!("got malformed lambda value"),
                             }
-                            _ => panic!("got malformed lambda value"),
                         }
                     }
                 }

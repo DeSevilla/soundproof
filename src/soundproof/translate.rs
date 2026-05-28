@@ -316,7 +316,7 @@ impl ITerm {
         &self,
         ctx: &Context,
         meta: impl Selector,
-        may_step: bool,
+        mut may_step: bool,
     ) -> Result<(Type, bool, SoundTree), String> {
         // the process for defining the sounds is fairly subjective - there's no one correct answer,
         // we just want something that sounds good and represents the structure.
@@ -325,14 +325,16 @@ impl ITerm {
         match self {
             ITerm::Ann(ct, cty) => {
                 // should we modify something in this to present an annotation better? term-translate the type, maybe?
-                let (mut tytree, stepped) = cty.check_translate(ctx, &Value::Star, meta.clone(), may_step)?;
-                let may_step = may_step && !stepped;
+                let (mut tytree, mut stepped) = cty.check_translate(ctx, &Value::Star, meta.clone(), may_step)?;
+                may_step = may_step && !stepped;
                 let ty = cty.eval(ctx);
-                let (termtree, tmstep) = ct.check_translate(ctx, &ty, meta, may_step)?; // should we have the type and term at diff depths?
-                let stepped = stepped || tmstep;
                 if may_step && let CTerm::Inf(_) = ct {
                     tytree.pervade_metadata(&|m| m.will_step = Some(Highlight::Two));
+                    stepped = true;
+                    may_step = false;
                 };
+                let (termtree, tmstep) = ct.check_translate(ctx, &ty, meta, may_step)?; // should we have the type and term at diff depths?
+                stepped = stepped || tmstep;
                 let tree = SoundTree::simul([node_melody, SoundTree::seq([termtree, tytree])]);
                 // let tree = SoundTree::simul(&[node_melody, SoundTree::seq(&[tytree, termtree])]);    //alt 1: swap term/ty
                 // let tree = SoundTree::simul(&[node_melody, tytree, termtree]);                       //alt 2: flatten

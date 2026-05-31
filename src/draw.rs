@@ -1,7 +1,9 @@
+use std::fs;
 use std::path::Path;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
+use clap::Parser;
 // use fundsp::sequencer::ReplayMode;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{self, StreamConfig};
@@ -71,7 +73,7 @@ pub fn draw(tree: &SoundTree, scaling: DivisionMethod, path: impl AsRef<Path>) {
 //     }
 // }
 
-pub fn animate_term_steps(args: &SoundproofArgs) {
+pub fn animate_term_steps(mut args: SoundproofArgs) {
     let frame_secs = args.time.unwrap_or(1.0);
     let meta = Silence::new();
     let mut visual_device = Device::new().unwrap();
@@ -122,12 +124,23 @@ pub fn animate_term_steps(args: &SoundproofArgs) {
     // meta.increment();
     // let start_instant = Instant::now();
     let term = args.term();
-    let limit = args.step_count;
-    let mut freq_range = (args.freq_max - args.freq_min) as f32;
-    let mut scaling = args.division;
+    let limit = args.step_count.unwrap_or(100);
+    // let mut freq_range = (args.freq_max - args.freq_min) as f32;
+    // let mut scaling = args.division;
     let mut same = 20;
     sleep(Duration::from_secs(5));
+    let sequence = match &args.file {
+        Some(path) => {
+            let contents = fs::read_to_string(path).expect("Could not open config file");
+            contents.split("\n").map(|s| s.to_owned()).collect()
+        },
+        None => vec![],
+    };
     for (ii, tm) in term.step_over(ctx.clone()).enumerate() {
+        if ii < sequence.len() {
+            println!("Loading from file: {}", sequence[ii]);
+            args = SoundproofArgs::parse_from(sequence[ii].split(' '))
+        }
         if !window.is_open() {
             println!("Window closed; quitting");
             return;
@@ -146,7 +159,7 @@ pub fn animate_term_steps(args: &SoundproofArgs) {
         // println!("Frame time: {frame_time:?}");
         // tree.generate_with(&mut cfg_seq, 0.0, 2000.0, DivisionMethod::Weight, 0.0);
 
-        let buckets: Buckets<64> = Buckets::from_tree(&tree, args.freq_min, args.freq_max, scaling)
+        let buckets: Buckets<64> = Buckets::from_tree(&tree, args.freq_min, args.freq_max, args.division)
             // ;
             .reverse();
         // let mut buckets: Buckets<64> = Buckets::empty();
@@ -166,8 +179,8 @@ pub fn animate_term_steps(args: &SoundproofArgs) {
         let mut rc = bitmap.render_context();
         let rect = Rect::new(0.0, 0.0, WIDTH_IN, HEIGHT_IN);
         rc.fill(rect, &Color::BLACK);
-        let args = FixedDrawArgs::new(tree.metadata().max_depth, None, scaling);
-        drawtree(&tree, &mut rc, args);
+        let draw_args = FixedDrawArgs::new(tree.metadata().max_depth, None, args.division);
+        drawtree(&tree, &mut rc, draw_args);
         rc.finish().unwrap();
         std::mem::drop(rc);
         let a = bitmap.to_image_buf(ImageFormat::RgbaPremul).unwrap();
@@ -181,21 +194,22 @@ pub fn animate_term_steps(args: &SoundproofArgs) {
             .update_with_buffer(&buf, WIDTH_PX, HEIGHT_PX)
             .unwrap();
 
-        scaling = match rand::random_range(0..=4) + same {
-            0 => DivisionMethod::Size,
-            1 => DivisionMethod::Even,
-            _ => DivisionMethod::Weight,
-        };
+        // scaling = match rand::random_range(0..=4) + same {
+        //     0 => DivisionMethod::Size,
+        //     1 => DivisionMethod::Even,
+        //     _ => DivisionMethod::Weight,
+        // };
 
-        freq_range = match rand::random_range(0..=16) + same * 3 {
-            0..=2 => 900.,
-            3..=5 => 2500.,
-            6..=8 => 1200.,
-            9 => 6000.,
-            10 => 60.,
-            11 => 300.,
-            _ => 1500.
-        };
+        // freq_range = match rand::random_range(0..=16) + same * 3 {
+        //     0..=2 => 900.,
+        //     3..=5 => 2500.,
+        //     6..=8 => 1200.,
+        //     9 => 6000.,
+        //     10 => 60.,
+        //     11 => 300.,
+        //     _ => 1500.
+        // };
+        
         if same > 0 {
             same -= 1;
         }

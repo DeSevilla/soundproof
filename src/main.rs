@@ -2,6 +2,7 @@ use clap::*;
 use fundsp::prelude32::*;
 
 use std::fs;
+use std::path::Path;
 use std::time::Instant;
 
 use lambdapi::ast::*;
@@ -14,6 +15,7 @@ use translate::*;
 use types::*;
 
 use crate::draw::animate_term_steps;
+use crate::lambdapi::step::Stepper;
 // use crate::lambdapi::eval2::*;
 // use crate::lambdapi::term::std_env;
 
@@ -226,7 +228,7 @@ impl RunMode {
 /// A system which converts dependently-typed lambda calculus into music, with a focus on Girard's Paradox.
 /// Generates audio, a spectrograph, an image representation of the "sound tree" structure, and
 /// animation frames matching the visualization with the sound.
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[command(version, about, long_about=None)]
 pub struct SoundproofArgs {
     /// Run the live performance mode. If set, all other options have no effect.
@@ -257,11 +259,13 @@ pub struct SoundproofArgs {
     #[arg(long, default_value="2500")]
     freq_max: f32,
     /// Maximum number of steps before quitting in step mode. Does nothing unless mode=steps
-    #[arg(short('S'), long, default_value="100")]
-    step_count: usize,
+    #[arg(short('S'), long)]
+    step_count: Option<usize>,
     /// Additional filters added after audio generation.
     #[arg(short, long, default_value = "clip-lowpass")]
     filters: FilterOptions,
+    #[arg(long)]
+    file: Option<String>,
     /// When set, only generate visualization (potentially including animation frames), not music.
     #[arg(short('D'), long, action)]
     draw_only: bool,
@@ -414,21 +418,18 @@ fn run_steps(term: ITerm, limit: usize) {
     // println!()
 }
 
-pub fn main_steps(args: &SoundproofArgs) {
-    use crate::step::Step;
+pub fn main_steps(mut args: SoundproofArgs) {
     use crate::term::std_env;
     let all_start = Instant::now();
-    println!("Starting tone generation at {all_start:?}");
-    let start_term = args.term();
+    println!("Starting tone generation");
     // run_steps(start_term, args.time.unwrap_or(1000.).floor() as usize);
     // return;
-    let base_dur = 5.;
+    let base_dur = args.time.unwrap_or(5.0);
     let mut tones = ToneMaker::new(0.0, base_dur);
     let changes = Silence::new();
     // let changes = SineRhythmizer::new();
-    let mut steps = 0;
     if args.animate {
-        animate_term_steps(args);
+        animate_term_steps(args.clone());
     }
     if args.draw_only {
         return;
@@ -437,18 +438,28 @@ pub fn main_steps(args: &SoundproofArgs) {
     let seq = Sequencer::new(0, 2, ReplayMode::None);
     // let backend = Box::new(seq.backend());
     let mut cfg_seq = ConfigSequencer::new(seq, args.mode.live());
-    let mut current = Step::new(start_term);
     // let mut prev_size = 1000.0;
     // let freq_range = 1500.; //args.time.unwrap_or((tree.size() + 40) as f64);
     let mut base_size = SetOnce::new();
-    loop {
-        steps += 1;
-        println!("Translating for number {steps}...");
+    let sequence = match &args.file {
+        Some(path) => {
+            let contents = fs::read_to_string(path).expect("Could not open config file");
+            contents.split("\n").map(|s| s.to_owned()).collect()
+        },
+        None => vec![],
+    };
+    let max_steps = args.step_count.unwrap_or(100);
+    for (ii, term) in args.term().step_over(Context::new(std_env())).enumerate() {
+        if ii < sequence.len() {
+            println!("Loading from file: {}", sequence[ii]);
+            args = SoundproofArgs::parse_from(sequence[ii].split(' '))
+        }
+        println!("Translating for number {ii}...");
         let step_start = Instant::now();
-        let (term, _) = match &current {
-            Step::Cont(t, v) => (t.clone(), v.clone()),
-            Step::Done(_, _) => break,
-        };
+        // let (term, _) = match &current {
+        //     Step::Cont(t, v) => (t.clone(), v.clone()),
+        //     Step::Done(_, _) => break,
+        // };
         let dur = base_dur;
         // let dur = match change {
         //     Some(change) => {
@@ -503,10 +514,9 @@ pub fn main_steps(args: &SoundproofArgs) {
             seq_start.elapsed(),
             step_start.elapsed()
         );
-        current = current.step(Context::new(std_env()));
         println!("\t{:?} with stepping", step_start.elapsed());
-        if steps > args.step_count {
-            println!("Hit {} steps", args.step_count);
+        if ii >= max_steps {
+            println!("Hit {max_steps} steps");
             break;
         }
         // println!("Got this many events: {}", SIGN.load(std::sync::atomic::Ordering::SeqCst));
@@ -528,7 +538,7 @@ pub fn main() {
         #[cfg(feature = "perform")]
         RunMode::Live => performance::main_live(),
         RunMode::Term => main_to_file(&args),
-        RunMode::Steps => main_steps(&args),
+        RunMode::Steps => main_steps(args),
         // _ => unimplemented!()
     }
 }

@@ -749,7 +749,7 @@ impl Weights {
 
     pub fn instrument(&self) -> An<impl AudioNode<Inputs = U2, Outputs = U2> + use<>> {
         let phase: f32 = self.body.into_iter().sum();
-        let phase = phase / 5. % 0.5;
+        let phase = phase.powi(5) / 5.;
         match self.body {
             [a, b, c, d, e, f, g, h, i, j] => {
                 multisplit::<U2,U4>() >>
@@ -763,10 +763,10 @@ impl Weights {
                     // + h * sinesaw()
                     // + i * sine()
                     // + j * square()
-                    (pass()   + saw().phase(phase)           >> (a + e + i) * sine())
-                    + (pass() + square().phase(phase * 0.5) >> (b + f) * saw())
+                    (pass()   + saw().phase(phase % 1.0)           >> (a + e + i) * sine())
+                    + (pass() + square().phase((phase + 0.5) % 1.0) >> (b + f) * saw())
                     + (pass() + sine()                       >> (d + h) * sinesaw())
-                    + (pass() + sine().phase(1.5 * phase)    >> (c + g + j) * square())
+                    + (pass() + sine().phase((1.5 * phase) % 1.0)    >> (c + g + j) * square())
                     >> split()
             }
         }
@@ -857,13 +857,13 @@ impl<const N: usize> Buckets<N> {
         }
     }
 
-    pub fn from_tree(tree: &SoundTree, range: f32, scaling: DivisionMethod) -> Self {
+    pub fn from_tree(tree: &SoundTree, freq_min: f32, freq_max: f32, scaling: DivisionMethod) -> Self {
         let mut result = Buckets {
             buckets: [Weights {
                 body: [0.0; Weights::LENGTH],
             }; N],
             freqs: array::from_fn(|i| {
-                lerp(Self::MIN_FREQ, Self::MIN_FREQ + range, i as f32 / N as f32)
+                lerp(freq_min, freq_max, i as f32 / N as f32)
             }), // min_freq: Self::MIN_FREQ,
                 // max_freq: Self::MIN_FREQ + range,
         };
@@ -880,7 +880,7 @@ impl<const N: usize> Buckets<N> {
                 bucket.insert(meta.tag);
                 if meta.will_step.is_some() {
                     bucket.insert(meta.tag);
-                    bucket.insert(meta.tag);
+                    // bucket.insert(meta.tag);
                     // bucket.insert(meta.tag);
                 }
             },

@@ -11,7 +11,7 @@ use minifb::{Window, WindowOptions};
 use piet_common::kurbo::{Circle, Line, Rect};
 use piet_common::*; //{Color, Device, DwriteFactory, FontFamily, ImageFormat, PietText, PietTextLayout, RenderContext, Text, TextLayoutBuilder};
 
-use crate::FilterOptions;
+use crate::{SoundproofArgs, FilterOptions};
 use crate::lambdapi::ast::*;
 use crate::lambdapi::term::*;
 use crate::music::write_data;
@@ -24,11 +24,11 @@ use crate::type_translate;
 use crate::DivisionMethod;
 
 // const WIDTH_PX: usize = 377 * 3;
-// const WIDTH_PX: usize = 1920;
-const WIDTH_PX: usize = 3000;
+const WIDTH_PX: usize = 1920;
+// const WIDTH_PX: usize = 3000;
 // const HEIGHT_PX: usize = 120 * 3;
-// const HEIGHT_PX: usize = 1080;
-const HEIGHT_PX: usize = 1800;
+const HEIGHT_PX: usize = 1080;
+// const HEIGHT_PX: usize = 1800;
 const DPI: f64 = 96.;
 const WIDTH_IN: f64 = WIDTH_PX as f64 / DPI;
 const HEIGHT_IN: f64 = HEIGHT_PX as f64 / DPI;
@@ -71,7 +71,8 @@ pub fn draw(tree: &SoundTree, scaling: DivisionMethod, path: impl AsRef<Path>) {
 //     }
 // }
 
-pub fn animate_term_steps(term: ITerm, scaling: DivisionMethod, limit: usize, frame_secs: f64) {
+pub fn animate_term_steps(args: &SoundproofArgs) {
+    let frame_secs = args.time.unwrap_or(1.0);
     let meta = Silence::new();
     let mut visual_device = Device::new().unwrap();
     let window_options = WindowOptions {
@@ -120,8 +121,12 @@ pub fn animate_term_steps(term: ITerm, scaling: DivisionMethod, limit: usize, fr
     });
     // meta.increment();
     // let start_instant = Instant::now();
-    let mut freq_range = 1500.;
-    let mut scaling = scaling;
+    let term = args.term();
+    let limit = args.step_count;
+    let mut freq_range = (args.freq_max - args.freq_min) as f32;
+    let mut scaling = args.division;
+    let mut same = 20;
+    sleep(Duration::from_secs(5));
     for (ii, tm) in term.step_over(ctx.clone()).enumerate() {
         if !window.is_open() {
             println!("Window closed; quitting");
@@ -141,7 +146,7 @@ pub fn animate_term_steps(term: ITerm, scaling: DivisionMethod, limit: usize, fr
         // println!("Frame time: {frame_time:?}");
         // tree.generate_with(&mut cfg_seq, 0.0, 2000.0, DivisionMethod::Weight, 0.0);
 
-        let buckets: Buckets<64> = Buckets::from_tree(&tree, freq_range, scaling)
+        let buckets: Buckets<64> = Buckets::from_tree(&tree, args.freq_min, args.freq_max, scaling)
             // ;
             .reverse();
         // let mut buckets: Buckets<64> = Buckets::empty();
@@ -176,20 +181,24 @@ pub fn animate_term_steps(term: ITerm, scaling: DivisionMethod, limit: usize, fr
             .update_with_buffer(&buf, WIDTH_PX, HEIGHT_PX)
             .unwrap();
 
-        scaling = match scaling {
-            DivisionMethod::Even => DivisionMethod::Weight,
-            DivisionMethod::Weight => DivisionMethod::Size,
-            DivisionMethod::Size => DivisionMethod::Even,
+        scaling = match rand::random_range(0..=4) + same {
+            0 => DivisionMethod::Size,
+            1 => DivisionMethod::Even,
+            _ => DivisionMethod::Weight,
         };
 
-        freq_range = match freq_range {
-            1500. => 900.,
-            900. => 2500.,
-            2500. => 1200.,
-            1200. => 6000.,
-            6000. => 60.,
+        freq_range = match rand::random_range(0..=16) + same * 3 {
+            0..=2 => 900.,
+            3..=5 => 2500.,
+            6..=8 => 1200.,
+            9 => 6000.,
+            10 => 60.,
+            11 => 300.,
             _ => 1500.
         };
+        if same > 0 {
+            same -= 1;
+        }
         let frame_end = Instant::now();
         let render_dur = frame_end - frame_start;
         // println!("Render: {render_dur:?} ending at {:?}", frame_end - start_instant);
@@ -270,7 +279,7 @@ struct FixedDrawArgs {
 impl FixedDrawArgs {
     pub fn new(max_depth: usize, current: Option<f64>, scaling: DivisionMethod) -> Self {
         // let depth_height = if max_depth != 0 { HEIGHT_IN * 0.9 / max_depth as f64 } else { 0.05 };
-        let depth_height = HEIGHT_IN / 40.;
+        let depth_height = HEIGHT_IN / 45.;
         let text_bar = depth_height * 4.0;
         Self {
             max_depth,
@@ -293,10 +302,10 @@ fn drawtree(
         args.scaling,
         0.0,
         &mut |_, meta, start, frac, _| {
-            if frac * WIDTH_IN < 0.1 / DPI {
-                // println!("Too short: {duration} {:?}", meta.color);
-                return;
-            }
+            // if frac * WIDTH_IN < 0.001 / DPI {
+            //     // println!("Too short: {duration} {:?}", meta.color);
+            //     return;
+            // }
 
             let bottom = HEIGHT_IN - meta.max_depth as f64 * args.depth_height; // height is negative
             let top = bottom - args.depth_height;

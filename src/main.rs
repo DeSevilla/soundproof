@@ -228,12 +228,12 @@ impl RunMode {
 /// animation frames matching the visualization with the sound.
 #[derive(Parser, Debug)]
 #[command(version, about, long_about=None)]
-pub struct Args {
+pub struct SoundproofArgs {
     /// Run the live performance mode. If set, all other options have no effect.
     #[arg(short, long, default_value = "term")]
     mode: RunMode,
     /// Predefined terms of the dependently typed lambda calculus.
-    #[arg(short, long, default_value = "girard")]
+    #[arg(short, long, default_value = "sigma")]
     value: NamedTerm,
     /// When set, normalize the term as far as possible before being presented.
     #[arg(short, long, action)]
@@ -250,6 +250,15 @@ pub struct Args {
     /// How to assign sound-tree structure to a term.
     #[arg(short, long, default_value = "type")]
     structure: Structure,
+    /// Low end of frequency range in step mode. Does nothing unless mode=steps
+    #[arg(long, default_value="60")]
+    freq_min: f32,
+    /// High end of frequency range in step mode. Does nothing unless mode=steps
+    #[arg(long, default_value="2500")]
+    freq_max: f32,
+    /// Maximum number of steps before quitting in step mode. Does nothing unless mode=steps
+    #[arg(short('S'), long, default_value="100")]
+    step_count: usize,
     /// Additional filters added after audio generation.
     #[arg(short, long, default_value = "clip-lowpass")]
     filters: FilterOptions,
@@ -264,7 +273,7 @@ pub struct Args {
     output: String,
 }
 
-impl Args {
+impl SoundproofArgs {
     pub fn term(&self) -> ITerm {
         if self.reduce {
             self.value.term_reduced()
@@ -318,7 +327,7 @@ pub fn make_tree(structure: Structure, content: AudioSelectorOptions, term: &ITe
     tree
 }
 
-pub fn draw_tree(tree: &SoundTree, args: &Args) {
+pub fn draw_tree(tree: &SoundTree, args: &SoundproofArgs) {
     println!("Drawing...");
     let now = Instant::now();
     draw::draw(
@@ -362,7 +371,7 @@ pub fn make_output(
     }
 }
 
-pub fn main_to_file(args: &Args) {
+pub fn main_to_file(args: &SoundproofArgs) {
     assert!(!args.mode.live());
     if args.draw_only {
         return;
@@ -405,7 +414,7 @@ fn run_steps(term: ITerm, limit: usize) {
     // println!()
 }
 
-pub fn main_steps(args: &Args) {
+pub fn main_steps(args: &SoundproofArgs) {
     use crate::step::Step;
     use crate::term::std_env;
     let all_start = Instant::now();
@@ -418,9 +427,8 @@ pub fn main_steps(args: &Args) {
     let changes = Silence::new();
     // let changes = SineRhythmizer::new();
     let mut steps = 0;
-    let limit = args.time.unwrap_or(130.).floor() as usize; // 155, 261, 406, 596, 837
     if args.animate {
-        animate_term_steps(start_term.clone(), args.division, limit, 1.0);
+        animate_term_steps(args);
     }
     if args.draw_only {
         return;
@@ -431,7 +439,7 @@ pub fn main_steps(args: &Args) {
     let mut cfg_seq = ConfigSequencer::new(seq, args.mode.live());
     let mut current = Step::new(start_term);
     // let mut prev_size = 1000.0;
-    let freq_range = 1500.; //args.time.unwrap_or((tree.size() + 40) as f64);
+    // let freq_range = 1500.; //args.time.unwrap_or((tree.size() + 40) as f64);
     let mut base_size = SetOnce::new();
     loop {
         steps += 1;
@@ -468,14 +476,14 @@ pub fn main_steps(args: &Args) {
         // prev_size = tree.size() as f64;
         println!("\t{:?}, output size {}", step_start.elapsed(), tree.size());
 
-        println!("Sequencing over frequency range {freq_range} for duration {dur}...");
+        println!("Sequencing over frequency range {}-{} for duration {dur}...", args.freq_min, args.freq_max);
         let seq_start = Instant::now();
         const NUM_BUCKETS: usize = 512;
         // if tree.size() > NUM_BUCKETS * 8 {
         // let mut buckets: Buckets<NUM_BUCKETS> = Buckets::empty();
         // buckets.just_fill(&tree, freq_range as f32 / 2., NUM_BUCKETS / 2, NUM_BUCKETS as f32);
         let buckets: Buckets<NUM_BUCKETS> =
-            Buckets::from_tree(&tree, freq_range as f32, args.division);
+            Buckets::from_tree(&tree, args.freq_min, args.freq_max, args.division);
         buckets
             .reverse()
             .sequence(&mut cfg_seq, tones.start_time, tones.duration, 0.0);
@@ -497,8 +505,8 @@ pub fn main_steps(args: &Args) {
         );
         current = current.step(Context::new(std_env()));
         println!("\t{:?} with stepping", step_start.elapsed());
-        if steps > limit {
-            println!("Hit {limit} steps");
+        if steps > args.step_count {
+            println!("Hit {} steps", args.step_count);
             break;
         }
         // println!("Got this many events: {}", SIGN.load(std::sync::atomic::Ordering::SeqCst));
@@ -512,7 +520,9 @@ pub fn main_steps(args: &Args) {
 }
 
 pub fn main() {
-    let args = Args::parse();
+    let args = SoundproofArgs::parse();
+    // let args = Args::parse_from("soundproof.exe -m=steps -v=lem2 -t=200 -d=weight --animate --draw-only".split(" "));
+    println!("{:?}", args);
     println!("Running in mode: {:?}", args.mode);
     match args.mode {
         #[cfg(feature = "perform")]

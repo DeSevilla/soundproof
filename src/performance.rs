@@ -1,8 +1,15 @@
+pub mod animate;
+
+#[cfg(feature = "bevy")]
 pub mod soundproof_bevy;
+#[cfg(feature = "bevy")]
 use bevy::prelude::*;
+#[cfg(feature = "bevy")]
 use bevy::window::WindowMode;
+#[cfg(feature = "bevy")]
 use bevy_procedural_audio::prelude::DspPlugin;
 
+#[cfg(feature = "bevy")]
 pub fn main_live() {
     App::new()
         .add_plugins((

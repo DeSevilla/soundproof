@@ -2,7 +2,6 @@ use clap::*;
 use fundsp::prelude32::*;
 
 use std::fs;
-use std::path::Path;
 use std::time::Instant;
 
 use lambdapi::ast::*;
@@ -13,8 +12,8 @@ use soundproof::select::*;
 use soundproof::*;
 use translate::*;
 use types::*;
+use performance::animate::*;
 
-use crate::draw::animate_term_steps;
 use crate::lambdapi::step::Stepper;
 // use crate::lambdapi::eval2::*;
 // use crate::lambdapi::term::std_env;
@@ -27,7 +26,6 @@ pub mod lambdapi;
 /// The "sound" side. Synths and utilities for generating audio.
 pub mod music;
 /// The live performance
-#[cfg(feature = "perform")]
 pub mod performance;
 /// Translation from LambdaPi to music.
 pub mod soundproof;
@@ -204,8 +202,9 @@ pub enum RunMode {
     Term,
     /// Generates a file for a proof term's evolution as it reduces
     Steps,
+    LiveSteps,
     /// Live performance mode
-    #[cfg(feature = "perform")]
+    #[cfg(feature = "bevy")]
     Live,
 }
 
@@ -214,15 +213,11 @@ impl RunMode {
         match self {
             RunMode::Term => false,
             RunMode::Steps => false,
-            #[cfg(feature = "perform")]
+            RunMode::LiveSteps => true,
+            #[cfg(feature = "bevy")]
             RunMode::Live => true,
         }
     }
-
-    // #[cfg(not(feature = "perform"))]
-    // fn live(&self) -> bool {
-    //     false
-    // }
 }
 
 /// A system which converts dependently-typed lambda calculus into music, with a focus on Girard's Paradox.
@@ -331,31 +326,31 @@ pub fn make_tree(structure: Structure, content: AudioSelectorOptions, term: &ITe
     tree
 }
 
-pub fn draw_tree(tree: &SoundTree, args: &SoundproofArgs) {
-    println!("Drawing...");
-    let now = Instant::now();
-    draw::draw(
-        tree,
-        args.division,
-        format!(
-            "output/images/{:?}{}-viz.png",
-            args.value,
-            if args.reduce { "-reduced" } else { "" }
-        ),
-    );
-    println!("One image: {:?}", now.elapsed());
-    draw::draw(tree, args.division, "output/visualization.png");
-    if args.animate {
-        let frames_path = "output/images/frames";
-        fs::remove_dir_all(frames_path).unwrap();
-        fs::create_dir(frames_path).unwrap();
-        let time = args.time.unwrap_or(tree.size() as f64);
-        // let frames = (30.0 * time).floor() as usize;
-        // println!("Drawing {frames} frames...");
-        draw::draw_anim(tree, args.division, time, 30);
-        // println!("All frames: {:?}", now.elapsed());
-    }
-}
+// fn draw_tree(tree: &SoundTree, args: &SoundproofArgs) {
+//     println!("Drawing...");
+//     let now = Instant::now();
+//     draw::draw(
+//         tree,
+//         args.division,
+//         format!(
+//             "output/images/{:?}{}-viz.png",
+//             args.value,
+//             if args.reduce { "-reduced" } else { "" }
+//         ),
+//     );
+//     println!("One image: {:?}", now.elapsed());
+//     draw::draw(tree, args.division, "output/visualization.png");
+//     if args.animate {
+//         let frames_path = "output/images/frames";
+//         fs::remove_dir_all(frames_path).unwrap();
+//         fs::create_dir(frames_path).unwrap();
+//         let time = args.time.unwrap_or(tree.size() as f64);
+//         // let frames = (30.0 * time).floor() as usize;
+//         // println!("Drawing {frames} frames...");
+//         draw_anim(tree, args.division, time, 30);
+//         // println!("All frames: {:?}", now.elapsed());
+//     }
+// }
 
 pub fn make_output(
     sound: Box<impl AudioUnit + 'static>,
@@ -428,6 +423,10 @@ pub fn main_steps(mut args: SoundproofArgs) {
     let mut tones = ToneMaker::new(0.0, base_dur);
     let changes = Silence::new();
     // let changes = SineRhythmizer::new();
+    if args.mode == RunMode::LiveSteps {
+        animate_term_midi(args);
+        return;
+    }
     if args.animate {
         animate_term_steps(args.clone());
     }
@@ -535,9 +534,10 @@ pub fn main() {
     println!("{:?}", args);
     println!("Running in mode: {:?}", args.mode);
     match args.mode {
-        #[cfg(feature = "perform")]
+        #[cfg(feature = "bevy")]
         RunMode::Live => performance::main_live(),
         RunMode::Term => main_to_file(&args),
+        RunMode::LiveSteps => main_steps(args),
         RunMode::Steps => main_steps(args),
         // _ => unimplemented!()
     }

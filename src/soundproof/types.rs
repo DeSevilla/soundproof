@@ -5,7 +5,7 @@ use std::time::Instant;
 use fundsp::prelude32::*;
 use piet_common::Color;
 
-#[cfg(feature = "perform")]
+#[cfg(feature = "bevy")]
 use bevy::prelude::*;
 
 use crate::DivisionMethod;
@@ -134,7 +134,7 @@ impl ConfigSequencer {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "perform", derive(Component))]
+#[cfg_attr(feature = "bevy", derive(Component))]
 pub struct Timings {
     pub start: f64,
     pub duration: f64,
@@ -162,7 +162,7 @@ pub enum Highlight {
 }
 
 // #[derive(Clone, Debug, PartialEq, Component)]
-#[cfg_attr(feature = "perform", derive(Component))]
+#[cfg_attr(feature = "bevy", derive(Component))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct TreeMetadata {
     pub name: String,

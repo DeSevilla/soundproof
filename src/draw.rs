@@ -1,28 +1,8 @@
-use std::fs;
 use std::path::Path;
-use std::thread::sleep;
-use std::time::{Duration, Instant};
-
-use clap::Parser;
-// use fundsp::sequencer::ReplayMode;
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{self, StreamConfig};
-use fundsp::prelude::Sequencer;
-use fundsp::sequencer::ReplayMode;
 use minifb::{Window, WindowOptions};
-use piet_common::kurbo::{Circle, Line, Rect};
-use piet_common::*; //{Color, Device, DwriteFactory, FontFamily, ImageFormat, PietText, PietTextLayout, RenderContext, Text, TextLayoutBuilder};
-
-use crate::{SoundproofArgs, FilterOptions};
-use crate::lambdapi::ast::*;
-use crate::lambdapi::term::*;
-use crate::music::write_data;
-use crate::soundproof::select::Silence;
-use crate::soundproof::sound_generators::{Buckets, SoundGenerator};
-use crate::soundproof::types::{ConfigSequencer, Highlight, SoundTree};
-use crate::step::*;
-use crate::type_translate;
-// use crate::soundproof::types::SoundTree;
+use piet_common::kurbo::Rect;
+use piet_common::*;
+use crate::soundproof::types::{Highlight, SoundTree};
 use crate::DivisionMethod;
 
 // const WIDTH_PX: usize = 377 * 3;
@@ -73,213 +53,57 @@ pub fn draw(tree: &SoundTree, scaling: DivisionMethod, path: impl AsRef<Path>) {
 //     }
 // }
 
-pub fn animate_term_steps(mut args: SoundproofArgs) {
-    let frame_secs = args.time.unwrap_or(1.0);
-    let meta = Silence::new();
-    let mut visual_device = Device::new().unwrap();
+pub fn make_soundproof_window() -> Window {
     let window_options = WindowOptions {
         borderless: true,
         ..Default::default()
     };
-    let mut window = Window::new("Hi", WIDTH_PX, HEIGHT_PX, window_options).unwrap();
-    let base_time = Duration::new(0, (1e9 * frame_secs) as u32);
-    // let mut base_size = SetOnce::new();
-    let frame_time = base_time;
+    Window::new("Soundproof Output", WIDTH_PX, HEIGHT_PX, window_options).expect("")
+}
 
-    println!("frame time: {frame_time:?}");
-    // let frames = (duration * fps as f64).ceil() as usize;
-    let ctx = Context::new(std_env());
-    let mut seq = Sequencer::new(0, 2, ReplayMode::None);
-    let backend = crate::make_output(Box::new(seq.backend()), FilterOptions::ClipLowpass);
-    let mut cfg_seq = ConfigSequencer::new(seq, true);
-    let host = cpal::default_host();
-    let audio_device = host
-        .default_output_device()
-        .expect("failed to find a default output device");
-    let config: StreamConfig = audio_device.default_output_config().unwrap().into();
-    let channels = config.channels as usize;
-    std::thread::spawn(move || {
-        let sample_rate = config.sample_rate.0 as f64;
-        let mut sound = backend;
-        sound.set_sample_rate(sample_rate);
 
-        let mut next_value = move || sound.get_stereo();
-        let err_fn = |err| eprintln!("an error occurred on stream: {err}");
-        let stream = audio_device
-            .build_output_stream(
-                &config,
-                move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-                    write_data(data, channels, &mut next_value)
-                },
-                err_fn,
-                None,
-            )
-            .unwrap();
+pub fn draw_tree_canvas(tree: &SoundTree, scaling: DivisionMethod, device: &mut Device) -> Vec<u32> {
+    let mut bitmap = device
+        .bitmap_target(WIDTH_PX, HEIGHT_PX, DPI)
+        .unwrap();
+    let mut rc = bitmap.render_context();
+    let rect = Rect::new(0.0, 0.0, WIDTH_IN, HEIGHT_IN);
+    rc.fill(rect, &Color::BLACK);
+    let draw_args = FixedDrawArgs::new(tree.metadata().max_depth, None, scaling);
+    drawtree(&tree, &mut rc, draw_args);
+    rc.finish().unwrap();
+    std::mem::drop(rc);
+    let buf = bitmap.to_image_buf(ImageFormat::RgbaPremul).unwrap();
+    buf
+        .raw_pixels()
+        .chunks_exact(4)
+        .map(|s| s.try_into().unwrap())
+        .map(|[r, g, b, _a]: [u8; 4]| ((r as u32) << 16) | ((g as u32) << 8) | b as u32)
+        .collect()
+}
 
-        stream.play().unwrap();
-        loop {
-            std::thread::sleep(std::time::Duration::from_millis(1));
+pub struct LiveDrawContext {
+    pub(crate) window: Window,
+    pub(crate) device: Device,
+}
+
+impl LiveDrawContext {
+    pub fn new() -> Self {
+        Self {
+            window: make_soundproof_window(),
+            device: Device::new().unwrap(),
         }
-    });
-    // meta.increment();
-    // let start_instant = Instant::now();
-    let term = args.term();
-    let limit = args.step_count.unwrap_or(100);
-    // let mut freq_range = (args.freq_max - args.freq_min) as f32;
-    // let mut scaling = args.division;
-    let mut same = 20;
-    sleep(Duration::from_secs(5));
-    let sequence = match &args.file {
-        Some(path) => {
-            let contents = fs::read_to_string(path).expect("Could not open config file");
-            contents.split("\n").map(|s| s.to_owned()).collect()
-        },
-        None => vec![],
-    };
-    for (ii, tm) in term.step_over(ctx.clone()).enumerate() {
-        if ii < sequence.len() {
-            println!("Loading from file: {}", sequence[ii]);
-            args = SoundproofArgs::parse_from(sequence[ii].split(' '))
-        }
-        if !window.is_open() {
-            println!("Window closed; quitting");
-            return;
-        }
-        if ii > limit {
-            break;
-        }
-        let frame_start = Instant::now();
-        // println!("Frame {ii} started at {:?}", frame_start - start_instant);
-        // meta.increment();
-        let tree = type_translate(&tm, meta).unwrap();
-        // let size = tree.size();
-        // let ratio = size as f64 / base_size.get(size) as f64;
-        // frame_time = base_time * size as u32 / base_size.get(size) as u32;
+    }
 
-        // println!("Frame time: {frame_time:?}");
-        // tree.generate_with(&mut cfg_seq, 0.0, 2000.0, DivisionMethod::Weight, 0.0);
-
-        let buckets: Buckets<64> = Buckets::from_tree(&tree, args.freq_min, args.freq_max, args.division)
-            // ;
-            .reverse();
-        // let mut buckets: Buckets<64> = Buckets::empty();
-        // buckets.just_fill(&tree, 666., 32, 32.0);
-
-        // let next_frame_start = (frame_start + frame_time - start_instant).as_secs_f64() + frame_adjust;
-        // let frame_adjust = (frame_time / 15).as_secs_f64();
-        let frame_adjust = 0.;
-        let sound_duration = frame_time.as_secs_f64() - frame_adjust;
-        // let sound_duration = frame_time.as_secs_f64();
-        // println!("seq next frame: {next_frame_start} to {}, from {:?}", next_frame_start + sound_duration, Instant::now() - start_instant);
-        buckets.sequence(&mut cfg_seq, 0.0, sound_duration, 0.0);
-
-        let mut bitmap = visual_device
-            .bitmap_target(WIDTH_PX, HEIGHT_PX, DPI)
-            .unwrap();
-        let mut rc = bitmap.render_context();
-        let rect = Rect::new(0.0, 0.0, WIDTH_IN, HEIGHT_IN);
-        rc.fill(rect, &Color::BLACK);
-        let draw_args = FixedDrawArgs::new(tree.metadata().max_depth, None, args.division);
-        drawtree(&tree, &mut rc, draw_args);
-        rc.finish().unwrap();
-        std::mem::drop(rc);
-        let a = bitmap.to_image_buf(ImageFormat::RgbaPremul).unwrap();
-        let buf: Vec<u32> = a
-            .raw_pixels()
-            .chunks_exact(4)
-            .map(|s| s.try_into().unwrap())
-            .map(|[r, g, b, _a]: [u8; 4]| ((r as u32) << 16) | ((g as u32) << 8) | b as u32)
-            .collect();
-        window
-            .update_with_buffer(&buf, WIDTH_PX, HEIGHT_PX)
-            .unwrap();
-
-        // scaling = match rand::random_range(0..=4) + same {
-        //     0 => DivisionMethod::Size,
-        //     1 => DivisionMethod::Even,
-        //     _ => DivisionMethod::Weight,
-        // };
-
-        // freq_range = match rand::random_range(0..=16) + same * 3 {
-        //     0..=2 => 900.,
-        //     3..=5 => 2500.,
-        //     6..=8 => 1200.,
-        //     9 => 6000.,
-        //     10 => 60.,
-        //     11 => 300.,
-        //     _ => 1500.
-        // };
+    pub fn draw_tree(&mut self, tree: &SoundTree, scaling: DivisionMethod) {
+        let buf = draw_tree_canvas(&tree, scaling, &mut self.device);
         
-        if same > 0 {
-            same -= 1;
-        }
-        let frame_end = Instant::now();
-        let render_dur = frame_end - frame_start;
-        // println!("Render: {render_dur:?} ending at {:?}", frame_end - start_instant);
-        if render_dur < frame_time {
-            sleep(frame_time - render_dur)
-        }
-    }
-    sleep(frame_time)
-}
-
-pub fn draw_anim(tree: &SoundTree, scaling: DivisionMethod, duration: f64, fps: usize) {
-    let mut device = Device::new().unwrap();
-    let window_options = WindowOptions {
-        borderless: true,
-        ..Default::default()
-    };
-    // window_options.borderless = true;
-    let mut window = Window::new("Hi", WIDTH_PX, HEIGHT_PX, window_options).unwrap();
-    // let mut elapsed = 0.0;
-    let frame_time = Duration::new(0, (1e9 / fps as f64) as u32);
-    let frames = (duration * fps as f64).ceil() as usize;
-    // let log_margin = frames / 10;
-    // let start = Instant::now();
-    for ii in 0..frames {
-        let frame_start = Instant::now();
-        let fraction = ii as f64 / frames as f64;
-        if !window.is_open() {
-            println!("Window closed; quitting");
-            break;
-        }
-        let mut bitmap = device.bitmap_target(WIDTH_PX, HEIGHT_PX, DPI).unwrap();
-        let mut rc = bitmap.render_context();
-        let rect = Rect::new(0.0, 0.0, WIDTH_IN, HEIGHT_IN);
-        rc.fill(rect, &Color::BLACK);
-        let args = FixedDrawArgs::new(tree.metadata().max_depth, Some(fraction), scaling);
-        let cursor_loc = ((WIDTH_IN - args.text_bar) * fraction, HEIGHT_IN * 0.05);
-        let dot = Circle::new(cursor_loc, 0.05);
-        rc.fill(dot, &Color::WHITE);
-        rc.stroke(dot, &Color::BLUE, 0.03);
-        let line = Line::new(cursor_loc, (cursor_loc.0, HEIGHT_IN));
-        rc.stroke(line, &Color::GRAY, 0.01);
-        drawtree(tree, &mut rc, args);
-        rc.finish().unwrap();
-        std::mem::drop(rc);
-        let a = bitmap.to_image_buf(ImageFormat::RgbaPremul).unwrap();
-        let buf: Vec<u32> = a
-            .raw_pixels()
-            .chunks_exact(4)
-            .map(|s| s.try_into().unwrap())
-            .map(|[r, g, b, _a]: [u8; 4]| ((r as u32) << 16) | ((g as u32) << 8) | b as u32)
-            .collect();
-        window
+        self.window
             .update_with_buffer(&buf, WIDTH_PX, HEIGHT_PX)
             .unwrap();
-        // let digits = frames.ilog10() as usize + 1;
-        // bitmap.save_to_file(path.as_ref().join(format!("{:0digits$}.png", ii))).expect("should save file successfully");
-        // if ii % log_margin == 0 {
-        //     println!("Completed {ii}/{frames} frames in {:?}", Instant::now() - start);
-        // }
-        // elapsed += frame_time;
-        let frame_end = Instant::now();
-        let render_dur = frame_end - frame_start;
-        if render_dur < frame_time {
-            sleep(frame_time - render_dur)
-        }
     }
 }
+
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 struct FixedDrawArgs {

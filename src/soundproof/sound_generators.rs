@@ -844,7 +844,7 @@ pub struct Buckets<const N: usize> {
 }
 
 impl<const N: usize> Buckets<N> {
-    const MIN_FREQ: f32 = 60.;
+    // const MIN_FREQ: f32 = 60.;
     // const N_INV: f32 = 1. / N as f32;
 
     pub fn empty() -> Self {

@@ -225,7 +225,7 @@ pub struct SoundproofArgs {
     /// Whether to run the single-term or step-based translation.
     #[arg(short, long, default_value = "term")]
     mode: RunMode,
-    /// Whether to render to file or run it live. Single-term live runs require the 'bevy' feature.
+    /// Whether to render to file or run it live. Single-term live runs are currently unavailable on this branch.
     #[arg(short, long, action)]
     live: bool,
     /// Predefined terms of the dependently typed lambda calculus.
@@ -459,9 +459,9 @@ pub fn main() {
     // println!("{:?}", args);
     // println!("Running in mode: {:?}", args.mode);
     match (args.mode, args.live) {
-        #[cfg(feature = "bevy")]
-        (RunMode::Single, true) => performance::main_live(),
-        (RunMode::Single, true) => println!("Cannot run single-term live mode without the 'bevy' feature enabled."),
+        // #[cfg(feature = "bevy")]
+        // (RunMode::Single, true) => performance::main_live(),
+        (RunMode::Single, true) => println!("Cannot run single-term live mode on this branch due to FunDSP incompatibilities. Switch to branch 'bevy'."),
         (RunMode::Single, false) => main_to_file(&args),
         (RunMode::Steps, true) => main_steps_live(args),
         (RunMode::Steps, false) => main_steps(args),

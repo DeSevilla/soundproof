@@ -13,6 +13,8 @@ It has two modes: single-term (`--mode=term`) and step-based (`--mode=step`). Th
 
 The canonical output for the single-term mode is available for free download on [Bandcamp](https://isdra.bandcamp.com/album/girards-paradox). A screen recording of the live version is on [Youtube](https://www.youtube.com/watch?v=Fu4yqLvZQOI).
 
+The step-based mode does not yet have a canonical output.
+
 A demo of this project, and a live performance of its output, was presented at [the FARM workshop at ICFP/SPLASH 2025](https://2025.splashcon.org/track/splash-2025-farm). The paper can be found [in the FARM proceedings here](https://dl.acm.org/doi/10.1145/3759162.3759644), and a recording of the talk is available [on the ACM SIGPLAN YouTube channel here](https://www.youtube.com/live/F_7S90vFEsE?t=2015s). Video of the FARM performance should be available eventually.
 
 ## How It Works
@@ -58,7 +60,7 @@ generates animation frames matched to the duration of the music at 30FPS; this c
 quite a long time. Frames are not automatically put together into a video, but the file names are chosen 
 to make it easy for FFMPEG to handle this process. -->
 
-The single-term live performance mode requires the 'bevy' feature to be enabled. It takes text input and parses it into terms which are then translated and displayed as moving trees along with the tags of the currently-playing subterms. Its display font is a modified version of JetBrains Mono which displays backslash as lambda.
+The single-term live performance mode is available on the `bevy` branch, and NOT on this one. It takes text input and parses it into terms which are then translated and displayed as moving trees along with the tags of the currently-playing subterms. Its display font is a modified version of JetBrains Mono which displays backslash as lambda.
 
 The step-based live performance mode can take a path to a config file with a list of command-line options.
 By default, these will be stepped through sequentially; with the `--midi` option, they are mapped 
@@ -69,8 +71,10 @@ to MIDI notes and can be activated by a MIDI controller.
 * Soundproof should always be compiled with `--release`, as the synth portions using FunDSP depend highly
   on optimizations that are not enabled in debug mode. It will not run in any reasonable time
   otherwise.
+<!-- 
+* While the single-term live performance version uses a font with ligatures, some are broken (most notably ->), due to [a bug in cosmic-text](https://github.com/pop-os/cosmic-text/issues/378). I solved this for my live performances by making an entire local copy of cosmic-text with a deeply bad modification, which I'm not including in this repository (sorry). -->
 
-* While the single-term live performance version uses a font with ligatures, some are broken (most notably ->), due to [a bug in cosmic-text](https://github.com/pop-os/cosmic-text/issues/378). I solved this for my live performances by making an entire local copy of cosmic-text with a deeply bad modification, which I'm not including in this repository (sorry).
+* The single-term live performance mode is unavailable on this branch due to dependency issues; switch to branch `bevy` to use it.
 
 * The audio selectors `names-short`, `names-long`, and `mixed` pull from audio files in the `files` folder, 
   which have not been included in Git for multiple reasons. The selectors' source in `select.rs` contains the 
@@ -83,7 +87,7 @@ Usage: soundproof [OPTIONS]
 
 Options:
   -m, --mode <MODE>              Whether to run the single-term or step-based translation [default: term] [possible values: single, steps]
-  -l, --live                     Whether to render to file or run it live. Single-term live runs require the 'bevy' feature
+  -l, --live                     Whether to render to file or run it live.
   -v, --value <VALUE>            Predefined terms of the dependently typed lambda calculus [default: sigma] [possible values: star, sets-of, u, tau, sigma, omega, lem0, lem2, lem3, girard]
   -r, --reduce                   When set, normalize the term as far as possible before being presented
   -t, --time <TIME>              In seconds. If unset, scales with size of tree. In step mode, determines time of one frame

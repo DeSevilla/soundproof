@@ -1,5 +1,5 @@
 #![allow(unused)]
-use fundsp::hacker32::*;
+use fundsp::prelude32::*;
 
 /// Frequency of A5 (A above middle C) in Hz. 440 Hz is standard concert pitch.
 pub const BASE_HZ: f32 = 440.0;

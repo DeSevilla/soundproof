@@ -1,0 +1,4 @@
+1 -t 3 -d weight
+2 -d size --freq-min 200 --freq-max 900 -t 0.5
+3 -t 7
+4 -t 2 -d even --freq-min 200 --freq-max 440

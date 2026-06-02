@@ -1,20 +1,22 @@
 use std::path::Path;
-use std::thread::sleep;
-use std::time::{Duration, Instant};
-
 use minifb::{Window, WindowOptions};
-use piet_common::*; //{Color, Device, DwriteFactory, FontFamily, ImageFormat, PietText, PietTextLayout, RenderContext, Text, TextLayoutBuilder};
-use piet_common::kurbo::{Circle, Line, Rect};
-
-use crate::soundproof::types::SoundTree;
+use piet_common::kurbo::Rect;
+use piet_common::*;
+use crate::soundproof::types::{Highlight, SoundTree};
 use crate::DivisionMethod;
 
-const WIDTH_PX: usize = 377 * 3;
-// const WIDTH_PX: usize = 1920;
-const HEIGHT_PX: usize = 120 * 3;
+// TODO we should take these as options
+// const WIDTH_PX: usize = 377 * 3;
+const WIDTH_PX: usize = 1920;
+// const WIDTH_PX: usize = 3000;
+// const HEIGHT_PX: usize = 120 * 3;
+const HEIGHT_PX: usize = 1080;
+// const HEIGHT_PX: usize = 1800;
 const DPI: f64 = 96.;
 const WIDTH_IN: f64 = WIDTH_PX as f64 / DPI;
 const HEIGHT_IN: f64 = HEIGHT_PX as f64 / DPI;
+
+// we should restructure a bit here, the live/static split is wonky
 
 pub fn draw(tree: &SoundTree, scaling: DivisionMethod, path: impl AsRef<Path>) {
     let mut device = Device::new().unwrap();
@@ -22,86 +24,64 @@ pub fn draw(tree: &SoundTree, scaling: DivisionMethod, path: impl AsRef<Path>) {
     let mut rc = bitmap.render_context();
     let rect = Rect::new(0.0, 0.0, WIDTH_IN, HEIGHT_IN);
     // rc.fill(rect, &Color::rgb8(0xCE, 0xCE, 0xCE));
-    // rc.fill(rect, &Color::BLACK);
-    rc.fill(rect, &Color::WHITE);
+    rc.fill(rect, &Color::BLACK);
+    // rc.fill(rect, &Color::WHITE);
     let args = FixedDrawArgs::new(tree.metadata().max_depth, None, scaling);
-    drawtree(tree, &mut rc, args, 0.0, 1.0, 0);
+    drawtree(tree, &mut rc, args);
     rc.finish().unwrap();
     std::mem::drop(rc);
-    bitmap.save_to_file(path).expect("should save file successfully");
+    bitmap
+        .save_to_file(path)
+        .expect("should save file successfully");
 }
 
-// struct AnimationFrames<'a> {
-//     tree: &'a SoundTree,
-//     scaling: DivisionMethod,
-//     current: usize,
-//     max: usize,
-// }
+pub fn make_soundproof_window() -> Window {
+    let window_options = WindowOptions {
+        borderless: true,
+        ..Default::default()
+    };
+    Window::new("Soundproof Output", WIDTH_PX, HEIGHT_PX, window_options).expect("")
+}
 
-// impl<'a> SoundTree {
-//     pub fn animation_frames(&'a self) -> AnimationFrames<'a> {
-//         let mut device = Device::new().unwrap();
-//     }
-// }
+pub fn draw_tree_canvas(tree: &SoundTree, scaling: DivisionMethod, device: &mut Device) -> Vec<u32> {
+    let mut bitmap = device
+        .bitmap_target(WIDTH_PX, HEIGHT_PX, DPI)
+        .unwrap();
+    let mut rc = bitmap.render_context();
+    let rect = Rect::new(0.0, 0.0, WIDTH_IN, HEIGHT_IN);
+    rc.fill(rect, &Color::BLACK);
+    let draw_args = FixedDrawArgs::new(tree.metadata().max_depth, None, scaling);
+    drawtree(&tree, &mut rc, draw_args);
+    rc.finish().unwrap();
+    std::mem::drop(rc);
+    let buf = bitmap.to_image_buf(ImageFormat::RgbaPremul).unwrap();
+    buf
+        .raw_pixels()
+        .chunks_exact(4)
+        .map(|s| s.try_into().unwrap())
+        .map(|[r, g, b, _a]: [u8; 4]| ((r as u32) << 16) | ((g as u32) << 8) | b as u32)
+        .collect()
+}
 
-// impl<'a> Iterator for AnimationFrames<'a> {
-//     type Item = BitmapTarget<'a>;
-    
-//     fn next(&mut self) -> Option<Self::Item> {
-//         todo!()
-//     }
-    
-// }
+pub struct LiveDrawContext {
+    pub(crate) window: Window,
+    pub(crate) device: Device,
+}
 
-pub fn draw_anim(tree: &SoundTree, scaling: DivisionMethod, duration: f64, fps: usize) {
-    let mut device = Device::new().unwrap();
-    let window_options = WindowOptions { borderless: true, ..Default::default() };
-    // window_options.borderless = true;
-    let mut window = Window::new("Hi", WIDTH_PX, HEIGHT_PX, window_options).unwrap();
-    // let mut elapsed = 0.0;
-    let frame_time = Duration::new(0, (1e9 / fps as f64) as u32);
-    let frames = (duration * fps as f64).ceil() as usize;
-    // let log_margin = frames / 10;
-    // let start = Instant::now();
-    for ii in 0..frames {
-        let frame_start = Instant::now();
-        let fraction = ii as f64 / frames as f64;
-        if !window.is_open() {
-            println!("Window closed; quitting");
-            break;
+impl LiveDrawContext {
+    pub fn new() -> Self {
+        Self {
+            window: make_soundproof_window(),
+            device: Device::new().unwrap(),
         }
-        let mut bitmap = device.bitmap_target(WIDTH_PX, HEIGHT_PX, DPI).unwrap();
-        let mut rc = bitmap.render_context();
-        let rect = Rect::new(0.0, 0.0, WIDTH_IN, HEIGHT_IN);
-        rc.fill(rect, &Color::BLACK);
-        let args = FixedDrawArgs::new(tree.metadata().max_depth, Some(fraction), scaling);
-        let cursor_loc = ((WIDTH_IN - args.text_bar) * fraction, HEIGHT_IN * 0.05);
-        let dot = Circle::new(cursor_loc, 0.05);
-        rc.fill(dot, &Color::WHITE);
-        rc.stroke(dot, &Color::BLUE, 0.03);
-        let line = Line::new(cursor_loc, (cursor_loc.0, HEIGHT_IN));
-        rc.stroke(line, &Color::GRAY, 0.01);
-        drawtree(tree, &mut rc, args, 0.0, 1.0, 0);
-        rc.finish().unwrap();
-        std::mem::drop(rc);
-        let a = bitmap.to_image_buf(ImageFormat::RgbaPremul).unwrap();
-        let buf: Vec<u32> = a.raw_pixels()
-            .chunks_exact(4)
-            .map(|s| s.try_into().unwrap())
-            .map(|[r, g, b, _a]: [u8; 4]| ((r as u32) << 16) | ((g as u32) << 8) | b as u32)
-            .collect();
-        window.update_with_buffer(&buf, WIDTH_PX, HEIGHT_PX).unwrap();
-        // let digits = frames.ilog10() as usize + 1;
-        // bitmap.save_to_file(path.as_ref().join(format!("{:0digits$}.png", ii))).expect("should save file successfully");
-        // if ii % log_margin == 0 {
-        //     println!("Completed {ii}/{frames} frames in {:?}", Instant::now() - start);
-        // }
-        // elapsed += frame_time;
-        let frame_end = Instant::now();
-        let render_dur = frame_end - frame_start;
-        if render_dur < frame_time {
-            sleep(frame_time - render_dur)
-        }
+    }
+
+    pub fn draw_tree(&mut self, tree: &SoundTree, scaling: DivisionMethod) {
+        let buf = draw_tree_canvas(&tree, scaling, &mut self.device);
+        
+        self.window
+            .update_with_buffer(&buf, WIDTH_PX, HEIGHT_PX)
+            .unwrap();
     }
 }
 
@@ -117,14 +97,14 @@ struct FixedDrawArgs {
 impl FixedDrawArgs {
     pub fn new(max_depth: usize, current: Option<f64>, scaling: DivisionMethod) -> Self {
         // let depth_height = if max_depth != 0 { HEIGHT_IN * 0.9 / max_depth as f64 } else { 0.05 };
-        let depth_height = 0.2;
+        let depth_height = HEIGHT_IN / 45.;
         let text_bar = depth_height * 4.0;
         Self {
             max_depth,
             depth_height,
             text_bar,
             current,
-            scaling
+            scaling,
         }
     }
 }
@@ -133,63 +113,75 @@ fn drawtree(
     tree: &SoundTree,
     ctx: &mut impl RenderContext<TextLayout = PietTextLayout>,
     args: FixedDrawArgs,
-    start_time: f64,
-    fraction: f64,
-    depth: usize
 ) {
-    match tree {
-        SoundTree::Simul(vec, _) => {
-            for (ii, elem) in vec.iter().enumerate() {
-                drawtree(elem, ctx, args, start_time, fraction, depth + ii);
-            }
-        },
-        SoundTree::Seq(vec, _) => {
-            let mut time_elapsed = 0.0;
-            for child in vec {
-                let ratio = args.scaling.child_scale(child) / args.scaling.parent_scale(tree);
-                let new_time = fraction * ratio;
-                drawtree(child, ctx, args, start_time + time_elapsed, new_time, depth);
-                time_elapsed += new_time;
-            }
-        },
-        SoundTree::Sound(_, meta) => {
-            if fraction * WIDTH_IN <  0.1 / DPI {
-                // println!("Too short: {duration} {:?}", meta.color);
-                return;
-            }
+    tree.distribute(
+        0.0,
+        1.0,
+        args.scaling,
+        0.0,
+        &mut |_, meta, start, frac, _| {
+            // if frac * WIDTH_IN < 0.001 / DPI {
+            //     // println!("Too short: {duration} {:?}", meta.color);
+            //     return;
+            // }
 
-
-            let bottom = HEIGHT_IN - depth as f64 * args.depth_height;  // height is negative
+            let bottom = HEIGHT_IN - meta.max_depth as f64 * args.depth_height; // height is negative
             let top = bottom - args.depth_height;
 
-            let main_width = WIDTH_IN - if args.current.is_some() { args.text_bar } else { 0.0 };
-            let left = start_time * main_width;
-            let right = left + fraction * main_width;
+            let main_width = WIDTH_IN
+                - if args.current.is_some() {
+                    args.text_bar
+                } else {
+                    0.0
+                };
+            let left = start * main_width;
+            let right = left + frac * main_width;
+            let border_width = ((right - left).min(args.depth_height) * 0.5).min(0.1);
+            let rect_base = Rect::new(left, bottom, right, top);
+            let rect = if border_width > 1.0 / DPI {
+                let adjust = border_width * 0.5;
+                Rect::new(left + adjust, bottom - adjust, right - adjust, top + adjust)
+            }
+            else {
+                rect_base
+            };
 
-            let rect = Rect::new(
-                left,
-                bottom,
-                right,
-                top,
-            );
-            if args.current.is_some_and(|t| start_time <= t && t <= start_time + fraction) {
-                let mut text_manager = PietText::new_with_shared_fonts(DwriteFactory::new().unwrap(), None);
+            if args
+                .current
+                .is_some_and(|t| start <= t && t <= start + frac)
+            {
+                // let mut text_manager = PietText::new_with_shared_fonts(DwriteFactory::new().unwrap(), None);
+                let mut text_manager = PietText::new();
                 let text = meta.name.to_owned();
-                let text_layout = text_manager.new_text_layout(text)
+                let text_layout = text_manager
+                    .new_text_layout(text)
                     .max_width(args.text_bar)
                     .font(FontFamily::SANS_SERIF, args.depth_height * 0.6)
                     .text_color(meta.alt_color)
-                    .build().unwrap();
+                    .build()
+                    .unwrap();
                 ctx.draw_text(&text_layout, (main_width + 0.05 * args.text_bar, top));
                 ctx.fill(rect, &meta.alt_color);
-            }
-            else {
+            } else {
                 ctx.fill(rect, &meta.base_color);
+                // if meta.will_step {
+                //     ctx.fill(rect, &meta.base_color);
+                // }
+                // else {
+                //     ctx.fill(rect, &meta.alt_color);
+                // }
             };
-            let border_width = ((right - left).min(args.depth_height) * 0.5).min(0.1);
-            if border_width > 1.0 / DPI {
-                ctx.stroke(rect, &Color::WHITE, border_width);
+            // let adjust = border_width * 0.5;
+            if let Some(w) = meta.will_step && border_width > 1.0 / DPI {
+                let border_color = match w {
+                    Highlight::One => Color::WHITE,
+                    Highlight::Two => Color::RED,
+                    Highlight::Three => Color::BLUE,
+                };
+                ctx.stroke(rect_base, &border_color, border_width);
             }
         },
-    }
+        &mut |_, _, _, _, _| {},
+        &mut |_, _, _, _, _| {},
+    )
 }

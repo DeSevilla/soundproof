@@ -1,15 +1,15 @@
-use nom::branch::*;
-use nom::character::complete::*;
-use nom::bytes::complete::*;
-use nom::combinator::*;
-use nom::error::context;
-use nom::error::ParseError;
-use nom::multi::*;
-use nom::sequence::*;
-use nom::AsChar;
-use nom::{IResult, Parser};
 use crate::lambdapi::ast::*;
 use crate::music::notes;
+use nom::AsChar;
+use nom::branch::*;
+use nom::bytes::complete::*;
+use nom::character::complete::*;
+use nom::combinator::*;
+use nom::error::ParseError;
+use nom::error::context;
+use nom::multi::*;
+use nom::sequence::*;
+use nom::{IResult, Parser};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Statement {
@@ -32,12 +32,20 @@ pub fn statement(vars: Vec<String>, input: &str) -> IResult<&str, Statement> {
     let (input, _) = ws(input)?;
     alt((
         |i| {
-            let (i, (_, n, _, v, _)) = (tag("let"), identifier, tag("="), |i| iterm(0, vars.clone(), i), ws).parse(i)?;
+            let (i, (_, n, _, v, _)) = (
+                tag("let"),
+                identifier,
+                tag("="),
+                |i| iterm(0, vars.clone(), i),
+                ws,
+            )
+                .parse(i)?;
             Ok((i, Let(n, v)))
         },
-        |i| { 
+        |i| {
             let (i, _) = tag("assume").parse(i)?;
-            let (i, terms) = many1(parens((identifier, tag("::"), |i| cterm(0, vec![], i)))).parse(i)?;
+            let (i, terms) =
+                many1(parens((identifier, tag("::"), |i| cterm(0, vec![], i)))).parse(i)?;
             let terms = terms.into_iter().map(|(n, _, v)| (n, v)).collect();
             Ok((i, Assume(terms)))
         },
@@ -48,14 +56,16 @@ pub fn statement(vars: Vec<String>, input: &str) -> IResult<&str, Statement> {
         },
         |i| {
             let (i, _) = tag("set").parse(i)?;
-            let (i, (tag, _, n1, n2, n3, n4)) = parens((node_tag, tag("="), note, note, note, note)).parse(i)?;
+            let (i, (tag, _, n1, n2, n3, n4)) =
+                parens((node_tag, tag("="), note, note, note, note)).parse(i)?;
             Ok((i, Set(tag, [n1, n2, n3, n4])))
         },
         |i| {
             let (i, _) = tag("clear").parse(i)?;
             Ok((i, Clear))
         },
-    )).parse(input)
+    ))
+    .parse(input)
 }
 
 fn node_tag(input: &str) -> IResult<&str, Tag> {
@@ -69,7 +79,8 @@ fn node_tag(input: &str) -> IResult<&str, Tag> {
         tag("Zero").map(|_| Tag::Zero),
         tag("Fin").map(|_| Tag::Finite),
         tag("Lam").map(|_| Tag::Lambda),
-    )).parse(input)
+    ))
+    .parse(input)
 }
 
 fn note(input: &str) -> IResult<&str, i32> {
@@ -82,14 +93,16 @@ fn note(input: &str) -> IResult<&str, i32> {
         'E' => notes::E,
         'F' => notes::F,
         'G' => notes::G,
-        _ => unreachable!()
+        _ => unreachable!(),
     };
     Ok((i, note))
 }
 
-fn parens<'a, O, E>(parser: impl Parser<&'a str, Output=O, Error=E>) -> impl Parser<&'a str, Output=O, Error=E> 
-    where 
-        E: ParseError<&'a str>
+fn parens<'a, O, E>(
+    parser: impl Parser<&'a str, Output = O, Error = E>,
+) -> impl Parser<&'a str, Output = O, Error = E>
+where
+    E: ParseError<&'a str>,
 {
     delimited((ws, char('('), ws), parser, (ws, char(')'), ws))
 }
@@ -114,20 +127,27 @@ pub fn identifier(input: &str) -> IResult<&str, String> {
     let (input, _) = ws(input)?;
     let ident = id_start.to_owned() + id_rest;
     if reserved(&ident) {
-        Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Fail)))
-    }
-    else {
+        Err(nom::Err::Error(nom::error::Error::new(
+            input,
+            nom::error::ErrorKind::Fail,
+        )))
+    } else {
         Ok((input, ident))
     }
 }
 
 pub fn ws<'a, E>(input: &'a str) -> IResult<&'a str, (), E>
-    where
-        E: ParseError<&'a str>
+where
+    E: ParseError<&'a str>,
 {
     // take_while1(char::is_whitespace)(input)
     // many0(one_of(" \t\r\n")).map(|v| v.into_iter().collect()).parse(input)
-    (multispace0, many0((multispace0, tag("--"), not_line_ending, many0(line_ending)))).map(|_| ()).parse(input)
+    (
+        multispace0,
+        many0((multispace0, tag("--"), not_line_ending, many0(line_ending))),
+    )
+        .map(|_| ())
+        .parse(input)
     // preceded(multispace0, (tag("--"), not_line_ending))
     // space0(input)
 }
@@ -141,7 +161,7 @@ pub fn lambda(vars: Vec<String>, i: &str) -> IResult<&str, CTerm> {
     let (i, _) = ws(i)?;
     let (i, _) = tag("->").parse(i)?;
     let (i, _) = ws(i)?;
-    
+
     let mut new_vars: Vec<String> = names.clone().iter().map(|c| c.to_string()).collect();
     new_vars.reverse();
     let mut vars = vars;
@@ -160,17 +180,30 @@ pub fn cterm(n: usize, vars: Vec<String>, input: &str) -> IResult<&str, CTerm> {
     // println!("cterm {n}: \x1b[32m{input}\x1b[0m");
     if n == 0 {
         // println!("cterm 1");
-        context("cterm 0", alt((
-            |i| lambda(vars.clone(), i), 
-            map(|i| iterm(n, vars.clone(), i), |iterm| CTerm::Inf(Box::new(iterm))),
-        ))).parse(input)
-    }
-    else {
+        context(
+            "cterm 0",
+            alt((
+                |i| lambda(vars.clone(), i),
+                map(
+                    |i| iterm(n, vars.clone(), i),
+                    |iterm| CTerm::Inf(Box::new(iterm)),
+                ),
+            )),
+        )
+        .parse(input)
+    } else {
         // println!("cterm 1");
-        context("cterm 1", alt((
-            parens(|i| lambda(vars.clone(), i)),
-            map(|i| iterm(n, vars.clone(), i), |iterm| CTerm::Inf(Box::new(iterm))),
-        ))).parse(input)
+        context(
+            "cterm 1",
+            alt((
+                parens(|i| lambda(vars.clone(), i)),
+                map(
+                    |i| iterm(n, vars.clone(), i),
+                    |iterm| CTerm::Inf(Box::new(iterm)),
+                ),
+            )),
+        )
+        .parse(input)
     }
 }
 
@@ -190,45 +223,49 @@ pub fn iterm(n: usize, vars: Vec<String>, input: &str) -> IResult<&str, ITerm> {
             // println!("ok w implication pi");
             Ok((i, ITerm::Pi(t, body)))
         };
-        context("iterm 0", alt((
-            |i| {
-                // println!("iterm0 opt 1: forall: \x1b[32m{i}\x1b[0m");
-                let (i, _) = tag("forall").parse(i)?;
-                let (i, _) = ws(i)?;
-                // println!("forall getting bindings");
-                let (i, (names, values)) = bindings(true, vars.clone(), i)?;
-                // println!("forall got bindings");
-                let (i, _) = tag(".").parse(i)?;
-                // println!("forall getting body");
-                let (i, body) = cterm(0, names, i)?;
-                // println!("forall got body {body:?} \x1b[32m{i}\x1b[0m");
-                let (i, _) = ws(i)?;
-                let (head, tail) = values.split_at(1);
-                let head = head[0].clone();
-                let mut result = ITerm::Pi(head, body);
-                for val in tail {
-                    result = ITerm::Pi(val.clone(), CTerm::Inf(Box::new(result)))
-                }
-                // println!("ok w forall {result:?}");
-                Ok((i, result))
-            },
-            |i| {
-                // println!("iterm0 opt 2: next level (mb implication): \x1b[32m{i}\x1b[0m");
-                let (i, iterm) = iterm(1, vars.clone(), i)?;
-                // println!("got higher iterm: {iterm:?} || \x1b[32m{i}\x1b[0m");
-                alt((
-                    |i| rest(i, CTerm::Inf(Box::new(iterm.clone()))),
-                    |i| Ok((i, iterm.clone())), 
-                )).parse(i)
-            },
-            |i| {
-                // println!("iterm0 opt 3: parens-lambda || \x1b[32m{i}\x1b[0m");
-                let (i, t) = parens(|i| lambda(vars.clone(), i)).parse(i)?;
-                rest(i, t)
-            }
-        ))).parse(input)
-    }
-    else if n == 1 {
+        context(
+            "iterm 0",
+            alt((
+                |i| {
+                    // println!("iterm0 opt 1: forall: \x1b[32m{i}\x1b[0m");
+                    let (i, _) = tag("forall").parse(i)?;
+                    let (i, _) = ws(i)?;
+                    // println!("forall getting bindings");
+                    let (i, (names, values)) = bindings(true, vars.clone(), i)?;
+                    // println!("forall got bindings");
+                    let (i, _) = tag(".").parse(i)?;
+                    // println!("forall getting body");
+                    let (i, body) = cterm(0, names, i)?;
+                    // println!("forall got body {body:?} \x1b[32m{i}\x1b[0m");
+                    let (i, _) = ws(i)?;
+                    let (head, tail) = values.split_at(1);
+                    let head = head[0].clone();
+                    let mut result = ITerm::Pi(head, body);
+                    for val in tail {
+                        result = ITerm::Pi(val.clone(), CTerm::Inf(Box::new(result)))
+                    }
+                    // println!("ok w forall {result:?}");
+                    Ok((i, result))
+                },
+                |i| {
+                    // println!("iterm0 opt 2: next level (mb implication): \x1b[32m{i}\x1b[0m");
+                    let (i, iterm) = iterm(1, vars.clone(), i)?;
+                    // println!("got higher iterm: {iterm:?} || \x1b[32m{i}\x1b[0m");
+                    alt((
+                        |i| rest(i, CTerm::Inf(Box::new(iterm.clone()))),
+                        |i| Ok((i, iterm.clone())),
+                    ))
+                    .parse(i)
+                },
+                |i| {
+                    // println!("iterm0 opt 3: parens-lambda || \x1b[32m{i}\x1b[0m");
+                    let (i, t) = parens(|i| lambda(vars.clone(), i)).parse(i)?;
+                    rest(i, t)
+                },
+            )),
+        )
+        .parse(input)
+    } else if n == 1 {
         let rest = |i, t| {
             // println!("can we annotate?");
             let (i, _) = ws(i)?;
@@ -239,34 +276,43 @@ pub fn iterm(n: usize, vars: Vec<String>, input: &str) -> IResult<&str, ITerm> {
             // println!("ok w ann");
             Ok((i, ITerm::Ann(t, ty)))
         };
-        context("iterm 1", alt((
-            |i| {
-                // println!("iterm1 opt 1: maybe-annotate || \x1b[32m{i}\x1b[0m");
-                let (i, term) = iterm(2, vars.clone(), i)?;
-                // println!("got a term: {term:?} || \x1b[32m{i}\x1b[0m");
-                alt((
-                    |i| rest(i, CTerm::Inf(Box::new(term.clone()))),
-                    |i| Ok((i, term.clone()))
-                )).parse(i)
-                // todo!()
-            },
-            |i| {
-                // println!("iterm1 opt 2: annotated lambda || \x1b[32m{i}\x1b[0m");
-                let (i, term) = parens(|i| lambda(vars.clone(), i)).parse(i)?;
-                rest(i, term)
-            }
-        ))).parse(input)
-    }
-    else if n == 2 {
+        context(
+            "iterm 1",
+            alt((
+                |i| {
+                    // println!("iterm1 opt 1: maybe-annotate || \x1b[32m{i}\x1b[0m");
+                    let (i, term) = iterm(2, vars.clone(), i)?;
+                    // println!("got a term: {term:?} || \x1b[32m{i}\x1b[0m");
+                    alt((
+                        |i| rest(i, CTerm::Inf(Box::new(term.clone()))),
+                        |i| Ok((i, term.clone())),
+                    ))
+                    .parse(i)
+                    // todo!()
+                },
+                |i| {
+                    // println!("iterm1 opt 2: annotated lambda || \x1b[32m{i}\x1b[0m");
+                    let (i, term) = parens(|i| lambda(vars.clone(), i)).parse(i)?;
+                    rest(i, term)
+                },
+            )),
+        )
+        .parse(input)
+    } else if n == 2 {
         let (i, func) = iterm(3, vars.clone(), input)?;
         // println!("got iterm... making args? || \x1b[32m{i}\x1b[0m");
-        let (i, args) = context("iterm 2 many", many0(preceded(ws, |i| cterm(3, vars.clone(), i)))).parse(i)?;
+        let (i, args) = context(
+            "iterm 2 many",
+            many0(preceded(ws, |i| cterm(3, vars.clone(), i))),
+        )
+        .parse(i)?;
         // println!("got args... {args:?} || \x1b[32m{i}\x1b[0m");
-        let result = args.into_iter().fold(func, |acc, c| ITerm::App(Box::new(acc), c));
+        let result = args
+            .into_iter()
+            .fold(func, |acc, c| ITerm::App(Box::new(acc), c));
         // println!("ok w var / applications");
         Ok((i, result))
-    }
-    else if n == 3 {
+    } else if n == 3 {
         alt((
             map(tag("*"), |_| ITerm::Star),
             map(digit1, |n: &str| to_nat(n.parse::<usize>().unwrap())),
@@ -279,15 +325,14 @@ pub fn iterm(n: usize, vars: Vec<String>, input: &str) -> IResult<&str, ITerm> {
                 if let Some(n) = vars.iter().position(|n| *n == name) {
                     // println!("ok bound {n}");
                     Ok((i, ITerm::Bound(n)))
-                }
-                else {
+                } else {
                     // println!("ok free {name} in ctx {vars:?}");
                     Ok((i, ITerm::Free(Name::Global(name.to_string()))))
                 }
             },
-        )).parse(input)
-    }
-    else {
+        ))
+        .parse(input)
+    } else {
         panic!("Called iterm parser with too large a number: {n}")
     }
 }
@@ -301,14 +346,27 @@ pub fn one_binding(use_env: bool, vars: Vec<String>, i: &str) -> IResult<&str, (
     let (i, _) = tag("::").parse(i)?;
     let (i, _) = ws(i)?;
     // println!("binding getting cterm || \x1b[32m{i}\x1b[0m");
-    let (i, term) = cterm(0, if use_env { vars } else { println!("going w/o vars"); vec![] }, i)?;
+    let (i, term) = cterm(
+        0,
+        if use_env {
+            vars
+        } else {
+            println!("going w/o vars");
+            vec![]
+        },
+        i,
+    )?;
     // println!("binding got cterm {term:?} || \x1b[32m{i}\x1b[0m");
     let (i, _) = ws(i)?;
     // println!("ok one binding");
     Ok((i, (name.to_owned(), term)))
 }
 
-pub fn multiple_bindings(use_env: bool, vars: Vec<String>, input: &str) -> IResult<&str, Vec<(String, CTerm)>> {
+pub fn multiple_bindings(
+    use_env: bool,
+    vars: Vec<String>,
+    input: &str,
+) -> IResult<&str, Vec<(String, CTerm)>> {
     if use_env {
         let mut vars = vars;
         let mut bindings = Vec::new();
@@ -316,35 +374,42 @@ pub fn multiple_bindings(use_env: bool, vars: Vec<String>, input: &str) -> IResu
         loop {
             // println!("parsing binding with vars {vars:?}");
             let vars1 = vars.clone();
-            if let Ok((i, (n, v))) = parens(move |i| one_binding(use_env, vars1.clone(), i)).parse(rest) {
+            if let Ok((i, (n, v))) =
+                parens(move |i| one_binding(use_env, vars1.clone(), i)).parse(rest)
+            {
                 // println!("got binding {n}: {v}");
                 vars.insert(0, n.clone());
                 // bindings.insert(0, (n, v));
                 bindings.push((n, v));
                 rest = i;
-            }
-            else {
+            } else {
                 break;
             }
         }
         if !bindings.is_empty() {
             Ok((rest, bindings))
+        } else {
+            Err(nom::Err::Error(nom::error::Error::new(
+                input,
+                nom::error::ErrorKind::Fail,
+            )))
         }
-        else {
-            Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Fail)))
-        }
-    }
-    else {
+    } else {
         many1(parens(|i| one_binding(use_env, vars.clone(), i))).parse(input)
     }
 }
 
-pub fn bindings(use_env: bool, vars: Vec<String>, input: &str) -> IResult<&str, (Vec<String>, Vec<CTerm>)> {
+pub fn bindings(
+    use_env: bool,
+    vars: Vec<String>,
+    input: &str,
+) -> IResult<&str, (Vec<String>, Vec<CTerm>)> {
     // println!("bindings: \x1b[32m{input}\x1b[0m");
     let (i, bindings) = alt((
         (|i| one_binding(use_env, vars.clone(), i)).map(|b| vec![b]),
         |i| multiple_bindings(use_env, vars.clone(), i),
-    )).parse(input)?;
+    ))
+    .parse(input)?;
     // println!("got bindings: {bindings:?} || \x1b[32m{i}\x1b[0m");
     // this part is fiddly
     let (mut names, values): (Vec<String>, Vec<CTerm>) = bindings.into_iter().rev().unzip();
@@ -353,7 +418,6 @@ pub fn bindings(use_env: bool, vars: Vec<String>, input: &str) -> IResult<&str, 
     // println!("ok bindings {names:?}");
     Ok((i, (names, values)))
 }
-
 
 pub fn to_nat(n: usize) -> ITerm {
     let mut t = ITerm::Zero;
@@ -373,7 +437,9 @@ fn test_iterm(text: &str) {
 
 #[cfg(test)]
 fn test_statements(text: &str) {
-    let (rest, stmts) = many0(|i| statement(vec![], i)).parse(text).expect("Should have parsed");
+    let (rest, stmts) = many0(|i| statement(vec![], i))
+        .parse(text)
+        .expect("Should have parsed");
     println!("statements: {stmts:?}");
     println!("Rest: {rest}");
     assert!(rest.len() == 0)
@@ -401,7 +467,7 @@ pub fn test_iterm_fold() {
 pub fn test_comments() {
     let text = r"( \ m mz ms -> natElim   -- hello world
     ( \ _ -> m )   mz ( \ n' rec -> ms rec ) ) :: forall (m :: *) . m -> (m -> m) -> Nat -> m";
-    // let text = r"natElim  -- hello world 
+    // let text = r"natElim  -- hello world
     // ( \ _ -> m )   mz ( \ n' rec -> ms rec ) ) :: forall (m :: *) . m -> (m -> m) -> Nat -> m";
     test_iterm(text);
 }
@@ -432,7 +498,7 @@ pub fn test_more_newlines() {
          a 
          x -> Cons a n' x (rec_n' a x) )
     ) :: forall (n :: Nat) . forall (a :: *) . a -> Vec a n";
-    test_iterm(text); 
+    test_iterm(text);
     // let (i, _) = space1(i)?;
 }
 

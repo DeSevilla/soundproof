@@ -7,15 +7,16 @@ pub mod check;
 pub mod eval;
 /// Functions for rendering terms and types as strings.
 pub mod print;
+pub mod step;
 /// Functions for constructing and modifying terms beyond the basic struct definitions.
 pub mod term;
 // pub mod parse;
 
 // this module structure is essentially Klyuchnikov's
 use ast::*;
-use term::*;
 use check::*;
 use eval::*;
+use term::*;
 
 // this mostly contains constructors for specific terms of LambdaPi
 // at some point we could add a parser to extend it to more of a general tool
@@ -29,7 +30,7 @@ pub fn void() -> ITerm {
 pub fn sets_of() -> ITerm {
     iann(
         clam(ipi(bnd(0), ITerm::Star)),
-        ipi(ITerm::Star, ITerm::Star)
+        ipi(ITerm::Star, ITerm::Star),
     )
 }
 
@@ -40,15 +41,18 @@ pub fn sets_of_nat() -> ITerm {
 
 /// The "universe" type U used to derive Girard's Paradox: forall (X :: *) . (P(P(X)) -> X) -> P(P(X)).
 pub fn u() -> ITerm {
-    ipi(      //function that takes X
-        ITerm::Star,          //of type *
-        ipi(             //to a function that takes 
-            ipi(        //a function taking z
+    ipi(
+        //function that takes X
+        ITerm::Star, //of type *
+        ipi(
+            //to a function that takes
+            ipi(
+                //a function taking z
                 iapp(sets_of(), iapp(sets_of(), bnd(0))), //of type setsOf setsOf X
-                bnd(1) //and producing an X
+                bnd(1),                                   //and producing an X
             ),
-            iapp(sets_of(), iapp(sets_of(), bnd(1))) //and produces a setOf setsOf X
-        )
+            iapp(sets_of(), iapp(sets_of(), bnd(1))), //and produces a setOf setsOf X
+        ),
     )
 }
 
@@ -60,9 +64,14 @@ pub fn sets_of_u() -> ITerm {
 /// A term of type P(P(U)) -> U. See [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf) for details.
 pub fn tau() -> ITerm {
     iann(
-        clam(clam(clam(clam(iapp(bnd(3),
-            clam(iapp(bnd(1), iapp(bnd(2), iapp(iapp(bnd(0), bnd(3)), bnd(2)))))))))), 
-        ipi(iapp(sets_of(), iapp(sets_of(), u())), u())
+        clam(clam(clam(clam(iapp(
+            bnd(3),
+            clam(iapp(
+                bnd(1),
+                iapp(bnd(2), iapp(iapp(bnd(0), bnd(3)), bnd(2))),
+            )),
+        ))))),
+        ipi(iapp(sets_of(), iapp(sets_of(), u())), u()),
     )
 }
 
@@ -70,24 +79,17 @@ pub fn tau() -> ITerm {
 pub fn sigma() -> ITerm {
     iann(
         clam(iapp(iapp(bnd(0), u()), tau())),
-        ipi(u(), iapp(sets_of(), iapp(sets_of(), u())))
+        ipi(u(), iapp(sets_of(), iapp(sets_of(), u()))),
     )
 }
 
 pub fn precedes() -> ITerm {
     iann(
-        clam(
-            clam(
-                ipi(
-                    iapp(sets_of(), u()),
-                    ipi(
-                        iapp(iapp(sigma(), bnd(2)), bnd(0)),
-                        iapp(bnd(1), bnd(2))
-                    )
-                )
-            )
-        ),
-        ipi(u(), iapp(sets_of(), u()))
+        clam(clam(ipi(
+            iapp(sets_of(), u()),
+            ipi(iapp(iapp(sigma(), bnd(2)), bnd(0)), iapp(bnd(1), bnd(2))),
+        ))),
+        ipi(u(), iapp(sets_of(), u())),
     )
 }
 
@@ -104,9 +106,9 @@ pub fn delta() -> ITerm {
             //         iapp(bnd(1), iapp(tau(), iapp(sigma(), bnd(2))))
             //     )
             // ),
-            void()
+            void(),
         )),
-        iapp(sets_of(), u())
+        iapp(sets_of(), u()),
     )
 }
 
@@ -116,12 +118,9 @@ pub fn preomega() -> ITerm {
     iann(
         clam(ipi(
             u(),
-            ipi(
-                iapp(iapp(sigma(), bnd(0)), bnd(1)),
-                iapp(bnd(2), bnd(1))
-            )
+            ipi(iapp(iapp(sigma(), bnd(0)), bnd(1)), iapp(bnd(2), bnd(1))),
         )),
-        iapp(sets_of(), iapp(sets_of(), u()))
+        iapp(sets_of(), iapp(sets_of(), u())),
     )
 }
 
@@ -135,20 +134,20 @@ pub fn omega() -> ITerm {
 /// See [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf) for details.
 pub fn lem0() -> ITerm {
     iann(
-        clam(clam(iapp(iapp(bnd(0), omega()), clam(iapp(bnd(1), iapp(tau(), iapp(sigma(), bnd(0)))))))),
+        clam(clam(iapp(
+            iapp(bnd(0), omega()),
+            clam(iapp(bnd(1), iapp(tau(), iapp(sigma(), bnd(0))))),
+        ))),
         ipi(
             sets_of_u(),
             ipi(
                 ipi(
                     u(),
-                    ipi(
-                        iapp(iapp(sigma(), bnd(0)), bnd(1)),
-                        iapp(bnd(2), bnd(1))
-                    )
+                    ipi(iapp(iapp(sigma(), bnd(0)), bnd(1)), iapp(bnd(2), bnd(1))),
                 ),
-                iapp(bnd(1), omega())
-            )
-        )
+                iapp(bnd(1), omega()),
+            ),
+        ),
     )
 }
 
@@ -161,7 +160,10 @@ pub fn sigma_omega() -> ITerm {
 /// The proposition that [tau]\([sigma]\([omega])) is a predecessor of [omega].
 /// See [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf) for details.
 pub fn d() -> ITerm {
-    iapp(iapp(precedes(), omega()), iapp(tau(), iapp(sigma(), omega())))
+    iapp(
+        iapp(precedes(), omega()),
+        iapp(tau(), iapp(sigma(), omega())),
+    )
     // ipi(
     //     sets_of_u(),
     //     ipi(
@@ -173,19 +175,15 @@ pub fn d() -> ITerm {
 
 pub fn delta_inductive() -> ITerm {
     iann(
-        clam(
-            clam(
-                clam(
-                    iapp(iapp(iapp(bnd(0), delta()), bnd(1)), clam(
-                        iapp(bnd(1), clam(
-                            iapp(bnd(1), iapp(tau(), iapp(sigma(), bnd(0))))
-                        ))
-                    ))
-                )
-            )    
-        ),
-        iapp(preomega(), delta())
-    ) 
+        clam(clam(clam(iapp(
+            iapp(iapp(bnd(0), delta()), bnd(1)),
+            clam(iapp(
+                bnd(1),
+                clam(iapp(bnd(1), iapp(tau(), iapp(sigma(), bnd(0))))),
+            )),
+        )))),
+        iapp(preomega(), delta()),
+    )
 }
 
 /// A proof that [tau]\([sigma]\([omega])) is not a predecessor of [omega].
@@ -193,7 +191,7 @@ pub fn delta_inductive() -> ITerm {
 pub fn lem2() -> ITerm {
     iann(
         iapp(iapp(lem0(), delta()), delta_inductive()),
-        ipi(d(), void())
+        ipi(d(), void()),
     )
 }
 
@@ -201,11 +199,10 @@ pub fn lem2() -> ITerm {
 /// See [Hurkens et al.](https://www.cs.cmu.edu/~kw/scans/hurkens95tlca.pdf) for details.
 pub fn lem3() -> ITerm {
     iann(
-        clam(
-            iapp(lem0(), clam(
-                iapp(bnd(1), iapp(tau(), iapp(sigma(), bnd(0))))
-            ))
-        ),
+        clam(iapp(
+            lem0(),
+            clam(iapp(bnd(1), iapp(tau(), iapp(sigma(), bnd(0))))),
+        )),
         d(),
     )
 }
@@ -216,16 +213,18 @@ pub fn girard() -> ITerm {
     iann(iapp(lem2(), lem3()), void())
 }
 
+/// Reduce an [ITerm] to a [CTerm].
 pub fn reduce(term: ITerm) -> CTerm {
-    quote0(term.eval(Context::new(vec![])))
+    quote0(&term.eval(&Context::new(vec![])))
 }
 
+/// Reduce an [ITerm] to an [ITerm], annotating if necessary.
 pub fn ireduce(term: ITerm) -> Result<ITerm, String> {
-    let ty = term.infer_type(Context::new(vec![]))?;
+    let ty = term.infer_type(&Context::new(vec![]))?;
     let reduced = reduce(term);
     match reduced {
         CTerm::Inf(it) => Ok(*it),
-        CTerm::Lam(_) => Ok(iann(reduced, quote0(ty)))
+        CTerm::Lam(_) => Ok(iann(reduced, quote0(&ty))),
     }
 }
 
@@ -238,25 +237,19 @@ pub fn girard_reduced() -> ITerm {
 /// For all types X, a function from False to X. Ex falso sequitur quodlibet.
 pub fn exfalso() -> ITerm {
     iann(
-        clam(
-            clam(
-                ITerm::FinElim(
-                    clam(
-                        ITerm::NatElim(clam(
-                            ipi(
-                                ITerm::Fin(bnd(0).into()),
-                                ITerm::Star
-                            )
-                        ), clam(bnd(3)), clam(clam(clam(ITerm::Fin(inat(1).into())))), bnd(0).into())
-                    ),
-                    clam(ITerm::FZero(ITerm::Zero.into())),
-                    clam(clam(clam(ITerm::FZero(ITerm::Zero.into())))), 
-                    ITerm::Zero.into(),
-                    bnd(0).into()
-                )
-            )
-        ),
-        ipi(ITerm::Star, ipi(void(), bnd(1)))
+        clam(clam(ITerm::FinElim(
+            clam(ITerm::NatElim(
+                clam(ipi(ITerm::Fin(bnd(0).into()), ITerm::Star)),
+                clam(bnd(3)),
+                clam(clam(clam(ITerm::Fin(inat(1).into())))),
+                bnd(0).into(),
+            )),
+            clam(ITerm::FZero(ITerm::Zero.into())),
+            clam(clam(clam(ITerm::FZero(ITerm::Zero.into())))),
+            ITerm::Zero.into(),
+            bnd(0).into(),
+        ))),
+        ipi(ITerm::Star, ipi(void(), bnd(1))),
     )
 }
 
@@ -265,12 +258,13 @@ pub fn validate(name: &str, term: &ITerm, eval_preserve: Option<bool>) {
     println!("{name}");
     // println!("{term}");
     let ctx = Context::new(vec![]);
-    let typ = term.infer_type(ctx.clone()).expect("Term should be well-typed");
+    let typ = term.infer_type(&ctx).expect("Term should be well-typed");
     if let Some(preserve) = eval_preserve {
-        let val = term.clone().eval(ctx.clone());
-        let qval = quote0(val);
-        qval.check_type(ctx.clone(), typ.clone()).expect("Evaluation should preserve type");
-        let typ1 = quote0(typ);
+        let val = term.clone().eval(&ctx);
+        let qval = quote0(&val);
+        qval.check_type(&ctx, typ.clone())
+            .expect("Evaluation should preserve type");
+        let typ1 = quote0(&typ);
         println!("\t{term} has type {typ1}");
         // println!("Passed type checks!");
         let iqval = match qval {

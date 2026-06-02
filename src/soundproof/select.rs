@@ -2,23 +2,18 @@ use std::collections::HashMap;
 // use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
+use crate::{ast::*, instruments::*, notes::*, sound_generators::*, types::*};
+use fundsp::prelude32::*;
 use piet_common::Color;
-use fundsp::hacker32::*;
-use crate::{
-    ast::*,
-    instruments::*,
-    notes::*,
-    types::*,
-};
 
 const ORANGE: Color = Color::rgb8(0xCE, 0x5D, 0x00);
 const PALEORANGE: Color = Color::rgb8(0xf5, 0xc1, 0x4b);
-const LAVENDER: Color = Color::rgb8(0x96, 0x7e, 0xf7);
-const DEEPBLUE: Color = Color::rgb8(0x27, 0x3a, 0x8c);
-const DEEPPURPLE: Color = Color::rgb8(0x4D, 0x01, 0x86);
-const PINK: Color = Color::rgb8(0xF8, 0x18, 0x94);
-const TURQUOISE: Color = Color::rgb8(0x00, 0xDD, 0xD0);
-const VIOLET: Color = Color::rgb8(0x90, 0x00, 0x90);
+// const LAVENDER: Color = Color::rgb8(0x96, 0x7e, 0xf7);
+// const DEEPBLUE: Color = Color::rgb8(0x27, 0x3a, 0x8c);
+// const DEEPPURPLE: Color = Color::rgb8(0x4D, 0x01, 0x86);
+// const PINK: Color = Color::rgb8(0xF8, 0x18, 0x94);
+// const TURQUOISE: Color = Color::rgb8(0x00, 0xDD, 0xD0);
+// const VIOLET: Color = Color::rgb8(0x90, 0x00, 0x90);
 
 pub trait Selector: Clone {
     fn isound(&self, term: &ITerm) -> SoundTree;
@@ -26,29 +21,159 @@ pub trait Selector: Clone {
     fn imerge(&self, term: &ITerm) -> Self;
     fn cmerge(&self, term: &CTerm) -> Self;
     fn imeta(&self, term: &ITerm) -> TreeMetadata {
-        let color = match term {
-            // ITerm::Ann(_, _) => Color::RED,
-            ITerm::Ann(_, _) => Color::FUCHSIA,
-            ITerm::Star => PALEORANGE,
-            // ITerm::Pi(_, _) => Color::BLUE,
-            ITerm::Pi(_, _) => LAVENDER,
-            // ITerm::App(_, _) => ORANGE,
-            ITerm::App(_, _) => DEEPBLUE,
-            ITerm::Bound(_) => Color::grey(0.5),
-            ITerm::Free(Name::Local(i)) => Color::rgb8(0x00, 0x28 + 0x12 * (*i as u8), 0x00),
-            ITerm::Free(_) => Color::GREEN,
-            ITerm::Zero => PINK,
-            ITerm::Fin(_) => TURQUOISE,
-            _ => unimplemented!()
+        const PURPLES: (Color, Color) =
+            (Color::rgb8(0x59, 0x08, 0x7E), Color::rgb8(0xAE, 0x69, 0xE2));
+        const ORANGES: (Color, Color) = (ORANGE, PALEORANGE);
+        const YELLOWS: (Color, Color) =
+            (Color::rgb8(0xC1, 0xA1, 0x00), Color::rgb8(0xE3, 0xFA, 0x5F));
+        const PINKS: (Color, Color) =
+            (Color::rgb8(0xB2, 0x00, 0x74), Color::rgb8(0xFA, 0x75, 0x9E));
+        const GREENS: (Color, Color) =
+            (Color::rgb8(0x00, 0x96, 0x44), Color::rgb8(0x8E, 0xFC, 0x62));
+        let (alt_color, base_color) = match term {
+            // ITerm::Ann(_, _) => Color::rgb8(0x86, 0xD8, 0x4B),
+            // ITerm::Ann(_, _) => Color::GREEN,
+            // ITerm::Ann(_, _) => Color::rgb8(0xBA, 0x7F, 0x3E),
+            ITerm::Ann(_, _) => PINKS,
+            // ITerm::Star => Color::rgb8(0x4D, 0x91, 0xEF),
+            ITerm::Star => ORANGES,
+            // ITerm::Pi(_, _) => Color::rgb8(0x2E, 0x6F, 0x94),
+            // ITerm::Pi(_, _) => Color::rgb8(0xC5, 0xFF, 0x00),
+            // ITerm::Pi(_, _) => Color::rgb8(0xA3, 0xF0, 0x95),
+            // ITerm::Pi(_, _) => (Color::rgb8(0x6C, 0x04, 0x1C), Color::RED),
+            ITerm::Pi(_, _) => PURPLES,
+            ITerm::Bound(_) => (Color::GRAY, Color::GRAY),
+            // ITerm::Free(_) => Color::rgb8(0x5E, 0xB4, 0x97),
+            // ITerm::Free(_) => Color::rgb8(0x4A, 0xE4, 0x87),
+            // ITerm::Free(_) => Color::rgb8(0x6C, 0x04, 0x1C),
+            ITerm::Free(_) => YELLOWS,
+            // ITerm::App(_, _) => Color::rgb8(0x8C, 0x3E, 0x64),
+            ITerm::App(_, _) => GREENS,
+            // ITerm::App(_, _) => Color::rgb8(0xE6, 0xDB, 0x61),
+            // ITerm::Zero => (DEEPPURPLE, Color::PURPLE),
+            ITerm::Zero => (Color::grey(0.373), Color::grey(0.5)),
+            // ITerm::Fin(_) => (Color::TEAL, Color::rgb8(0x43, 0xA6, 0xB5)),
+            ITerm::Fin(_) => (Color::RED, Color::MAROON),
+            // _ => unimplemented!()
+            _ => (Color::BLACK, Color::BLACK),
         };
-        TreeMetadata { name: term.to_string(), base_color: color, alt_color: color, max_depth: 0, dspthing: None }
+        TreeMetadata {
+            name: format!("{:?}", term.tag()),
+            tag: term.tag(),
+            // parent: format!("{:?}", term.tag()),
+            base_color,
+            alt_color,
+            max_depth: 0,
+            will_step: None,
+            // dspthing: None,
+        }
+        // let color = match term {
+        //     // ITerm::Ann(_, _) => Color::RED,
+        //     ITerm::Ann(_, _) => Color::FUCHSIA,
+        //     ITerm::Star => PALEORANGE,
+        //     // ITerm::Pi(_, _) => Color::BLUE,
+        //     ITerm::Pi(_, _) => LAVENDER,
+        //     // ITerm::App(_, _) => ORANGE,
+        //     ITerm::App(_, _) => DEEPBLUE,
+        //     ITerm::Bound(_) => Color::grey(0.5),
+        //     ITerm::Free(Name::Local(i)) => Color::rgb8(0x00, 0x28 + 0x12 * (*i as u8), 0x00),
+        //     ITerm::Free(_) => Color::GREEN,
+        //     ITerm::Zero => PINK,
+        //     ITerm::Fin(_) => TURQUOISE,
+        //     _ => unimplemented!()
+        // };
+        // // TreeMetadata { name: term.to_string(), base_color: color, alt_color: color, max_depth: 0, dspthing: None }
+        // TreeMetadata { name: term.to_string(), base_color: color, alt_color: color, max_depth: 0 }
     }
     fn cmeta(&self, term: &CTerm) -> TreeMetadata {
+        const BLUES: (Color, Color) =
+            (Color::rgb8(0x00, 0x73, 0x96), Color::rgb8(0x40, 0xF2, 0xE9));
         match term {
-            CTerm::Inf(it) => self.imeta(it),
-            // CTerm::Lam(_) => TreeMetadata { name: term.to_string(), color: Color::YELLOW }
-            CTerm::Lam(_) => TreeMetadata { name: term.to_string(), base_color: DEEPPURPLE, alt_color: VIOLET, max_depth: 0, dspthing: None }
+            CTerm::Inf(iterm) => self.imeta(iterm),
+            // CTerm::Lam(_) => TreeMetadata { name: term.to_string(), color: Color::rgb8(0x52, 0x1D, 0x67) },
+            // CTerm::Lam(_) => TreeMetadata { name: format!("{:?}", term.tag()), color: Color::TEAL },
+            // CTerm::Lam(_) => TreeMetadata { name: format!("{:?}", term.tag()), color: Color::rgb8(0x18, 0x4D, 0x02) },
+            CTerm::Lam(_) => TreeMetadata {
+                name: format!("{:?}", term.tag()),
+                tag: term.tag(),
+                base_color: BLUES.1,
+                alt_color: BLUES.0,
+                max_depth: 0,
+                will_step: None, 
+                // dspthing: None,
+            },
         }
+        // match term {
+        //     CTerm::Inf(it) => self.imeta(it),
+        //     // CTerm::Lam(_) => TreeMetadata { name: term.to_string(), color: Color::YELLOW }
+        //     // CTerm::Lam(_) => TreeMetadata { name: term.to_string(), base_color: DEEPPURPLE, alt_color: VIOLET, max_depth: 0, dspthing: None }
+        //     CTerm::Lam(_) => TreeMetadata { name: term.to_string(), base_color: DEEPPURPLE, alt_color: VIOLET, max_depth: 0 }
+        // }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Silence {
+    depth: usize,
+}
+
+impl Silence {
+    pub fn new() -> Self {
+        Silence { depth: 0 }
+    }
+
+    pub fn next(&self) -> Self {
+        Silence {
+            depth: self.depth + 1,
+        }
+    }
+}
+
+impl Default for Silence {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SoundGenerator for Silence {
+    fn sequence(&self, _seq: &mut ConfigSequencer, _start_time: f64, _duration: f64, _lean: f32) {}
+
+    fn base_duration(&self) -> f64 {
+        1.0
+    }
+}
+
+impl Selector for Silence {
+    fn isound(&self, term: &ITerm) -> SoundTree {
+        SoundTree::sound(self.next(), self.imeta(term))
+    }
+
+    fn csound(&self, term: &CTerm) -> SoundTree {
+        SoundTree::sound(self.next(), self.cmeta(term))
+    }
+
+    fn imerge(&self, _term: &ITerm) -> Self {
+        self.next()
+    }
+
+    fn cmerge(&self, _term: &CTerm) -> Self {
+        self.next()
+    }
+
+    fn imeta(&self, term: &ITerm) -> TreeMetadata {
+        FullStratifier {
+            parent: Term::I(ITerm::Star),
+            depth: self.depth + 1,
+        }
+        .imeta(term)
+    }
+
+    fn cmeta(&self, term: &CTerm) -> TreeMetadata {
+        FullStratifier {
+            parent: Term::I(ITerm::Star),
+            depth: self.depth + 1,
+        }
+        .cmeta(term)
     }
 }
 
@@ -75,23 +200,45 @@ impl Default for Plain {
 
 impl Selector for Plain {
     fn isound(&self, term: &ITerm) -> SoundTree {
-        SoundTree::sound(Melody::new_even(sine(), &[self.pitch_factor().try_into().unwrap()]), self.imeta(term))
+        SoundTree::sound(
+            Melody::new_even(sine(), &[self.pitch_factor().try_into().unwrap()]),
+            self.imeta(term),
+        )
     }
 
     fn csound(&self, term: &CTerm) -> SoundTree {
-        SoundTree::sound(Melody::new_even(sine(), &[self.pitch_factor().try_into().unwrap()]), self.cmeta(term))
+        SoundTree::sound(
+            Melody::new_even(sine(), &[self.pitch_factor().try_into().unwrap()]),
+            self.cmeta(term),
+        )
     }
 
     fn imerge(&self, _term: &ITerm) -> Self {
         Plain {
-            depth: self.depth + 1
+            depth: self.depth + 1,
         }
     }
 
     fn cmerge(&self, _term: &CTerm) -> Self {
         Plain {
-            depth: self.depth + 1
+            depth: self.depth + 1,
         }
+    }
+
+    fn imeta(&self, term: &ITerm) -> TreeMetadata {
+        FullStratifier {
+            parent: Term::I(ITerm::Star),
+            depth: self.depth,
+        }
+        .imeta(term)
+    }
+
+    fn cmeta(&self, term: &CTerm) -> TreeMetadata {
+        FullStratifier {
+            parent: Term::I(ITerm::Star),
+            depth: self.depth,
+        }
+        .cmeta(term)
     }
 }
 
@@ -107,6 +254,110 @@ impl Term {
             Term::I(iterm) => iterm.tag(),
             Term::C(cterm) => cterm.tag(),
         }
+    }
+}
+
+#[derive(Clone)]
+pub struct ToneMaker {
+    pub start_time: f64,
+    pub duration: f64,
+    pub depth: usize,
+}
+
+impl Default for ToneMaker {
+    fn default() -> Self {
+        Self::new(0.0, 10.0)
+    }
+}
+
+impl ToneMaker {
+    pub fn new(start_time: f64, duration: f64) -> Self {
+        ToneMaker {
+            start_time,
+            duration,
+            depth: 0,
+        }
+    }
+
+    pub fn increment(&mut self) {
+        self.start_time += self.duration;
+    }
+}
+
+impl Selector for ToneMaker {
+    fn isound(&self, term: &ITerm) -> SoundTree {
+        fn lerper<T: AudioNode>(
+            n: An<T>,
+        ) -> An<Unop<Unop<T, FrameMulScalar<T::Outputs>>, FrameAddScalar<T::Outputs>>> {
+            // i wish we could simplify the type here but we're not allowed to just do impl type
+            // bc we need to specify that it's FrameMulScalar in the output type of the audio node
+            // which apparently isn't inferrable
+            n * 0.5 + 0.5
+        }
+        let mut tt = match term {
+            ITerm::Ann(_, _) => Toner::new(sine() * lerper(saw_hz(0.5 * self.duration as f32))),
+            ITerm::Star => Toner::new(saw() * lerper(sine_hz(2.0 * self.duration as f32))),
+            ITerm::Pi(_, _) => Toner::new(sinesaw() * lerper(saw_hz(self.duration as f32))),
+            ITerm::Bound(_) => Toner::new(square()),
+            ITerm::Free(_) => Toner::new(sine()),
+            ITerm::App(_, _) => Toner::new(saw()),
+            ITerm::Nat => Toner::new(sinesaw()),
+            ITerm::Zero => Toner::new(square()),
+            ITerm::Succ(_) => Toner::new(sine()),
+            ITerm::NatElim(_, _, _, _) => Toner::new(saw()),
+            ITerm::Fin(_) => Toner::new(square()),
+            ITerm::FZero(_) => Toner::new(sinesaw()),
+            ITerm::FSucc(_, _) => Toner::new(sine()),
+            ITerm::FinElim(_, _, _, _, _) => Toner::new(sine()),
+            ITerm::Eq(_, _, _) => Toner::new(sine()),
+            ITerm::Refl(_, _) => Toner::new(sine()),
+            ITerm::EqElim(_, _, _, _, _, _) => Toner::new(sine()),
+        };
+        tt.start_time = self.start_time;
+        tt.duration = self.duration;
+        SoundTree::sound(tt, self.imeta(term))
+    }
+
+    fn csound(&self, term: &CTerm) -> SoundTree {
+        match term {
+            CTerm::Inf(iterm) => self.isound(iterm),
+            CTerm::Lam(_) => {
+                let mut tt = Toner::new(sinesaw());
+                tt.start_time = self.start_time;
+                tt.duration = self.duration;
+                SoundTree::sound(tt, self.cmeta(term))
+            }
+        }
+    }
+
+    fn imerge(&self, _term: &ITerm) -> Self {
+        Self {
+            depth: self.depth + 1,
+            ..self.clone()
+        }
+    }
+
+    fn cmerge(&self, _term: &CTerm) -> Self {
+        Self {
+            depth: self.depth + 1,
+            ..self.clone()
+        }
+    }
+
+    fn imeta(&self, term: &ITerm) -> TreeMetadata {
+        FullStratifier {
+            parent: Term::I(ITerm::Star),
+            depth: self.depth,
+        }
+        .imeta(term)
+    }
+
+    fn cmeta(&self, term: &CTerm) -> TreeMetadata {
+        FullStratifier {
+            parent: Term::I(ITerm::Star),
+            depth: self.depth,
+        }
+        .cmeta(term)
     }
 }
 
@@ -134,7 +385,12 @@ pub struct AsyncNodeInfo {
 // }
 
 impl AsyncNodeInfo {
-    fn new(notes: [i32; FS_MEL_SIZE], timings: [f64; FS_MEL_SIZE], instrument: impl AudioUnit + 'static, effect: impl AudioUnit + 'static) -> Self {
+    fn new(
+        notes: [i32; FS_MEL_SIZE],
+        timings: [f64; FS_MEL_SIZE],
+        instrument: impl AudioUnit + 'static,
+        effect: impl AudioUnit + 'static,
+    ) -> Self {
         Self {
             notes: Arc::new(Mutex::new(notes)),
             timings: Arc::new(Mutex::new(timings)),
@@ -146,32 +402,74 @@ impl AsyncNodeInfo {
 }
 
 #[derive(Clone)]
-pub struct AsyncStratifier
-{
+pub struct AsyncStratifier {
     params: Arc<HashMap<Tag, AsyncNodeInfo>>,
     parent: Term,
-    depth: usize
+    depth: usize,
 }
-
-
 
 impl AsyncStratifier {
     pub fn new() -> Self {
-        let mut params= HashMap::new();
+        let mut params = HashMap::new();
         use Tag::*;
         // let tags = [Annotation, Type, Pi, Application, BoundVar, FreeVar, Zero, Nat, Finite, Lambda];
         for tag in Tag::all() {
             let info = match tag {
-                Ann => AsyncNodeInfo::new([A, D, F, A], [1.0, 0.5, 1.5, 1.0], sawfir() * 0.75, (pass() | (800.0 + 100.0 * sine_hz(2.0)) | constant(1.0)) >> highpass()),
+                Ann => AsyncNodeInfo::new(
+                    [A, D, F, A],
+                    [1.0, 0.5, 1.5, 1.0],
+                    sawfir() * 0.75,
+                    (pass() | (800.0 + 100.0 * sine_hz(2.0)) | constant(1.0)) >> highpass(),
+                ),
                 Type => AsyncNodeInfo::new([B, C, E, E], [1.0, 1.0, 1.0, 1.0], violinish(), pass()),
-                Pi => AsyncNodeInfo::new([E, C, A, C], [0.5, 1.5, 0.5, 1.5], sinesaw() >> split() >> fbd(0.2, -5.0), split() >> fbd(0.25, -3.5)),
-                App => AsyncNodeInfo::new([A, E, C, B], [2.5, 0.5, 0.5, 0.5], sine() * 2.0, reverb_distort()),
-                Bound => AsyncNodeInfo::new([A, A, E, C], [-1.0, 0., 0., 0.], violinish() * 1.1, major_chord() >> join::<U3>()),
-                Free => AsyncNodeInfo::new([B, A, C, B], [1.5, 0.5, 1.0, 1.0], three_equivalents(wobbly_sine()) * 0.7, shape(Clip(0.75))),
-                Zero => AsyncNodeInfo::new([E, F, C, A], [-1.0, 0., 0., 0.], sinesaw(), shape(Clip(100.0))),
-                Nat => AsyncNodeInfo::new([E, F, G, E], [-1.0, 0., 0., 0.], sinesaw(), shape(Clip(100.0))),
-                Finite => AsyncNodeInfo::new([A, A + 12, E, F], [0.7, 0.7, 2.1, 0.5], violinish() * 1.1, bell_hz(200.0, 1.0, 5.0)),
-                Lambda => AsyncNodeInfo::new([D, F, E, C], [1.5, 0.5, 1., 0.5], fm_basic() * 0.28, reverb_highpass()),
+                Pi => AsyncNodeInfo::new(
+                    [E, C, A, C],
+                    [0.5, 1.5, 0.5, 1.5],
+                    sinesaw() >> split() >> fbd(0.2, -5.0),
+                    split() >> fbd(0.25, -3.5),
+                ),
+                App => AsyncNodeInfo::new(
+                    [A, E, C, B],
+                    [2.5, 0.5, 0.5, 0.5],
+                    sine() * 2.0,
+                    reverb_distort(),
+                ),
+                Bound => AsyncNodeInfo::new(
+                    [A, A, E, C],
+                    [-1.0, 0., 0., 0.],
+                    violinish() * 1.1,
+                    major_chord() >> join::<U3>(),
+                ),
+                Free => AsyncNodeInfo::new(
+                    [B, A, C, B],
+                    [1.5, 0.5, 1.0, 1.0],
+                    three_equivalents(wobbly_sine()) * 0.7,
+                    shape(Clip(0.75)),
+                ),
+                Zero => AsyncNodeInfo::new(
+                    [E, F, C, A],
+                    [-1.0, 0., 0., 0.],
+                    sinesaw(),
+                    shape(Clip(100.0)),
+                ),
+                Nat => AsyncNodeInfo::new(
+                    [E, F, G, E],
+                    [-1.0, 0., 0., 0.],
+                    sinesaw(),
+                    shape(Clip(100.0)),
+                ),
+                Finite => AsyncNodeInfo::new(
+                    [A, A + 12, E, F],
+                    [0.7, 0.7, 2.1, 0.5],
+                    violinish() * 1.1,
+                    bell_hz(200.0, 1.0, 5.0),
+                ),
+                Lambda => AsyncNodeInfo::new(
+                    [D, F, E, C],
+                    [1.5, 0.5, 1., 0.5],
+                    fm_basic() * 0.28,
+                    reverb_highpass(),
+                ),
             };
             params.insert(tag, info);
         }
@@ -185,7 +483,10 @@ impl AsyncStratifier {
     pub fn get(&self, tag: &Tag) -> AsyncNodeInfo {
         match self.params.get(tag) {
             Some(t) => t.clone(),
-            None => { println!("{tag:?}"); panic!() }
+            None => {
+                println!("{tag:?}");
+                panic!()
+            }
         }
     }
 
@@ -208,8 +509,7 @@ impl Default for AsyncStratifier {
     }
 }
 
-impl Selector for AsyncStratifier
-{
+impl Selector for AsyncStratifier {
     fn isound(&self, term: &ITerm) -> SoundTree {
         // let mel = self.melodies.get(&(self.parent.tag(), term.tag())).unwrap();
         let mel = self.for_pair(self.parent.tag(), term.tag());
@@ -228,7 +528,7 @@ impl Selector for AsyncStratifier
         Self {
             params: self.params.clone(),
             parent: Term::I(term.clone()),
-            depth: self.depth + 1
+            depth: self.depth + 1,
         }
     }
 
@@ -236,7 +536,7 @@ impl Selector for AsyncStratifier
         Self {
             params: self.params.clone(),
             parent: Term::C(term.clone()),
-            depth: self.depth + 1
+            depth: self.depth + 1,
         }
     }
 
@@ -244,14 +544,16 @@ impl Selector for AsyncStratifier
         FullStratifier {
             parent: self.parent.clone(),
             depth: self.depth,
-        }.imeta(term)
+        }
+        .imeta(term)
     }
 
     fn cmeta(&self, term: &CTerm) -> TreeMetadata {
         FullStratifier {
             parent: self.parent.clone(),
             depth: self.depth,
-        }.cmeta(term)
+        }
+        .cmeta(term)
     }
 }
 
@@ -270,7 +572,7 @@ impl FullStratifier {
     pub fn new() -> Self {
         Self {
             parent: Term::I(ITerm::Star),
-            depth: 1
+            depth: 1,
         }
     }
 
@@ -297,7 +599,7 @@ impl FullStratifier {
     pub fn cnotes(&self, term: &CTerm) -> [i32; FS_MEL_SIZE] {
         match term {
             CTerm::Lam(_) => [D, F, E, C],
-            _ => unimplemented!()
+            _ => unimplemented!(),
         }
     }
 
@@ -324,13 +626,15 @@ impl FullStratifier {
     pub fn crhythm(&self, term: &CTerm) -> [f64; FS_MEL_SIZE] {
         match term {
             CTerm::Lam(_) => [1.5, 0.5, 1., 0.5],
-            _ => unimplemented!()
+            _ => unimplemented!(),
         }
     }
 
     pub fn ieffect(&self, term: &ITerm) -> An<Unit<U1, U1>> {
         match term {
-            ITerm::Ann(_, _) => unit(Box::new((pass() | (800.0 + 100.0 * sine_hz(2.0)) | constant(1.0)) >> highpass())),
+            ITerm::Ann(_, _) => unit(Box::new(
+                (pass() | (800.0 + 100.0 * sine_hz(2.0)) | constant(1.0)) >> highpass(),
+            )),
             ITerm::Star => unit(Box::new(pass())),
             ITerm::Pi(_, _) => unit(Box::new(split() >> fbd(0.25, -3.5))),
             ITerm::Bound(_) => unit(Box::new(major_chord() >> join::<U3>())),
@@ -352,7 +656,7 @@ impl FullStratifier {
     pub fn ceffect(&self, term: &CTerm) -> An<Unit<U1, U1>> {
         match term {
             CTerm::Lam(_) => unit(Box::new(reverb_highpass())),
-            _ => unimplemented!()
+            _ => unimplemented!(),
         }
     }
 
@@ -366,7 +670,7 @@ impl FullStratifier {
             ITerm::App(_, _) => Melody::new_even(three_equivalents(wobbly_sine()) * 0.7, &notes),
             ITerm::Zero => Melody::new_even(sinesaw(), &notes),
             ITerm::Fin(_) => Melody::new_even(violinish() * 1.1, &notes),
-            _ => unimplemented!()
+            _ => unimplemented!(),
         };
         let rhythm = self.irhythm(term);
         mel.map_indexed(|i, (n, _d)| (*n, rhythm[i]));
@@ -377,7 +681,7 @@ impl FullStratifier {
     pub fn cmelody(&self, term: &CTerm, notes: [i32; FS_MEL_SIZE]) -> Melody {
         let mut mel = match term {
             CTerm::Lam(_) => Melody::new_even(fm_basic() * 0.28, &notes),
-            _ => unimplemented!()
+            _ => unimplemented!(),
         };
         let rhythm = self.crhythm(term);
         mel.adjust_timings(&rhythm).unwrap();
@@ -392,7 +696,7 @@ impl FullStratifier {
                 let mel = self.imelody(parent, notes);
                 let effect = self.ieffect(parent);
                 EffectMel::new(mel, effect)
-            },
+            }
             Term::C(parent) => {
                 let mel = self.cmelody(parent, notes);
                 let effect = self.ceffect(parent);
@@ -424,23 +728,27 @@ impl Selector for FullStratifier {
     fn imerge(&self, term: &ITerm) -> Self {
         Self {
             parent: Term::I(term.clone()),
-            depth: self.depth + 1
+            depth: self.depth + 1,
         }
     }
 
     fn cmerge(&self, term: &CTerm) -> Self {
         Self {
             parent: Term::C(term.clone()),
-            depth: self.depth + 1
+            depth: self.depth + 1,
         }
     }
 
     fn imeta(&self, term: &ITerm) -> TreeMetadata {
-        const PURPLES: (Color, Color) = (Color::rgb8(0x59, 0x08, 0x7E), Color::rgb8(0xAE, 0x69, 0xE2));
+        const PURPLES: (Color, Color) =
+            (Color::rgb8(0x59, 0x08, 0x7E), Color::rgb8(0xAE, 0x69, 0xE2));
         const ORANGES: (Color, Color) = (ORANGE, PALEORANGE);
-        const YELLOWS: (Color, Color) = (Color::rgb8(0xC1, 0xA1, 0x00), Color::rgb8(0xE3, 0xFA, 0x5F));
-        const PINKS: (Color, Color) = (Color::rgb8(0xB2, 0x00, 0x74), Color::rgb8(0xFA, 0x75, 0x9E));
-        const GREENS: (Color, Color) = (Color::rgb8(0x00, 0x96, 0x44), Color::rgb8(0x8E, 0xFC, 0x62)); 
+        const YELLOWS: (Color, Color) =
+            (Color::rgb8(0xC1, 0xA1, 0x00), Color::rgb8(0xE3, 0xFA, 0x5F));
+        const PINKS: (Color, Color) =
+            (Color::rgb8(0xB2, 0x00, 0x74), Color::rgb8(0xFA, 0x75, 0x9E));
+        const GREENS: (Color, Color) =
+            (Color::rgb8(0x00, 0x96, 0x44), Color::rgb8(0x8E, 0xFC, 0x62));
         let (alt_color, base_color) = match term {
             // ITerm::Ann(_, _) => Color::rgb8(0x86, 0xD8, 0x4B),
             // ITerm::Ann(_, _) => Color::GREEN,
@@ -466,21 +774,23 @@ impl Selector for FullStratifier {
             // ITerm::Fin(_) => (Color::TEAL, Color::rgb8(0x43, 0xA6, 0xB5)),
             ITerm::Fin(_) => (Color::RED, Color::MAROON),
             // _ => unimplemented!()
-            _ => (Color::BLACK, Color::BLACK)
+            _ => (Color::BLACK, Color::BLACK),
         };
         TreeMetadata {
             name: format!("{:?}", term.tag()),
-            // tag: term.tag(),
+            tag: term.tag(),
             // parent: format!("{:?}", term.tag()),
             base_color,
             alt_color,
             max_depth: self.depth,
-            dspthing: None,
+            will_step: None,
+            // dspthing: None,
         }
     }
 
     fn cmeta(&self, term: &CTerm) -> TreeMetadata {
-        const BLUES: (Color, Color) = (Color::rgb8(0x00, 0x73, 0x96), Color::rgb8(0x40, 0xF2, 0xE9));
+        const BLUES: (Color, Color) =
+            (Color::rgb8(0x00, 0x73, 0x96), Color::rgb8(0x40, 0xF2, 0xE9));
         match term {
             CTerm::Inf(iterm) => self.imeta(iterm),
             // CTerm::Lam(_) => TreeMetadata { name: term.to_string(), color: Color::rgb8(0x52, 0x1D, 0x67) },
@@ -488,11 +798,104 @@ impl Selector for FullStratifier {
             // CTerm::Lam(_) => TreeMetadata { name: format!("{:?}", term.tag()), color: Color::rgb8(0x18, 0x4D, 0x02) },
             CTerm::Lam(_) => TreeMetadata {
                 name: format!("{:?}", term.tag()),
-                base_color: BLUES.1, 
+                tag: term.tag(),
+                base_color: BLUES.1,
                 alt_color: BLUES.0,
                 max_depth: self.depth,
-                dspthing: None,
+                will_step: None,
+                // dspthing: None,
             },
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct SineRhythmizer {
+    rhythm: Vec<f64>,
+    depth: usize,
+}
+
+impl SineRhythmizer {
+    pub fn new() -> Self {
+        let length = 4;
+        Self {
+            rhythm: vec![1.0 / length as f64; length],
+            depth: 0,
+        }
+    }
+
+    pub fn imelody(&self, term: &ITerm) -> Melody {
+        let mut mel = match term {
+            ITerm::Ann(_, _) => Melody::new_even(sine(), &[A, D, F, A]),
+            ITerm::Star => Melody::new_even(sine(), &[B, C, E, E]),
+            ITerm::Pi(_, _) => Melody::new_even(sine(), &[E, C, A, C]),
+            ITerm::Bound(_) => Melody::new_even(sine(), &[A, E, C, B]),
+            ITerm::Free(_) => Melody::new_even(sine(), &[A, A, E, C]),
+            ITerm::App(_, _) => Melody::new_even(sine(), &[B, A, C, B]),
+            ITerm::Zero => Melody::new_even(sine(), &[E, F, C, A]),
+            ITerm::Fin(_) => Melody::new_even(sine(), &[A, A + 12, E, F]),
+            _ => panic!("{term} not implemented"),
+        };
+        // let rhythm = self.rhythm.clone();
+        mel.map_indexed(|i, (n, _d)| (*n, self.rhythm[i]));
+        mel.adjust_depth(self.depth);
+        mel
+    }
+
+    pub fn cmelody(&self, term: &CTerm) -> Melody {
+        let mut mel = match term {
+            CTerm::Lam(_) => Melody::new_even(sine(), &[D, F, E, C]),
+            _ => unimplemented!(), // _ => Melody::new_even(sine(), &[G, G, G, G]),  //value will never be used, but we have to call this for ownership reasons
+        };
+        mel.map_indexed(|i, (n, _d)| (*n, self.rhythm[i]));
+        mel.adjust_depth(self.depth);
+        mel
+    }
+}
+
+impl Default for SineRhythmizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Selector for SineRhythmizer {
+    fn isound(&self, term: &ITerm) -> SoundTree {
+        let mel = self.imelody(term);
+        SoundTree::sound(mel, self.imeta(term))
+    }
+
+    fn csound(&self, term: &CTerm) -> SoundTree {
+        let mel = self.cmelody(term);
+        SoundTree::sound(mel, self.cmeta(term))
+    }
+
+    fn imerge(&self, term: &ITerm) -> Self {
+        let rhythm = match term {
+            ITerm::Ann(_, _) => vec![1.0, 0.5, 1.5, 1.0],
+            ITerm::Star => vec![0.0, 0.0, 0.0, -1.0],
+            ITerm::Pi(_, _) => vec![0.5, 1.5, 0.5, 1.5],
+            ITerm::Bound(_) => vec![0.0, 0.0, -1.0, 0.0],
+            ITerm::Free(_) => vec![3.0, 0.3, 0.3, 0.4],
+            ITerm::App(_, _) => vec![2.5, 0.5, 0.5, 0.5],
+            ITerm::Zero => vec![-1.0, 0.0, 0.0, 0.0],
+            ITerm::Fin(_) => vec![0.7, 0.7, 2.1, 0.5],
+            _ => unimplemented!(),
+        };
+        Self {
+            rhythm,
+            depth: self.depth + 1,
+        }
+    }
+
+    fn cmerge(&self, term: &CTerm) -> Self {
+        let rhythm = match term {
+            CTerm::Inf(_) => panic!("inf merge???"),
+            CTerm::Lam(_) => vec![1.5, 0.5, 1., 0.5],
+        };
+        Self {
+            rhythm,
+            depth: self.depth + 1,
         }
     }
 }
@@ -508,7 +911,7 @@ impl Rhythmizer {
         let length = 4;
         Self {
             rhythm: vec![1.0 / length as f64; length],
-            depth: 0
+            depth: 0,
         }
     }
 
@@ -516,13 +919,15 @@ impl Rhythmizer {
         let mut mel = match term {
             ITerm::Ann(_, _) => Melody::new_even(violinish(), &[A, D, F, A]),
             ITerm::Star => Melody::new_even(three_equivalents(wobbly_sine()) * 0.7, &[B, C, E, E]),
-            ITerm::Pi(_, _) => Melody::new_even(sinesaw() >> split() >> fbd(0.25, -5.0), &[E, C, A, C]),
+            ITerm::Pi(_, _) => {
+                Melody::new_even(sinesaw() >> split() >> fbd(0.25, -5.0), &[E, C, A, C])
+            }
             ITerm::Bound(_) => Melody::new_even(sine() * 2.0, &[A, E, C, B]),
             ITerm::Free(_) => Melody::new_even(violinish() * 1.1, &[A, A, E, C]),
             ITerm::App(_, _) => Melody::new_even(sawfir() * 0.75, &[B, A, C, B]),
             ITerm::Zero => Melody::new_even(sinesaw(), &[E, F, C, A]),
             ITerm::Fin(_) => Melody::new_even(violinish() * 1.1, &[A, A + 12, E, F]),
-            _ => panic!("{term} not implemented")
+            _ => panic!("{term} not implemented"),
         };
         // let rhythm = self.rhythm.clone();
         mel.map_indexed(|i, (n, _d)| (*n, self.rhythm[i]));
@@ -533,8 +938,7 @@ impl Rhythmizer {
     pub fn cmelody(&self, term: &CTerm) -> Melody {
         let mut mel = match term {
             CTerm::Lam(_) => Melody::new_even(fm_basic() * 0.28, &[D, F, E, C]),
-            _ => unimplemented!()
-            // _ => Melody::new_even(sine(), &[G, G, G, G]),  //value will never be used, but we have to call this for ownership reasons
+            _ => unimplemented!(), // _ => Melody::new_even(sine(), &[G, G, G, G]),  //value will never be used, but we have to call this for ownership reasons
         };
         mel.map_indexed(|i, (n, _d)| (*n, self.rhythm[i]));
         mel.adjust_depth(self.depth);
@@ -569,9 +973,12 @@ impl Selector for Rhythmizer {
             ITerm::App(_, _) => vec![2.5, 0.5, 0.5, 0.5],
             ITerm::Zero => vec![-1.0, 0.0, 0.0, 0.0],
             ITerm::Fin(_) => vec![0.7, 0.7, 2.1, 0.5],
-            _ => unimplemented!()
+            _ => unimplemented!(),
         };
-        Self { rhythm, depth: self.depth + 1 }
+        Self {
+            rhythm,
+            depth: self.depth + 1,
+        }
     }
 
     fn cmerge(&self, term: &CTerm) -> Self {
@@ -579,7 +986,10 @@ impl Selector for Rhythmizer {
             CTerm::Inf(_) => panic!("inf merge???"),
             CTerm::Lam(_) => vec![1.5, 0.5, 1., 0.5],
         };
-        Self { rhythm, depth: self.depth + 1 }
+        Self {
+            rhythm,
+            depth: self.depth + 1,
+        }
     }
 }
 
@@ -591,10 +1001,7 @@ pub struct Looper<T: Selector> {
 
 impl<T: Selector> Looper<T> {
     pub fn new(body: T) -> Self {
-        Self {
-            body,
-            depth: 0
-        }
+        Self { body, depth: 0 }
     }
 }
 
@@ -602,7 +1009,7 @@ impl<T: Selector> Selector for Looper<T> {
     fn isound(&self, term: &ITerm) -> SoundTree {
         let base_mel = match self.body.isound(term) {
             SoundTree::Sound(sequenceable, _) => sequenceable,
-            _ => panic!("isound can only construct Sound")
+            _ => panic!("isound can only construct Sound"),
         };
         let mut lp = Loop::new(base_mel);
         lp.set_duration(lp.loop_duration() * 8.0 * 0.5_f64.powi(self.depth.div_ceil(4) as i32));
@@ -612,7 +1019,7 @@ impl<T: Selector> Selector for Looper<T> {
     fn csound(&self, term: &CTerm) -> SoundTree {
         let base_mel = match self.body.csound(term) {
             SoundTree::Sound(sequenceable, _) => sequenceable,
-            _ => panic!("csound can only construct Sound")
+            _ => panic!("csound can only construct Sound"),
         };
         let mut lp = Loop::new(base_mel);
         lp.set_duration(lp.loop_duration() * 32.0 * 0.5_f64.powi(self.depth.div_ceil(4) as i32));
@@ -620,11 +1027,17 @@ impl<T: Selector> Selector for Looper<T> {
     }
 
     fn imerge(&self, term: &ITerm) -> Self {
-        Self { body: self.body.imerge(term), depth: self.depth + 1 }
+        Self {
+            body: self.body.imerge(term),
+            depth: self.depth + 1,
+        }
     }
 
     fn cmerge(&self, term: &CTerm) -> Self {
-        Self { body: self.body.cmerge(term), depth: self.depth + 1 }
+        Self {
+            body: self.body.cmerge(term),
+            depth: self.depth + 1,
+        }
     }
 }
 
@@ -643,10 +1056,10 @@ pub struct MixedOutput {
 
 impl MixedOutput {
     pub fn new() -> Self {
-        MixedOutput { 
-            clip1: WaveClip::from_file("files/universalquantifier.mp3"), 
+        MixedOutput {
+            clip1: WaveClip::from_file("files/universalquantifier.mp3"),
             clip2: WaveClip::from_file("files/boundvariable.mp3"),
-            depth: 1
+            depth: 1,
         }
     }
 }
@@ -660,32 +1073,42 @@ impl Default for MixedOutput {
 impl Selector for MixedOutput {
     fn isound(&self, term: &ITerm) -> SoundTree {
         let result = match term {
-            ITerm::Ann(_, _) => Mixer::Melody(Melody::new_timed(sinesaw(), &[(E, 1.0), (F, 0.5), (E, 0.5), (C, 1.0), (A, 1.0)])),
-            ITerm::Star => Mixer::Melody(Melody::new_timed(three_equivalents(wobbly_sine()) * 0.7, &[
-                (B, 0.5), (C, 0.5), (E, 3.0)
-                // (E, 0.2), (E, 0.2), (E, 0.2), (E, 0.2), (E, 0.2),
-                // (E, 0.2), (E, 0.2), (E, 0.2), (E, 0.2), (E, 0.2),
-                // (E, 0.2), (E, 0.2), (E, 0.2), (E, 0.2), (E, 0.2)
-                ])),
+            ITerm::Ann(_, _) => Mixer::Melody(Melody::new_timed(
+                sinesaw(),
+                &[(E, 1.0), (F, 0.5), (E, 0.5), (C, 1.0), (A, 1.0)],
+            )),
+            ITerm::Star => Mixer::Melody(Melody::new_timed(
+                three_equivalents(wobbly_sine()) * 0.7,
+                &[
+                    (B, 0.5),
+                    (C, 0.5),
+                    (E, 3.0), // (E, 0.2), (E, 0.2), (E, 0.2), (E, 0.2), (E, 0.2),
+                              // (E, 0.2), (E, 0.2), (E, 0.2), (E, 0.2), (E, 0.2),
+                              // (E, 0.2), (E, 0.2), (E, 0.2), (E, 0.2), (E, 0.2)
+                ],
+            )),
             ITerm::Pi(_, _) => Mixer::Clip(self.clip1.clone()),
             ITerm::Bound(_) => Mixer::Clip(self.clip2.clone()),
             // ITerm::Free(_) => Mixer::Clip(self.clip1.clone()),
             ITerm::Free(_) => Mixer::Melody(Melody::new_even(violinish() * 1.1, &[A, A, E, C])),
-            ITerm::App(_, _) => Mixer::Melody(Melody::new_even(sinesaw() >> split() >> fbd(0.25, -5.0), &[E, C, A, C])),
+            ITerm::App(_, _) => Mixer::Melody(Melody::new_even(
+                sinesaw() >> split() >> fbd(0.25, -5.0),
+                &[E, C, A, C],
+            )),
             // ITerm::App(_, _) => Mixer::Melody(Melody::new_timed(sawfir() * 0.75, &[(B, 1.0), (A, 0.5), (E, 0.5), (C, 1.0), (B, 1.0)])),
             ITerm::Zero => Mixer::Melody(Melody::new_even(sine() * 2.0, &[A, E, C, B])),
             ITerm::Fin(_) => Mixer::Melody(Melody::new_even(violinish() * 1.1, &[A, A + 12, E, F])),
-            _ => panic!("{term} not implemented")
+            _ => panic!("{term} not implemented"),
         };
         match result {
             Mixer::Melody(mut mel) => {
                 mel.adjust_depth(self.depth);
                 SoundTree::sound(mel, self.imeta(term))
-            },
+            }
             Mixer::Clip(mut wav) => {
                 wav.adjust_depth(self.depth);
                 SoundTree::sound(wav, self.imeta(term))
-            },
+            }
             Mixer::Texture(mut tex) => {
                 tex.adjust_depth(self.depth);
                 SoundTree::sound(tex, self.imeta(term))
@@ -703,11 +1126,11 @@ impl Selector for MixedOutput {
             Mixer::Melody(mut mel) => {
                 mel.adjust_depth(self.depth);
                 SoundTree::sound(mel, self.cmeta(term))
-            },
+            }
             Mixer::Clip(mut wav) => {
                 wav.adjust_depth(self.depth);
                 SoundTree::sound(wav, self.cmeta(term))
-            },
+            }
             Mixer::Texture(mut tex) => {
                 tex.adjust_depth(self.depth);
                 SoundTree::sound(tex, self.cmeta(term))
@@ -716,11 +1139,17 @@ impl Selector for MixedOutput {
     }
 
     fn imerge(&self, _term: &ITerm) -> Self {
-        Self { depth: self.depth + 1, ..self.clone() }
+        Self {
+            depth: self.depth + 1,
+            ..self.clone()
+        }
     }
 
     fn cmerge(&self, _term: &CTerm) -> Self {
-        Self { depth: self.depth + 1, ..self.clone() }
+        Self {
+            depth: self.depth + 1,
+            ..self.clone()
+        }
     }
 }
 
@@ -732,7 +1161,10 @@ pub struct Effector {
 
 impl Effector {
     pub fn new() -> Self {
-        Self { effect: unit(Box::new(pass())), depth: 0 }
+        Self {
+            effect: unit(Box::new(pass())),
+            depth: 0,
+        }
     }
 }
 
@@ -759,7 +1191,9 @@ impl Selector for Effector {
 
     fn imerge(&self, term: &ITerm) -> Self {
         let effect = match term {
-            ITerm::Ann(_, _) => unit(Box::new((pass() | (800.0 + 100.0 * sine_hz(2.0)) | constant(1.0)) >> highpass())),
+            ITerm::Ann(_, _) => unit(Box::new(
+                (pass() | (800.0 + 100.0 * sine_hz(2.0)) | constant(1.0)) >> highpass(),
+            )),
             ITerm::Star => unit(Box::new(shape(Clip(100.0)))),
             ITerm::Pi(_, _) => unit(Box::new(split() >> fbd(0.25, -1.5))),
             ITerm::Bound(_) => unit(Box::new(major_chord() >> join::<U3>())),
@@ -767,9 +1201,12 @@ impl Selector for Effector {
             ITerm::App(_, _) => unit(Box::new(reverb_distort())),
             ITerm::Zero => unit(Box::new(shape(Clip(100.0)))),
             ITerm::Fin(_) => unit(Box::new(shape(Clip(2.0)))),
-            _ => panic!("{term} not implemented")
+            _ => panic!("{term} not implemented"),
         };
-        Self { effect, depth: self.depth + 1 }
+        Self {
+            effect,
+            depth: self.depth + 1,
+        }
     }
 
     fn cmerge(&self, term: &CTerm) -> Self {
@@ -777,7 +1214,10 @@ impl Selector for Effector {
             CTerm::Inf(_) => unit(Box::new(pass())),
             CTerm::Lam(_) => unit(Box::new(reverb_highpass())),
         };
-        Self { effect, depth: self.depth + 1 }
+        Self {
+            effect,
+            depth: self.depth + 1,
+        }
     }
 }
 
@@ -789,7 +1229,10 @@ pub struct StratifyInstrument {
 
 impl Default for StratifyInstrument {
     fn default() -> Self {
-        Self { mel: Melody::new_even(violinish(), &[A, D, F, A]), depth: 0 }
+        Self {
+            mel: Melody::new_even(violinish(), &[A, D, F, A]),
+            depth: 0,
+        }
     }
 }
 
@@ -809,24 +1252,41 @@ impl Selector for StratifyInstrument {
     fn imerge(&self, term: &ITerm) -> StratifyInstrument {
         let mel = match term {
             ITerm::Ann(_, _) => Melody::new_even(violinish(), &[A, D, F, A]),
-            ITerm::Star => Melody::new_timed(three_equivalents(wobbly_sine()) * 0.7, &[(B, 0.5), (C, 0.5), (E, 3.0)]),
-            ITerm::Pi(_, _) => Melody::new_even(sinesaw() >> split() >> fbd(0.25, -5.0), &[E, C, A, C]),
+            ITerm::Star => Melody::new_timed(
+                three_equivalents(wobbly_sine()) * 0.7,
+                &[(B, 0.5), (C, 0.5), (E, 3.0)],
+            ),
+            ITerm::Pi(_, _) => {
+                Melody::new_even(sinesaw() >> split() >> fbd(0.25, -5.0), &[E, C, A, C])
+            }
             ITerm::Bound(_) => Melody::new_even(sine() * 2.0, &[A, E, C, B]),
             ITerm::Free(_) => Melody::new_even(violinish() * 1.1, &[A, A, E, C]),
-            ITerm::App(_, _) => Melody::new_timed(sawfir() * 0.75, &[(B, 1.0), (A, 0.5), (E, 0.5), (C, 1.0), (B, 1.0)]),
-            ITerm::Zero => Melody::new_timed(sinesaw(), &[(E, 1.0), (F, 0.5), (E, 0.5), (C, 1.0), (A, 1.0)]),
+            ITerm::App(_, _) => Melody::new_timed(
+                sawfir() * 0.75,
+                &[(B, 1.0), (A, 0.5), (E, 0.5), (C, 1.0), (B, 1.0)],
+            ),
+            ITerm::Zero => Melody::new_timed(
+                sinesaw(),
+                &[(E, 1.0), (F, 0.5), (E, 0.5), (C, 1.0), (A, 1.0)],
+            ),
             ITerm::Fin(_) => Melody::new_even(violinish() * 1.1, &[A, A + 12, E, F]),
-            _ => panic!("{term} not implemented")
+            _ => panic!("{term} not implemented"),
         };
-        StratifyInstrument { mel, depth: self.depth + 1 }
+        StratifyInstrument {
+            mel,
+            depth: self.depth + 1,
+        }
     }
 
     fn cmerge(&self, term: &CTerm) -> StratifyInstrument {
         let mel = match term {
             CTerm::Lam(_) => Melody::new_even(fm_basic() * 0.28, &[D, F, E, C]),
-            _ => Melody::new_even(sine(), &[G, G, G, G]),  //value will never be used, but we have to call this for ownership reasons
+            _ => Melody::new_even(sine(), &[G, G, G, G]), //value will never be used, but we have to call this for ownership reasons
         };
-        StratifyInstrument { mel, depth: self.depth + 1 }
+        StratifyInstrument {
+            mel,
+            depth: self.depth + 1,
+        }
     }
 }
 
@@ -847,14 +1307,14 @@ impl ClipSelector {
     pub fn names() -> Self {
         Self {
             ann: Arc::new(Wave::load("files/annotation.mp3").unwrap()), // type annotation
-            star: Arc::new(Wave::load("files/star.mp3").unwrap()),  // universe type
-            pi: Arc::new(Wave::load("files/forall.mp3").unwrap()),  // universal quantifier
-            bound: Arc::new(Wave::load("files/bound.mp3").unwrap()),  // bound variable
-            free: Arc::new(Wave::load("files/free.mp3").unwrap()),  // free variable
-            app: Arc::new(Wave::load("files/application.mp3").unwrap()),  // function application
-            zero: Arc::new(Wave::load("files/zero.mp3").unwrap()),  // natural number zero
-            fin: Arc::new(Wave::load("files/finite.mp3").unwrap()),  // finite type
-            lam: Arc::new(Wave::load("files/lambdaabstraction.mp3").unwrap()),  // lambda abstraction
+            star: Arc::new(Wave::load("files/star.mp3").unwrap()),      // universe type
+            pi: Arc::new(Wave::load("files/forall.mp3").unwrap()),      // universal quantifier
+            bound: Arc::new(Wave::load("files/bound.mp3").unwrap()),    // bound variable
+            free: Arc::new(Wave::load("files/free.mp3").unwrap()),      // free variable
+            app: Arc::new(Wave::load("files/application.mp3").unwrap()), // function application
+            zero: Arc::new(Wave::load("files/zero.mp3").unwrap()),      // natural number zero
+            fin: Arc::new(Wave::load("files/finite.mp3").unwrap()),     // finite type
+            lam: Arc::new(Wave::load("files/lambdaabstraction.mp3").unwrap()), // lambda abstraction
         }
     }
 
@@ -862,13 +1322,13 @@ impl ClipSelector {
         Self {
             ann: Arc::new(Wave::load("files/annotation.mp3").unwrap()), // type annotation
             star: Arc::new(Wave::load("files/universe.mp3").unwrap()),  // universe type
-            pi: Arc::new(Wave::load("files/universalquantifier.mp3").unwrap()),  // universal quantifier
-            bound: Arc::new(Wave::load("files/boundvariable.mp3").unwrap()),  // bound variable
-            free: Arc::new(Wave::load("files/freevariable.mp3").unwrap()),  // free variable
-            app: Arc::new(Wave::load("files/functionapplication.mp3").unwrap()),  // function application
-            zero: Arc::new(Wave::load("files/naturalnumberzero.mp3").unwrap()),  // natural number zero
-            fin: Arc::new(Wave::load("files/finitetype.mp3").unwrap()),  // finite type
-            lam: Arc::new(Wave::load("files/lambdaabstraction.mp3").unwrap()),  // lambda abstraction
+            pi: Arc::new(Wave::load("files/universalquantifier.mp3").unwrap()), // universal quantifier
+            bound: Arc::new(Wave::load("files/boundvariable.mp3").unwrap()),    // bound variable
+            free: Arc::new(Wave::load("files/freevariable.mp3").unwrap()),      // free variable
+            app: Arc::new(Wave::load("files/functionapplication.mp3").unwrap()), // function application
+            zero: Arc::new(Wave::load("files/naturalnumberzero.mp3").unwrap()), // natural number zero
+            fin: Arc::new(Wave::load("files/finitetype.mp3").unwrap()),         // finite type
+            lam: Arc::new(Wave::load("files/lambdaabstraction.mp3").unwrap()), // lambda abstraction
         }
     }
 }
@@ -884,7 +1344,7 @@ impl Selector for ClipSelector {
             ITerm::App(_, _) => &self.app,
             ITerm::Zero => &self.zero,
             ITerm::Fin(_) => &self.fin,
-            _ => unimplemented!()
+            _ => unimplemented!(),
         };
         SoundTree::sound(Arc::clone(result), self.imeta(term))
     }
@@ -923,6 +1383,7 @@ pub enum MelodySelector {
     F,
     /// Same melodies as B and C but exclusively as sines. See [imelody_oneinstr] and [cmelody_oneinstr].
     PureSine,
+    // PureSineF,
     // Concrete(ClipSelector),
 }
 
@@ -937,8 +1398,7 @@ impl MelodySelector {
             MelodySelector::E => imelody5(term, depth),
             MelodySelector::F => imelody6(term, depth),
             MelodySelector::PureSine => imelody_oneinstr(sine(), term, depth),
-            // MelodySelector::Concrete(clip_selector) => SoundTree::sound(clip_selector.imelody(term, depth), term),
-            // _ => unimplemented!()
+            // MelodySelector::PureSineF => imelody7(term, depth),
         }
     }
 
@@ -952,13 +1412,17 @@ impl MelodySelector {
             MelodySelector::E => cmelody5(term, depth),
             MelodySelector::F => cmelody6(term, depth),
             MelodySelector::PureSine => cmelody_oneinstr(sine(), term, depth),
+            // MelodySelector::PureSineF => cmelody7(term, depth),
             // MelodySelector::Concrete(clip_selector) => SoundTree::sound(clip_selector.cmelody(term, depth), term.clone()),
             // _ => unimplemented!()
         }
     }
 
     pub fn deepen(self) -> MelodySelectorFull {
-        MelodySelectorFull { mel: self, depth: 1 }
+        MelodySelectorFull {
+            mel: self,
+            depth: 1,
+        }
     }
 }
 
@@ -987,11 +1451,17 @@ impl Selector for MelodySelectorFull {
     }
 
     fn imerge(&self, _term: &ITerm) -> Self {
-        MelodySelectorFull { mel: self.mel, depth: self.depth + 1 }
+        MelodySelectorFull {
+            mel: self.mel,
+            depth: self.depth + 1,
+        }
     }
 
     fn cmerge(&self, _term: &CTerm) -> Self {
-        MelodySelectorFull { mel: self.mel, depth: self.depth + 1 }
+        MelodySelectorFull {
+            mel: self.mel,
+            depth: self.depth + 1,
+        }
     }
 }
 
@@ -1007,7 +1477,10 @@ pub fn imelody1(term: &ITerm, depth: usize) -> Melody {
         ITerm::Ann(_, _) => Melody::new_even(violinish(), &[C, A, B, A]),
         ITerm::Star => Melody::new_even(wobbly_sine(), &[D, F, B, A]),
         ITerm::Pi(_, _) => Melody::new_even(sinesaw(), &[A, ASHARP, D, D]),
-        ITerm::Bound(n) => Melody::new_even(sinesaw() >> split() >> fbd(*n as f32 / 10.0, -5.0), &[E, E, C, B]),
+        ITerm::Bound(n) => Melody::new_even(
+            sinesaw() >> split() >> fbd(*n as f32 / 10.0, -5.0),
+            &[E, E, C, B],
+        ),
         ITerm::Free(_) => Melody::new_even(karplus(), &[E, G, A, B]),
         ITerm::App(_, _) => Melody::new_even(pink_sine(), &[B, C, D, E]),
         ITerm::Nat => Melody::new_even(sawfir(), &[C, B, B, A]),
@@ -1016,7 +1489,7 @@ pub fn imelody1(term: &ITerm, depth: usize) -> Melody {
         ITerm::Fin(_) => Melody::new_even(violinish(), &[D, D, D, G]),
         ITerm::FZero(_) => Melody::new_even(pink_sine(), &[C, F, C, G]),
         ITerm::FSucc(_, _) => Melody::new_even(sinesaw(), &[F, B, B, B]),
-        _ => panic!("{term} not implemented")
+        _ => panic!("{term} not implemented"),
     };
     result.adjust_depth(depth);
     result
@@ -1028,12 +1501,15 @@ pub fn imelody2(term: &ITerm, depth: usize) -> Melody {
         ITerm::Ann(_, _) => Melody::new_even(violinish(), &[C, E, B, E]),
         ITerm::Star => Melody::new_even(wobbly_sine(), &[G, E, C, B]),
         ITerm::Pi(_, _) => Melody::new_even(sinesaw(), &[E, C, G, E]),
-        ITerm::Bound(n) => Melody::new_even(sinesaw() >> split() >> fbd(*n as f32 / 10.0, -5.0), &[E, E, C, B]),
+        ITerm::Bound(n) => Melody::new_even(
+            sinesaw() >> split() >> fbd(*n as f32 / 10.0, -5.0),
+            &[E, E, C, B],
+        ),
         ITerm::Free(_) => Melody::new_even(karplus(), &[E, G, A, B]),
         ITerm::App(_, _) => Melody::new_even(pink_sine(), &[B, C, G, E]),
         ITerm::Zero => Melody::new_even(fm_basic(), &[B, C, E, G]),
         ITerm::Fin(_) => Melody::new_even(violinish(), &[E, B, G, C]),
-        _ => panic!("{term} not implemented")
+        _ => panic!("{term} not implemented"),
     };
     result.adjust_depth(depth);
     result
@@ -1055,12 +1531,15 @@ pub fn imelody3(term: &ITerm, depth: usize) -> Melody {
         ITerm::Ann(_, _) => Melody::new_even(violinish(), &[A, B, C, B]),
         ITerm::Star => Melody::new_even(wobbly_sine(), &[A, C, A, B]),
         ITerm::Pi(_, _) => Melody::new_even(sinesaw(), &[C, C, B, A]),
-        ITerm::Bound(n) => Melody::new_even(sinesaw() >> split() >> fbd(*n as f32 / 10.0, -5.0), &[E, E, C, B]),
+        ITerm::Bound(n) => Melody::new_even(
+            sinesaw() >> split() >> fbd(*n as f32 / 10.0, -5.0),
+            &[E, E, C, B],
+        ),
         ITerm::Free(_) => Melody::new_even(violinish(), &[A, G, F, D]),
         ITerm::App(_, _) => Melody::new_even(pink_sine(), &[B, C, G, E]),
         ITerm::Zero => Melody::new_even(fm_basic(), &[B, C, E, G]),
         ITerm::Fin(_) => Melody::new_even(violinish(), &[E, B, G, C]),
-        _ => panic!("{term} not implemented")
+        _ => panic!("{term} not implemented"),
     };
     result.adjust_depth(depth);
     result
@@ -1082,12 +1561,15 @@ pub fn imelody4(term: &ITerm, depth: usize) -> Melody {
         ITerm::Ann(_, _) => Melody::new_even(violinish(), &[A, B, C, B]),
         ITerm::Star => Melody::new_even(wobbly_sine(), &[A, C, A, B]),
         ITerm::Pi(_, _) => Melody::new_even(sine(), &[C, C, B, A]),
-        ITerm::Bound(n) => Melody::new_even(sinesaw() >> split() >> fbd(*n as f32 / 10.0, -5.0), &[E, E, C, B]),
+        ITerm::Bound(n) => Melody::new_even(
+            sinesaw() >> split() >> fbd(*n as f32 / 10.0, -5.0),
+            &[E, E, C, B],
+        ),
         ITerm::Free(_) => Melody::new_even(violinish(), &[A, G, F, D]),
         ITerm::App(_, _) => Melody::new_even(sawfir(), &[B, C, G, E]),
         ITerm::Zero => Melody::new_even(sinesaw(), &[B, C, E, G]),
         ITerm::Fin(_) => Melody::new_even(violinish(), &[E, B, G, C]),
-        _ => panic!("{term} not implemented")
+        _ => panic!("{term} not implemented"),
     };
     result.adjust_depth(depth);
     result
@@ -1109,12 +1591,21 @@ pub fn imelody5(term: &ITerm, depth: usize) -> Melody {
         ITerm::Ann(_, _) => Melody::new_even(violinish(), &[A, D, F, A]),
         ITerm::Star => Melody::new_even(wobbly_sine(), &[A, A + 12, E, F]),
         ITerm::Pi(_, _) => Melody::new_even(sine(), &[E, C, A, C]),
-        ITerm::Bound(n) => Melody::new_even(sinesaw() >> split() >> fbd(*n as f32 / 10.0, -5.0), &[A, E, C, B]),
+        ITerm::Bound(n) => Melody::new_even(
+            sinesaw() >> split() >> fbd(*n as f32 / 10.0, -5.0),
+            &[A, E, C, B],
+        ),
         ITerm::Free(_) => Melody::new_even(violinish(), &[A, A, E, C]),
         ITerm::App(_, _) => Melody::new_even(sawfir(), &[D, F, E, C]),
-        ITerm::Zero => Melody::new_timed(sinesaw(), &[(E, 1.0), (F, 0.5), (E, 0.5), (C, 1.0), (A, 1.0)]),
-        ITerm::Fin(_) => Melody::new_timed(violinish(), &[(B, 1.0), (A, 0.5), (E, 0.5), (C, 1.0), (B, 1.0)]),
-        _ => panic!("{term} not implemented")
+        ITerm::Zero => Melody::new_timed(
+            sinesaw(),
+            &[(E, 1.0), (F, 0.5), (E, 0.5), (C, 1.0), (A, 1.0)],
+        ),
+        ITerm::Fin(_) => Melody::new_timed(
+            violinish(),
+            &[(B, 1.0), (A, 0.5), (E, 0.5), (C, 1.0), (B, 1.0)],
+        ),
+        _ => panic!("{term} not implemented"),
     };
     result.adjust_depth(depth);
     result
@@ -1124,7 +1615,7 @@ pub fn imelody5(term: &ITerm, depth: usize) -> Melody {
 pub fn cmelody5(term: &CTerm, depth: usize) -> Melody {
     let mut result = match term {
         CTerm::Lam(_) => Melody::new_timed(violinish(), &[(B, 0.5), (C, 0.5), (E, 3.0)]),
-        _ => Melody::new_even(sine(), &[G, G, G, G]),  //value will never be used, but we have to call this for ownership reasons
+        _ => Melody::new_even(sine(), &[G, G, G, G]), //value will never be used, but we have to call this for ownership reasons
     };
     result.adjust_depth(depth);
     result
@@ -1134,14 +1625,23 @@ pub fn cmelody5(term: &CTerm, depth: usize) -> Melody {
 pub fn imelody6(term: &ITerm, depth: usize) -> Melody {
     let mut result = match term {
         ITerm::Ann(_, _) => Melody::new_even(violinish(), &[A, D, F, A]),
-        ITerm::Star => Melody::new_timed(three_equivalents(wobbly_sine()) * 0.7, &[(B, 0.5), (C, 0.5), (E, 3.0)]),
+        ITerm::Star => Melody::new_timed(
+            three_equivalents(wobbly_sine()) * 0.7,
+            &[(B, 0.5), (C, 0.5), (E, 3.0)],
+        ),
         ITerm::Pi(_, _) => Melody::new_even(sinesaw() >> split() >> fbd(0.25, -5.0), &[E, C, A, C]),
         ITerm::Bound(_) => Melody::new_even(sine() * 2.0, &[A, E, C, B]),
         ITerm::Free(_) => Melody::new_even(violinish() * 1.1, &[A, A, E, C]),
-        ITerm::App(_, _) => Melody::new_timed(sawfir() * 0.75, &[(B, 1.0), (A, 0.5), (E, 0.5), (C, 1.0), (B, 1.0)]),
-        ITerm::Zero => Melody::new_timed(sinesaw(), &[(E, 1.0), (F, 0.5), (E, 0.5), (C, 1.0), (A, 1.0)]),
+        ITerm::App(_, _) => Melody::new_timed(
+            sawfir() * 0.75,
+            &[(B, 1.0), (A, 0.5), (E, 0.5), (C, 1.0), (B, 1.0)],
+        ),
+        ITerm::Zero => Melody::new_timed(
+            sinesaw(),
+            &[(E, 1.0), (F, 0.5), (E, 0.5), (C, 1.0), (A, 1.0)],
+        ),
         ITerm::Fin(_) => Melody::new_even(violinish() * 1.1, &[A, A + 12, E, F]),
-        _ => panic!("{term} not implemented")
+        _ => panic!("{term} not implemented"),
     };
     result.adjust_depth(depth);
     result
@@ -1151,33 +1651,73 @@ pub fn imelody6(term: &ITerm, depth: usize) -> Melody {
 pub fn cmelody6(term: &CTerm, depth: usize) -> Melody {
     let mut result = match term {
         CTerm::Lam(_) => Melody::new_even(fm_basic() * 0.28, &[D, F, E, C]),
-        _ => Melody::new_even(sine(), &[G, G, G, G]),  //value will never be used, but we have to call this for ownership reasons
+        _ => Melody::new_even(sine(), &[G, G, G, G]), //value will never be used, but we have to call this for ownership reasons
+    };
+    result.adjust_depth(depth);
+    result
+}
+
+// /// Melodies with some hints of dissonance & more texture
+// pub fn imelody7(term: &ITerm, depth: usize) -> Melody {
+//     let mut result = match term {
+//         ITerm::Ann(_, _) => Melody::new_even(sine(), &[A, D, F, A]),
+//         ITerm::Star => Melody::new_timed(sine(), &[(B, 0.5), (C, 0.5), (E, 3.0)]),
+//         ITerm::Pi(_, _) => Melody::new_even(sine(), &[E, C, A, C]),
+//         ITerm::Bound(_) => Melody::new_even(sine(), &[A, E, C, B]),
+//         ITerm::Free(_) => Melody::new_even(sine(), &[A, A, E, C]),
+//         ITerm::App(_, _) => Melody::new_timed(sine(), &[(B, 1.0), (A, 0.5), (E, 0.5), (C, 1.0), (B, 1.0)]),
+//         ITerm::Zero => Melody::new_timed(sine(), &[(E, 1.0), (F, 0.5), (E, 0.5), (C, 1.0), (A, 1.0)]),
+//         ITerm::Fin(_) => Melody::new_even(sine() * 1.1, &[A, A + 12, E, F]),
+//         _ => panic!("{term} not implemented")
+//     };
+//     result.adjust_depth(depth);
+//     result
+// }
+
+// pub fn cmelody7(term: &CTerm, depth: usize) -> Melody {
+//     let mut result = match term {
+//         CTerm::Lam(_) => Melody::new_even(sine(), &[D, F, E, C]),
+//         _ => Melody::new_even(sine(), &[G, G, G, G]),  //value will never be used, but we have to call this for ownership reasons
+//     };
+//     result.adjust_depth(depth);
+//     result
+// }
+
+/// Melodies with B, C, E, and G, all on the same instrument
+pub fn imelody_oneinstr(
+    instrument: impl AudioUnit + 'static,
+    term: &ITerm,
+    depth: usize,
+) -> Melody {
+    let mut result = match term {
+        ITerm::Ann(_, _) => Melody::new_even(instrument, &[A, D, F, A]),
+        ITerm::Star => Melody::new_timed(instrument, &[(B, 0.5), (C, 0.5), (E, 3.0)]),
+        ITerm::Pi(_, _) => Melody::new_even(instrument, &[E, C, A, C]),
+        ITerm::Bound(_) => Melody::new_even(instrument, &[A, E, C, B]),
+        ITerm::Free(_) => Melody::new_even(instrument, &[A, A, E, C]),
+        ITerm::App(_, _) => Melody::new_timed(
+            instrument,
+            &[(B, 1.0), (A, 0.5), (E, 0.5), (C, 1.0), (B, 1.0)],
+        ),
+        ITerm::Zero => Melody::new_timed(
+            instrument,
+            &[(E, 1.0), (F, 0.5), (E, 0.5), (C, 1.0), (A, 1.0)],
+        ),
+        ITerm::Fin(_) => Melody::new_even(instrument, &[A, A + 12, E, F]),
+        _ => panic!("{term} not implemented"),
     };
     result.adjust_depth(depth);
     result
 }
 
 /// Melodies with B, C, E, and G, all on the same instrument
-pub fn imelody_oneinstr(instrument: impl AudioUnit + 'static, term: &ITerm, depth: usize) -> Melody {
+pub fn cmelody_oneinstr(
+    instrument: impl AudioUnit + 'static,
+    term: &CTerm,
+    depth: usize,
+) -> Melody {
     let mut result = match term {
-        ITerm::Ann(_, _) => Melody::new_even(instrument, &[C, E, B, E]),
-        ITerm::Star => Melody::new_even(instrument, &[G, E, C, B]),
-        ITerm::Pi(_, _) => Melody::new_even(instrument, &[E, C, G, E]),
-        ITerm::Bound(_) => Melody::new_even(instrument, &[E, E, C, B]),
-        ITerm::Free(_) => Melody::new_even(instrument, &[B, B, E, G]),
-        ITerm::App(_, _) => Melody::new_even(instrument, &[B, C, G, E]),
-        ITerm::Zero => Melody::new_even(instrument, &[B, C, E, G]),
-        ITerm::Fin(_) => Melody::new_even(instrument, &[E, B, G, C]),
-        _ => panic!("{term} not implemented")
-    };
-    result.adjust_depth(depth);
-    result
-}
-
-/// Melodies with B, C, E, and G, all on the same instrument
-pub fn cmelody_oneinstr(instrument: impl AudioUnit + 'static, term: &CTerm, depth: usize) -> Melody {
-    let mut result = match term {
-        CTerm::Lam(_) => Melody::new_even(instrument, &[G, B, E, C]),
+        CTerm::Lam(_) => Melody::new_even(instrument, &[D, F, E, C]),
         _ => Melody::new_even(sine(), &[A, A, A, A]), //value will never be used, but we have to call this for ownership reasons
     };
     result.adjust_depth(depth);

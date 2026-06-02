@@ -5,6 +5,7 @@ use piet_common::*;
 use crate::soundproof::types::{Highlight, SoundTree};
 use crate::DivisionMethod;
 
+// TODO we should take these as options
 // const WIDTH_PX: usize = 377 * 3;
 const WIDTH_PX: usize = 1920;
 // const WIDTH_PX: usize = 3000;
@@ -14,6 +15,8 @@ const HEIGHT_PX: usize = 1080;
 const DPI: f64 = 96.;
 const WIDTH_IN: f64 = WIDTH_PX as f64 / DPI;
 const HEIGHT_IN: f64 = HEIGHT_PX as f64 / DPI;
+
+// we should restructure a bit here, the live/static split is wonky
 
 pub fn draw(tree: &SoundTree, scaling: DivisionMethod, path: impl AsRef<Path>) {
     let mut device = Device::new().unwrap();
@@ -32,27 +35,6 @@ pub fn draw(tree: &SoundTree, scaling: DivisionMethod, path: impl AsRef<Path>) {
         .expect("should save file successfully");
 }
 
-// TODO: maybe like, pregenerate animation frames for a tree somehow? idk
-
-// fn write_data<T>(output: &mut [T], channels: usize, next_sample: &mut dyn FnMut() -> (f32, f32))
-// where
-//     T: SizedSample + FromSample<f32>,
-// {
-//     for frame in output.chunks_mut(channels) {
-//         let sample = next_sample();
-//         let left = T::from_sample(sample.0);
-//         let right: T = T::from_sample(sample.1);
-
-//         for (channel, sample) in frame.iter_mut().enumerate() {
-//             if channel & 1 == 0 {
-//                 *sample = left;
-//             } else {
-//                 *sample = right;
-//             }
-//         }
-//     }
-// }
-
 pub fn make_soundproof_window() -> Window {
     let window_options = WindowOptions {
         borderless: true,
@@ -60,7 +42,6 @@ pub fn make_soundproof_window() -> Window {
     };
     Window::new("Soundproof Output", WIDTH_PX, HEIGHT_PX, window_options).expect("")
 }
-
 
 pub fn draw_tree_canvas(tree: &SoundTree, scaling: DivisionMethod, device: &mut Device) -> Vec<u32> {
     let mut bitmap = device
@@ -103,7 +84,6 @@ impl LiveDrawContext {
             .unwrap();
     }
 }
-
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 struct FixedDrawArgs {

@@ -199,26 +199,22 @@ pub enum FilterOptions {
 #[derive(PartialEq, Eq, Clone, Copy, Debug, ValueEnum)]
 pub enum RunMode {
     /// Generates a file for a single proof term
-    Term,
+    Single,
     /// Generates a file for a proof term's evolution as it reduces
     Steps,
-    LiveSteps,
-    /// Live performance mode
-    #[cfg(feature = "bevy")]
-    Live,
 }
 
-impl RunMode {
-    fn live(&self) -> bool {
-        match self {
-            RunMode::Term => false,
-            RunMode::Steps => false,
-            RunMode::LiveSteps => true,
-            #[cfg(feature = "bevy")]
-            RunMode::Live => true,
-        }
-    }
-}
+// impl RunMode {
+//     fn live(&self) -> bool {
+//         match self {
+//             RunMode::Term => false,
+//             RunMode::Steps => false,
+//             RunMode::LiveSteps => true,
+//             #[cfg(feature = "bevy")]
+//             RunMode::Live => true,
+//         }
+//     }
+// }
 
 /// A system which converts dependently-typed lambda calculus into music, with a focus on Girard's Paradox.
 /// Generates audio, a spectrograph, an image representation of the "sound tree" structure, and
@@ -226,16 +222,19 @@ impl RunMode {
 #[derive(Parser, Debug, Clone)]
 #[command(version, about, long_about=None)]
 pub struct SoundproofArgs {
-    /// Run the live performance mode. If set, all other options have no effect.
+    /// Whether to run the single-term or step-based translation.
     #[arg(short, long, default_value = "term")]
     mode: RunMode,
+    /// Whether to render to file or run it live. Single-term live runs require the 'bevy' feature.
+    #[arg(short, long, action)]
+    live: bool,
     /// Predefined terms of the dependently typed lambda calculus.
     #[arg(short, long, default_value = "sigma")]
     value: NamedTerm,
     /// When set, normalize the term as far as possible before being presented.
     #[arg(short, long, action)]
     reduce: bool,
-    /// In seconds. If unset, scales with size of tree.
+    /// In seconds. If unset, scales with size of tree. In step mode, determines time of one frame.
     #[arg(short, long)]
     time: Option<f64>,
     /// Determines how time is broken down between sequential segments.
@@ -259,14 +258,18 @@ pub struct SoundproofArgs {
     /// Additional filters added after audio generation.
     #[arg(short, long, default_value = "clip-lowpass")]
     filters: FilterOptions,
-    #[arg(long)]
-    file: Option<String>,
-    /// When set, only generate visualization (potentially including animation frames), not music.
-    #[arg(short('D'), long, action)]
-    draw_only: bool,
-    /// When set, generate animation frames.
-    #[arg(short, long, action)]
-    animate: bool,
+    /// A file from which to load multiple configurations for stepping.
+    #[arg(long, requires="mode")]
+    step_file: Option<String>,
+    /// Whether to take MIDI input for steps. Only works live.
+    #[arg(long, action, requires="file", requires="live")]
+    midi: bool,
+    // /// When set, only generate visualization (potentially including animation frames), not music.
+    // #[arg(short('D'), long, action)]
+    // draw_only: bool,
+    // /// When set, generate animation frames.
+    // #[arg(short, long, action)]
+    // animate: bool,
     /// Name of the output file
     #[arg(short, long, default_value = "output.wav")]
     output: String,
@@ -326,32 +329,6 @@ pub fn make_tree(structure: Structure, content: AudioSelectorOptions, term: &ITe
     tree
 }
 
-// fn draw_tree(tree: &SoundTree, args: &SoundproofArgs) {
-//     println!("Drawing...");
-//     let now = Instant::now();
-//     draw::draw(
-//         tree,
-//         args.division,
-//         format!(
-//             "output/images/{:?}{}-viz.png",
-//             args.value,
-//             if args.reduce { "-reduced" } else { "" }
-//         ),
-//     );
-//     println!("One image: {:?}", now.elapsed());
-//     draw::draw(tree, args.division, "output/visualization.png");
-//     if args.animate {
-//         let frames_path = "output/images/frames";
-//         fs::remove_dir_all(frames_path).unwrap();
-//         fs::create_dir(frames_path).unwrap();
-//         let time = args.time.unwrap_or(tree.size() as f64);
-//         // let frames = (30.0 * time).floor() as usize;
-//         // println!("Drawing {frames} frames...");
-//         draw_anim(tree, args.division, time, 30);
-//         // println!("All frames: {:?}", now.elapsed());
-//     }
-// }
-
 pub fn make_output(
     sound: Box<impl AudioUnit + 'static>,
     filters: FilterOptions,
@@ -371,13 +348,8 @@ pub fn make_output(
 }
 
 pub fn main_to_file(args: &SoundproofArgs) {
-    assert!(!args.mode.live());
-    if args.draw_only {
-        return;
-    }
     let tree = make_tree(args.structure, args.content, &args.term());
     let time = args.time.unwrap_or(tree.size() as f64);
-    // draw_tree(&tree, args);
 
     println!("Sequencing over {time} seconds...");
     let seq = Sequencer::new(0, 2, ReplayMode::None);
@@ -410,37 +382,29 @@ fn run_steps(term: ITerm, limit: usize) {
             prev = ii;
         }
     }
-    // println!()
+}
+
+pub fn main_steps_live(args: SoundproofArgs) {
+    if args.midi {
+        animate_term_midi(args);
+    }
+    else {
+        animate_term_steps(args);
+    }
 }
 
 pub fn main_steps(mut args: SoundproofArgs) {
     use crate::term::std_env;
     let all_start = Instant::now();
     println!("Starting tone generation");
-    // run_steps(start_term, args.time.unwrap_or(1000.).floor() as usize);
-    // return;
     let base_dur = args.time.unwrap_or(5.0);
     let mut tones = ToneMaker::new(0.0, base_dur);
-    let changes = Silence::new();
-    // let changes = SineRhythmizer::new();
-    if args.mode == RunMode::LiveSteps {
-        animate_term_midi(args);
-        return;
-    }
-    if args.animate {
-        animate_term_steps(args.clone());
-    }
-    if args.draw_only {
-        return;
-    }
+    let selector = Silence::new();
 
     let seq = Sequencer::new(0, 2, ReplayMode::None);
-    // let backend = Box::new(seq.backend());
-    let mut cfg_seq = ConfigSequencer::new(seq, args.mode.live());
-    // let mut prev_size = 1000.0;
-    // let freq_range = 1500.; //args.time.unwrap_or((tree.size() + 40) as f64);
+    let mut cfg_seq = ConfigSequencer::new(seq, args.live);
     let mut base_size = SetOnce::new();
-    let sequence = match &args.file {
+    let sequence = match &args.step_file {
         Some(path) => {
             let contents = fs::read_to_string(path).expect("Could not open config file");
             contents.split("\n").map(|s| s.to_owned()).collect()
@@ -455,57 +419,22 @@ pub fn main_steps(mut args: SoundproofArgs) {
         }
         println!("Translating for number {ii}...");
         let step_start = Instant::now();
-        // let (term, _) = match &current {
-        //     Step::Cont(t, v) => (t.clone(), v.clone()),
-        //     Step::Done(_, _) => break,
-        // };
         let dur = base_dur;
-        // let dur = match change {
-        //     Some(change) => {
-        //         let change_tree = type_translate(&change, changes.clone()).unwrap();
-        //         let dur = (1.
-        //             + (change_tree.size() as f64 / base_size.get(18000) as f64).sqrt() * 5.)
-        //             * base_dur;
-        //         // println!("Change size: {} vs base at: {}", change_tree.size(), change_tree.size() as f64 / base_size as f64);
-        //         // change_tree.generate_with(
-        //         //     &mut cfg_seq,
-        //         //     tones.start_time,
-        //         //     dur,
-        //         //     args.division,
-        //         //     0.0
-        //         // );
-        //         base_dur
-        //     }
-        //     None => base_dur,
-        // };
         tones.duration = dur;
 
-        // let tree = type_translate(&term, tones.clone()).unwrap();
-        let tree = type_translate(&term, changes).unwrap();
+        let tree = type_translate(&term, selector).unwrap();
         base_size.get(tree.size());
-        // prev_size = tree.size() as f64;
         println!("\t{:?}, output size {}", step_start.elapsed(), tree.size());
 
         println!("Sequencing over frequency range {}-{} for duration {dur}...", args.freq_min, args.freq_max);
         let seq_start = Instant::now();
         const NUM_BUCKETS: usize = 512;
-        // if tree.size() > NUM_BUCKETS * 8 {
-        // let mut buckets: Buckets<NUM_BUCKETS> = Buckets::empty();
-        // buckets.just_fill(&tree, freq_range as f32 / 2., NUM_BUCKETS / 2, NUM_BUCKETS as f32);
+        
         let buckets: Buckets<NUM_BUCKETS> =
             Buckets::from_tree(&tree, args.freq_min, args.freq_max, args.division);
         buckets
             .reverse()
             .sequence(&mut cfg_seq, tones.start_time, tones.duration, 0.0);
-        // } else {
-        //     tree.generate_with(
-        //         &mut cfg_seq,
-        //         // 0.0,
-        //         freq_range,
-        //         args.division,
-        //         // 0.0,
-        //     );
-        // }
 
         tones.increment();
         println!(
@@ -518,11 +447,8 @@ pub fn main_steps(mut args: SoundproofArgs) {
             println!("Hit {max_steps} steps");
             break;
         }
-        // println!("Got this many events: {}", SIGN.load(std::sync::atomic::Ordering::SeqCst));
     }
     println!("Translated in {:?}", all_start.elapsed());
-    // use crate::SIGN;
-    // println!("Got this many events: {}", SIGN.load(std::sync::atomic::Ordering::SeqCst));
     let mut output = make_output(Box::new(cfg_seq.seq), args.filters);
     save(&mut *output, tones.start_time);
     println!("Done. Total time: {:?}", all_start.elapsed());
@@ -530,15 +456,14 @@ pub fn main_steps(mut args: SoundproofArgs) {
 
 pub fn main() {
     let args = SoundproofArgs::parse();
-    // let args = Args::parse_from("soundproof.exe -m=steps -v=lem2 -t=200 -d=weight --animate --draw-only".split(" "));
-    println!("{:?}", args);
-    println!("Running in mode: {:?}", args.mode);
-    match args.mode {
+    // println!("{:?}", args);
+    // println!("Running in mode: {:?}", args.mode);
+    match (args.mode, args.live) {
         #[cfg(feature = "bevy")]
-        RunMode::Live => performance::main_live(),
-        RunMode::Term => main_to_file(&args),
-        RunMode::LiveSteps => main_steps(args),
-        RunMode::Steps => main_steps(args),
-        // _ => unimplemented!()
+        (RunMode::Single, true) => performance::main_live(),
+        (RunMode::Single, true) => println!("Cannot run single-term live mode without the 'bevy' feature enabled."),
+        (RunMode::Single, false) => main_to_file(&args),
+        (RunMode::Steps, true) => main_steps_live(args),
+        (RunMode::Steps, false) => main_steps(args),
     }
 }

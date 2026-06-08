@@ -1,13 +1,8 @@
-
-use crate::draw::LiveDrawContext;
-use crate::soundproof::types::ConfigSequencer;
-use crate::step::*;
-use crate::type_translate;
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::fs;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-use std::fs;
 
 use clap::Parser;
 // use fundsp::sequencer::ReplayMode;
@@ -16,16 +11,20 @@ use cpal::{self, StreamConfig};
 use fundsp::prelude::Sequencer;
 use fundsp::prelude64::AudioUnit;
 use fundsp::sequencer::ReplayMode;
-use midi_msg::{MidiMsg, ChannelVoiceMsg};
+use midi_msg::{ChannelVoiceMsg, MidiMsg};
 // use midi_msg::{ChannelVoiceMsg, MidiMsg};
 use midir::{Ignore, MidiInput};
 
-use crate::{SoundproofArgs, FilterOptions};
+use crate::step::*;
 use crate::lambdapi::ast::*;
 use crate::lambdapi::term::*;
+use crate::draw::LiveDrawContext;
+use crate::soundproof::types::ConfigSequencer;
+use crate::type_translate;
 use crate::music::write_data;
 use crate::soundproof::select::Silence;
 use crate::soundproof::sound_generators::{Buckets, SoundGenerator};
+use crate::{FilterOptions, SoundproofArgs};
 
 // TODO: could we like, pregenerate animation frames for a tree somehow? idk
 
@@ -82,12 +81,15 @@ pub fn animate_term_midi(mut args: SoundproofArgs) {
     let in_port = if in_ports.is_empty() {
         println!("Could not load MIDI!");
         return;
-    }
-    else {
+    } else {
         in_ports[1].clone()
     };
     let in_port_name = midi_in.port_name(&in_port).unwrap();
-    let _conn_in = midi_in.connect(&in_port, "midir-read-input", move |_stamp, message, _| {
+    let _conn_in = midi_in
+        .connect(
+            &in_port,
+            "midir-read-input",
+            move |_stamp, message, _| {
                 println!("got something");
                 let (msg, _len) = MidiMsg::from_midi(message).unwrap();
                 if let MidiMsg::ChannelVoice { channel: _, msg } = msg {
@@ -99,7 +101,10 @@ pub fn animate_term_midi(mut args: SoundproofArgs) {
                             vel_close.store(velocity, Ordering::Relaxed);
                             updated_close.store(true, Ordering::Relaxed);
                         }
-                        ChannelVoiceMsg::NoteOff { note: _, velocity: _ } => {
+                        ChannelVoiceMsg::NoteOff {
+                            note: _,
+                            velocity: _,
+                        } => {
                             println!("Ending note");
                             note_close.store(0, Ordering::Relaxed);
                             vel_close.store(0, Ordering::Relaxed);
@@ -123,18 +128,21 @@ pub fn animate_term_midi(mut args: SoundproofArgs) {
         Some(path) => {
             let contents = fs::read_to_string(path).expect("Could not open config file");
             contents.split("\n").map(|s| s.to_owned()).collect()
-        },
+        }
         None => vec![],
     };
-    let (tx, rx) = std::sync::mpsc::sync_channel(10);
+    let (tx, rx) = std::sync::mpsc::sync_channel(30.min(limit));
     std::thread::spawn(move || {
         for (ii, tm) in args.term().step_over(Context::new(std_env())).enumerate() {
             if ii >= limit {
                 break;
             }
-            let tree = type_translate(&tm, meta).expect("Can only animate a term that's passed typechecking");
+            let tree = type_translate(&tm, meta)
+                .expect("Can only animate a term that's passed typechecking");
             println!("Finished translating tree {ii}");
-            tx.send(tree).unwrap_or_else(|_| panic!("total term count is less than the limit so we should be fine"));
+            tx.send(tree).unwrap_or_else(|_| {
+                panic!("total term count is less than the limit so we should be fine")
+            });
         }
     });
     let mut draw_ctx = LiveDrawContext::new();
@@ -160,10 +168,13 @@ pub fn animate_term_midi(mut args: SoundproofArgs) {
                 let ii = (note - 48) as usize;
                 println!("Running config {ii}");
                 if ii >= sequence.len() {
-                    println!("Selected config file only supports notes 48-{}", 47 + sequence.len())
+                    println!(
+                        "Selected config file only supports notes 48-{}",
+                        47 + sequence.len()
+                    )
                 }
                 args = SoundproofArgs::parse_from(sequence[ii].split(' '));
-            },
+            }
             _ => {
                 println!("Got unexpected note: {note}");
                 continue;
@@ -171,12 +182,12 @@ pub fn animate_term_midi(mut args: SoundproofArgs) {
         }
 
         // let tree = type_translate(&tm, meta).unwrap();
-        let buckets: Buckets<64> = Buckets::from_tree(&tree, args.freq_min, args.freq_max, args.division)
-            .reverse();
+        let buckets: Buckets<64> =
+            Buckets::from_tree(&tree, args.freq_min, args.freq_max, args.division).reverse();
         let sound_duration = f64::INFINITY; //args.time.unwrap_or(1.0); // TODO can we tie duration to keypress length?
         buckets.sequence(&mut cfg_seq, 0.0, sound_duration, 0.0);
         draw_ctx.draw_tree(&tree, args.division);
-       
+
         // wait for note to end before proceeding
         // TODO do we need this part?
         while !(updated.load(Ordering::Relaxed)) {
@@ -235,7 +246,7 @@ pub fn animate_term_steps(mut args: SoundproofArgs) {
         Some(path) => {
             let contents = fs::read_to_string(path).expect("Could not open config file");
             contents.split("\n").map(|s| s.to_owned()).collect()
-        },
+        }
         None => vec![],
     };
     let mut draw_ctx = LiveDrawContext::new();
@@ -259,11 +270,11 @@ pub fn animate_term_steps(mut args: SoundproofArgs) {
         let frame_secs = args.time.unwrap_or(1.0);
         let frame_time = Duration::new(0, (1e9 * frame_secs) as u32);
         let tree = type_translate(&tm, meta).unwrap();
-        let buckets: Buckets<64> = Buckets::from_tree(&tree, args.freq_min, args.freq_max, args.division)
-            .reverse();
+        let buckets: Buckets<64> =
+            Buckets::from_tree(&tree, args.freq_min, args.freq_max, args.division).reverse();
         buckets.sequence(&mut cfg_seq, 0.0, frame_secs, 0.0);
         draw_ctx.draw_tree(&tree, args.division);
-        
+
         let frame_end = Instant::now();
         let render_dur = frame_end - frame_start;
         if render_dur < frame_time {

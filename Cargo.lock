@@ -3501,7 +3501,3 @@ dependencies = [
  "quote",
  "syn 2.0.106",
 ]
-
-[[patch.unused]]
-name = "cosmic-text"
-version = "0.13.2"

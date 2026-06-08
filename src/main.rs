@@ -223,7 +223,7 @@ pub enum RunMode {
 #[command(version, about, long_about=None)]
 pub struct SoundproofArgs {
     /// Whether to run the single-term or step-based translation.
-    #[arg(short, long, default_value = "term")]
+    #[arg(short, long, default_value = "single")]
     mode: RunMode,
     /// Whether to render to file or run it live. Single-term live runs are currently unavailable on this branch.
     #[arg(short, long, action)]

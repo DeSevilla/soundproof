@@ -14,6 +14,7 @@ use clap::Parser;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{self, StreamConfig};
 use fundsp::prelude::Sequencer;
+use fundsp::prelude64::AudioUnit;
 use fundsp::sequencer::ReplayMode;
 use midi_msg::{MidiMsg, ChannelVoiceMsg};
 // use midi_msg::{ChannelVoiceMsg, MidiMsg};
@@ -115,8 +116,8 @@ pub fn animate_term_midi(mut args: SoundproofArgs) {
 
     // Set up loop parameters
     let meta = Silence::new();
-    let ctx = Context::new(std_env());
-    let term = args.term();
+    // let ctx = Context::new(std_env());
+    // let term = args.term();
     let limit = args.step_count.unwrap_or(100);
     let sequence = match &args.step_file {
         Some(path) => {
@@ -125,8 +126,20 @@ pub fn animate_term_midi(mut args: SoundproofArgs) {
         },
         None => vec![],
     };
+    let (tx, rx) = std::sync::mpsc::sync_channel(10);
+    std::thread::spawn(move || {
+        for (ii, tm) in args.term().step_over(Context::new(std_env())).enumerate() {
+            if ii >= limit {
+                break;
+            }
+            let tree = type_translate(&tm, meta).expect("Can only animate a term that's passed typechecking");
+            println!("Finished translating tree {ii}");
+            tx.send(tree).unwrap_or_else(|_| panic!("total term count is less than the limit so we should be fine"));
+        }
+    });
     let mut draw_ctx = LiveDrawContext::new();
-    for (ii, tm) in term.step_over(ctx.clone()).enumerate() {
+    let mut ii = 0;
+    while let Ok(tree) = rx.recv() {
         if !draw_ctx.window.is_open() {
             println!("Window closed; quitting");
             return;
@@ -141,7 +154,7 @@ pub fn animate_term_midi(mut args: SoundproofArgs) {
         let note = current_note.load(Ordering::Relaxed);
         let velocity = current_velocity.load(Ordering::Relaxed);
         updated.store(false, Ordering::Relaxed);
-        println!("Loaded note: {note} at vel {velocity}");
+        println!("Step {ii}: Loaded note {note} at vel {velocity}");
         match note {
             48..=73 => {
                 let ii = (note - 48) as usize;
@@ -157,10 +170,10 @@ pub fn animate_term_midi(mut args: SoundproofArgs) {
             }
         }
 
-        let tree = type_translate(&tm, meta).unwrap();
+        // let tree = type_translate(&tm, meta).unwrap();
         let buckets: Buckets<64> = Buckets::from_tree(&tree, args.freq_min, args.freq_max, args.division)
             .reverse();
-        let sound_duration = args.time.unwrap_or(1.0); // TODO can we tie duration to keypress length?
+        let sound_duration = f64::INFINITY; //args.time.unwrap_or(1.0); // TODO can we tie duration to keypress length?
         buckets.sequence(&mut cfg_seq, 0.0, sound_duration, 0.0);
         draw_ctx.draw_tree(&tree, args.division);
        
@@ -169,7 +182,9 @@ pub fn animate_term_midi(mut args: SoundproofArgs) {
         while !(updated.load(Ordering::Relaxed)) {
             sleep(Duration::from_millis(1));
         }
+        cfg_seq.seq.reset();
         updated.store(false, Ordering::Relaxed);
+        ii += 1;
     }
     println!("Closing connection");
 }

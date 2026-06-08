@@ -86,8 +86,10 @@ impl Stepper for ITerm {
         use Step::*;
         match self {
             ITerm::Ann(body, ty) => match body {
-                CTerm::Inf(it) => Cont(*it, Some(ITerm::Ann(ty, CTerm::Inf(Box::new(ITerm::Star))))),
-                CTerm::Lam(_) => ty.step(ctx).apply(|typ| ITerm::Ann(body, typ)) //lam doesn't step
+                CTerm::Inf(it) => {
+                    Cont(*it, Some(ITerm::Ann(ty, CTerm::Inf(Box::new(ITerm::Star)))))
+                }
+                CTerm::Lam(_) => ty.step(ctx).apply(|typ| ITerm::Ann(body, typ)), //lam doesn't step
             },
             // note: this alternative way of running Ann-step means False annotations are never removed
             // also breaks will_step somewhat
@@ -136,7 +138,7 @@ impl Stepper for ITerm {
                                     }
                                 }
                                 _ => panic!("got malformed lambda value"),
-                            }
+                            },
                         }
                     }
                 }
@@ -144,7 +146,7 @@ impl Stepper for ITerm {
             ITerm::Nat => Done(ITerm::Nat, None),
             ITerm::Zero => Done(ITerm::Zero, None),
             ITerm::Succ(n) => n.step(ctx).apply(ITerm::Succ),
-            ITerm::NatElim(cterm, cterm1, cterm2, cterm3) => todo!(),  // these aren't used in the paradox
+            ITerm::NatElim(cterm, cterm1, cterm2, cterm3) => todo!(), // these aren't used in the paradox
             ITerm::Fin(nat) => nat.step(ctx).apply(ITerm::Fin),
             ITerm::FZero(nat) => nat.step(ctx).apply(ITerm::FZero),
             ITerm::FSucc(cterm, cterm1) => todo!(),

@@ -857,15 +857,18 @@ impl<const N: usize> Buckets<N> {
         }
     }
 
-    pub fn from_tree(tree: &SoundTree, freq_min: f32, freq_max: f32, scaling: DivisionMethod) -> Self {
+    pub fn from_tree(
+        tree: &SoundTree,
+        freq_min: f32,
+        freq_max: f32,
+        scaling: DivisionMethod,
+    ) -> Self {
         let mut result = Buckets {
             buckets: [Weights {
                 body: [0.0; Weights::LENGTH],
             }; N],
-            freqs: array::from_fn(|i| {
-                lerp(freq_min, freq_max, i as f32 / N as f32)
-            }), // min_freq: Self::MIN_FREQ,
-                // max_freq: Self::MIN_FREQ + range,
+            freqs: array::from_fn(|i| lerp(freq_min, freq_max, i as f32 / N as f32)), // min_freq: Self::MIN_FREQ,
+                                                                                      // max_freq: Self::MIN_FREQ + range,
         };
         // need to distribute into buckets somehow
         // might not be able to be an array anymore but w/e

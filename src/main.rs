@@ -7,12 +7,12 @@ use std::time::Instant;
 use lambdapi::ast::*;
 use lambdapi::*;
 use music::*;
+use performance::animate::*;
 use sound_generators::*;
 use soundproof::select::*;
 use soundproof::*;
 use translate::*;
 use types::*;
-use performance::animate::*;
 
 use crate::lambdapi::step::Stepper;
 // use crate::lambdapi::eval2::*;
@@ -247,10 +247,10 @@ pub struct SoundproofArgs {
     #[arg(short, long, default_value = "type")]
     structure: Structure,
     /// Low end of frequency range in step mode. Does nothing unless mode=steps
-    #[arg(long, default_value="60")]
+    #[arg(long, default_value = "60")]
     freq_min: f32,
     /// High end of frequency range in step mode. Does nothing unless mode=steps
-    #[arg(long, default_value="2500")]
+    #[arg(long, default_value = "2500")]
     freq_max: f32,
     /// Maximum number of steps before quitting in step mode. Does nothing unless mode=steps
     #[arg(short('S'), long)]
@@ -259,10 +259,10 @@ pub struct SoundproofArgs {
     #[arg(short, long, default_value = "clip-lowpass")]
     filters: FilterOptions,
     /// A file from which to load multiple configurations for stepping.
-    #[arg(long, requires="mode")]
+    #[arg(long, requires = "mode")]
     step_file: Option<String>,
     /// Whether to take MIDI input for steps. Only works live.
-    #[arg(long, action, requires="file", requires="live")]
+    #[arg(long, action, requires = "file", requires = "live")]
     midi: bool,
     // /// When set, only generate visualization (potentially including animation frames), not music.
     // #[arg(short('D'), long, action)]
@@ -387,8 +387,7 @@ fn run_steps(term: ITerm, limit: usize) {
 pub fn main_steps_live(args: SoundproofArgs) {
     if args.midi {
         animate_term_midi(args);
-    }
-    else {
+    } else {
         animate_term_steps(args);
     }
 }
@@ -408,7 +407,7 @@ pub fn main_steps(mut args: SoundproofArgs) {
         Some(path) => {
             let contents = fs::read_to_string(path).expect("Could not open config file");
             contents.split("\n").map(|s| s.to_owned()).collect()
-        },
+        }
         None => vec![],
     };
     let max_steps = args.step_count.unwrap_or(100);
@@ -426,10 +425,13 @@ pub fn main_steps(mut args: SoundproofArgs) {
         base_size.get(tree.size());
         println!("\t{:?}, output size {}", step_start.elapsed(), tree.size());
 
-        println!("Sequencing over frequency range {}-{} for duration {dur}...", args.freq_min, args.freq_max);
+        println!(
+            "Sequencing over frequency range {}-{} for duration {dur}...",
+            args.freq_min, args.freq_max
+        );
         let seq_start = Instant::now();
         const NUM_BUCKETS: usize = 512;
-        
+
         let buckets: Buckets<NUM_BUCKETS> =
             Buckets::from_tree(&tree, args.freq_min, args.freq_max, args.division);
         buckets
@@ -461,7 +463,9 @@ pub fn main() {
     match (args.mode, args.live) {
         // #[cfg(feature = "bevy")]
         // (RunMode::Single, true) => performance::main_live(),
-        (RunMode::Single, true) => println!("Cannot run single-term live mode on this branch due to FunDSP incompatibilities. Switch to branch 'bevy'."),
+        (RunMode::Single, true) => println!(
+            "Cannot run single-term live mode on this branch due to FunDSP incompatibilities. Switch to branch 'bevy'."
+        ),
         (RunMode::Single, false) => main_to_file(&args),
         (RunMode::Steps, true) => main_steps_live(args),
         (RunMode::Steps, false) => main_steps(args),

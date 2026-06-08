@@ -99,7 +99,7 @@ pub trait Selector: Clone {
                 base_color: BLUES.1,
                 alt_color: BLUES.0,
                 max_depth: 0,
-                will_step: None, 
+                will_step: None,
                 // dspthing: None,
             },
         }

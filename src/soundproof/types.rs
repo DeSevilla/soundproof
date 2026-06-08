@@ -158,7 +158,7 @@ pub enum SoundTree {
 pub enum Highlight {
     One,
     Two,
-    Three
+    Three,
 }
 
 // #[derive(Clone, Debug, PartialEq, Component)]
@@ -444,13 +444,13 @@ impl SoundTree {
                 for child in children {
                     child.pervade_metadata(f);
                 }
-            },
+            }
             SoundTree::Seq(children, meta) => {
                 f(meta);
                 for child in children {
                     child.pervade_metadata(f);
                 }
-            },
+            }
             SoundTree::Sound(_, meta) => f(meta),
         }
     }

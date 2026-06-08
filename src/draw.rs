@@ -1,9 +1,9 @@
-use std::path::Path;
+use crate::DivisionMethod;
+use crate::soundproof::types::{Highlight, SoundTree};
 use minifb::{Window, WindowOptions};
 use piet_common::kurbo::Rect;
 use piet_common::*;
-use crate::soundproof::types::{Highlight, SoundTree};
-use crate::DivisionMethod;
+use std::path::Path;
 
 // TODO we should take these as options
 // const WIDTH_PX: usize = 377 * 3;
@@ -43,10 +43,12 @@ pub fn make_soundproof_window() -> Window {
     Window::new("Soundproof Output", WIDTH_PX, HEIGHT_PX, window_options).expect("")
 }
 
-pub fn draw_tree_canvas(tree: &SoundTree, scaling: DivisionMethod, device: &mut Device) -> Vec<u32> {
-    let mut bitmap = device
-        .bitmap_target(WIDTH_PX, HEIGHT_PX, DPI)
-        .unwrap();
+pub fn draw_tree_canvas(
+    tree: &SoundTree,
+    scaling: DivisionMethod,
+    device: &mut Device,
+) -> Vec<u32> {
+    let mut bitmap = device.bitmap_target(WIDTH_PX, HEIGHT_PX, DPI).unwrap();
     let mut rc = bitmap.render_context();
     let rect = Rect::new(0.0, 0.0, WIDTH_IN, HEIGHT_IN);
     rc.fill(rect, &Color::BLACK);
@@ -55,8 +57,7 @@ pub fn draw_tree_canvas(tree: &SoundTree, scaling: DivisionMethod, device: &mut 
     rc.finish().unwrap();
     std::mem::drop(rc);
     let buf = bitmap.to_image_buf(ImageFormat::RgbaPremul).unwrap();
-    buf
-        .raw_pixels()
+    buf.raw_pixels()
         .chunks_exact(4)
         .map(|s| s.try_into().unwrap())
         .map(|[r, g, b, _a]: [u8; 4]| ((r as u32) << 16) | ((g as u32) << 8) | b as u32)
@@ -78,7 +79,7 @@ impl LiveDrawContext {
 
     pub fn draw_tree(&mut self, tree: &SoundTree, scaling: DivisionMethod) {
         let buf = draw_tree_canvas(&tree, scaling, &mut self.device);
-        
+
         self.window
             .update_with_buffer(&buf, WIDTH_PX, HEIGHT_PX)
             .unwrap();
@@ -141,8 +142,7 @@ fn drawtree(
             let rect = if border_width > 1.0 / DPI {
                 let adjust = border_width * 0.5;
                 Rect::new(left + adjust, bottom - adjust, right - adjust, top + adjust)
-            }
-            else {
+            } else {
                 rect_base
             };
 
@@ -172,7 +172,9 @@ fn drawtree(
                 // }
             };
             // let adjust = border_width * 0.5;
-            if let Some(w) = meta.will_step && border_width > 1.0 / DPI {
+            if let Some(w) = meta.will_step
+                && border_width > 1.0 / DPI
+            {
                 let border_color = match w {
                     Highlight::One => Color::WHITE,
                     Highlight::Two => Color::RED,

@@ -1,6 +1,7 @@
 use std::fs;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::mpsc::sync_channel;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
@@ -66,12 +67,14 @@ pub fn animate_term_midi(mut args: SoundproofArgs) {
     });
 
     // Channels to transfer MIDI input to main loop
-    let updated = Arc::new(AtomicBool::new(false));
-    let current_note = Arc::new(AtomicU8::new(0));
-    let current_velocity = Arc::new(AtomicU8::new(0));
-    let updated_close = Arc::clone(&updated);
-    let note_close = Arc::clone(&current_note);
-    let vel_close = Arc::clone(&current_velocity);
+    // let new_note = Arc::new(AtomicBool::new(false));
+    // let end_note = Arc::new(AtomicBool::new(false));
+    // let current_note = Arc::new(AtomicU8::new(0));
+    // let current_velocity = Arc::new(AtomicU8::new(0));
+    // let new_note_close = Arc::clone(&new_note);
+    // let end_note_close = Arc::clone(&end_note);
+    // let note_close = Arc::clone(&current_note);
+    // let vel_close = Arc::clone(&current_velocity);
 
     // Initialize MIDI input
     let mut midi_in = MidiInput::new("midir reading input").expect("Should have loaded midi");
@@ -85,32 +88,36 @@ pub fn animate_term_midi(mut args: SoundproofArgs) {
         in_ports[1].clone()
     };
     let in_port_name = midi_in.port_name(&in_port).unwrap();
+    let (tx, nx) = sync_channel(30);
+    let (tx2, ex) = sync_channel(30);
     let _conn_in = midi_in
         .connect(
             &in_port,
             "midir-read-input",
             move |_stamp, message, _| {
-                println!("got something");
+                // println!("got something");
                 let (msg, _len) = MidiMsg::from_midi(message).unwrap();
                 if let MidiMsg::ChannelVoice { channel: _, msg } = msg {
                     println!("Received {msg:?}");
                     match msg {
                         ChannelVoiceMsg::NoteOn { note, velocity } => {
                             println!("Got note! {note} {velocity}");
-                            note_close.store(note, Ordering::Relaxed);
-                            vel_close.store(velocity, Ordering::Relaxed);
-                            updated_close.store(true, Ordering::Relaxed);
+                            tx.send((note, velocity)).unwrap();
+                            // note_close.store(note, Ordering::Relaxed);
+                            // vel_close.store(velocity, Ordering::Relaxed);
+                            // new_note_close.store(true, Ordering::Relaxed);
                         }
                         ChannelVoiceMsg::NoteOff {
                             note: _,
                             velocity: _,
                         } => {
                             println!("Ending note");
-                            note_close.store(0, Ordering::Relaxed);
-                            vel_close.store(0, Ordering::Relaxed);
-                            updated_close.store(true, Ordering::Relaxed);
+                            // note_close.store(0, Ordering::Relaxed);
+                            // vel_close.store(0, Ordering::Relaxed);
+                            tx2.send(()).unwrap();
+                            // end_note_close.store(true, Ordering::Relaxed);
                         }
-                        _ => {}
+                        _ => {println!("what kind of message is this? {msg:?}")}
                     }
                 }
             },
@@ -131,7 +138,7 @@ pub fn animate_term_midi(mut args: SoundproofArgs) {
         }
         None => vec![],
     };
-    let (tx, rx) = std::sync::mpsc::sync_channel(30.min(limit));
+    let (tx, rx) = sync_channel(30.min(limit));
     std::thread::spawn(move || {
         for (ii, tm) in args.term().step_over(Context::new(std_env())).enumerate() {
             if ii >= limit {
@@ -153,15 +160,18 @@ pub fn animate_term_midi(mut args: SoundproofArgs) {
             return;
         }
         if ii > limit {
+            println!("hit limit");
             break;
         }
 
-        while !(updated.load(Ordering::Relaxed)) {
-            sleep(Duration::from_millis(1));
-        }
-        let note = current_note.load(Ordering::Relaxed);
-        let velocity = current_velocity.load(Ordering::Relaxed);
-        updated.store(false, Ordering::Relaxed);
+        // while !(new_note.load(Ordering::Relaxed)) {
+        //     sleep(Duration::from_millis(1));
+        // }
+        // println!("flipping new_note");
+        // let note = current_note.load(Ordering::Relaxed);
+        // let velocity = current_velocity.load(Ordering::Relaxed);
+        // new_note.store(false, Ordering::Relaxed);
+        let (note, velocity) = nx.recv().unwrap();
         println!("Step {ii}: Loaded note {note} at vel {velocity}");
         match note {
             48..=73 => {
@@ -181,20 +191,24 @@ pub fn animate_term_midi(mut args: SoundproofArgs) {
             }
         }
 
+        println!("sequencing tree of size {}", tree.size());
         // let tree = type_translate(&tm, meta).unwrap();
         let buckets: Buckets<64> =
             Buckets::from_tree(&tree, args.freq_min, args.freq_max, args.division).reverse();
         let sound_duration = f64::INFINITY; //args.time.unwrap_or(1.0); // TODO can we tie duration to keypress length?
         buckets.sequence(&mut cfg_seq, 0.0, sound_duration, 0.0);
         draw_ctx.draw_tree(&tree, args.division);
+        println!("sequenced");
 
         // wait for note to end before proceeding
         // TODO do we need this part?
-        while !(updated.load(Ordering::Relaxed)) {
-            sleep(Duration::from_millis(1));
-        }
+        // while !(end_note.load(Ordering::Relaxed)) {
+        //     sleep(Duration::from_millis(1));
+        // }
+        ex.recv().unwrap();
+        println!("flipping end_note");
         cfg_seq.seq.reset();
-        updated.store(false, Ordering::Relaxed);
+        // end_note.store(false, Ordering::Relaxed);
         ii += 1;
     }
     println!("Closing connection");

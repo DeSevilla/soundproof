@@ -971,7 +971,8 @@ impl<const N: usize> SoundGenerator for Buckets<N> {
         // let modified_instrument = (constant(freq) >> self.instrument.clone()) >> split::<U2>() * factor;
         for (freq, weights) in self.iter_buckets() {
             let instr = (constant(freq) | constant(0.5)) >> weights.instrument();
-            let fade_duration = 0.05;
+            // let fade_duration = 0.05;
+            let fade_duration = 0.0;
             seq.push_duration(
                 start_time,
                 duration,

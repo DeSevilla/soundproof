@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use crate::term::{vapp, vlam, vpi};
+use crate::{AnnStep, CallBy};
 
 // LambdaPi was originally written for Haskell and I translated it to rust.
 // Certain design choices (bidirectional typing, a term/value split, higher-order abstract syntax)
@@ -115,12 +116,15 @@ pub enum Neutral {
 pub type Env = Vec<Value>;
 /// We do our typechecking with values.
 pub type Type = Value;
+
 /// Context of free variables for typechecking.
 #[derive(Clone)]
 pub struct Context {
     pub bound: Vec<Value>,
     pub free: Vec<(Name, Type, Option<Value>)>,
     pub bindings: usize,
+    pub call_by: CallBy,
+    pub ann_step: AnnStep,
 }
 
 impl Context {
@@ -129,6 +133,18 @@ impl Context {
             bound: vec![],
             free: free_vars,
             bindings: 0,
+            call_by: CallBy::Value,
+            ann_step: AnnStep::Neither,
+        }
+    }
+
+    pub fn new_with(free_vars: Vec<(Name, Type, Option<Value>)>, call_by: CallBy, ann_step: AnnStep) -> Self {
+        Self {
+            bound: vec![],
+            free: free_vars,
+            bindings: 0,
+            call_by,
+            ann_step,
         }
     }
 
@@ -187,6 +203,12 @@ impl Context {
     }
 }
 
+impl Default for Context {
+    fn default() -> Self {
+        Self::new(crate::lambdapi::std_env())
+    }
+}
+
 impl From<ITerm> for CTerm {
     fn from(value: ITerm) -> Self {
         CTerm::Inf(Box::new(value))
@@ -240,6 +262,13 @@ impl Tag {
 }
 
 impl CTerm {
+    pub fn size(&self) -> usize {
+        match self {
+            CTerm::Inf(iterm) => iterm.size(),
+            CTerm::Lam(cterm) => 1 + cterm.size(),
+        }
+    }
+
     pub fn tag(&self) -> Tag {
         match self {
             CTerm::Inf(iterm) => iterm.tag(),
@@ -249,6 +278,28 @@ impl CTerm {
 }
 
 impl ITerm {
+    pub fn size(&self) -> usize {
+        match self {
+            ITerm::Ann(body, typ) => 1 + body.size() + typ.size(),
+            ITerm::Star => 1,
+            ITerm::Pi(src, trg) => 1 + src.size() + trg.size(),
+            ITerm::Bound(_) => 1,
+            ITerm::Free(name) => 1,
+            ITerm::App(func, arg) => 1 + func.size() + arg.size(),
+            ITerm::Nat => 1,
+            ITerm::Zero => todo!(),
+            ITerm::Succ(cterm) => todo!(),
+            ITerm::NatElim(cterm, cterm1, cterm2, cterm3) => todo!(),
+            ITerm::Fin(cterm) => 1 + cterm.size(),
+            ITerm::FZero(cterm) => todo!(),
+            ITerm::FSucc(cterm, cterm1) => todo!(),
+            ITerm::FinElim(cterm, cterm1, cterm2, cterm3, cterm4) => todo!(),
+            ITerm::Eq(cterm, cterm1, cterm2) => todo!(),
+            ITerm::Refl(cterm, cterm1) => todo!(),
+            ITerm::EqElim(cterm, cterm1, cterm2, cterm3, cterm4, cterm5) => todo!(),
+        }
+    }
+
     pub fn tag(&self) -> Tag {
         use Tag::*;
         match self {

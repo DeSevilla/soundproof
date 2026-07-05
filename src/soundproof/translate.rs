@@ -3,7 +3,10 @@ use std::rc::Rc;
 
 use fundsp::prelude32::sine;
 
-use crate::{ast::*, music::notes::G, select::Selector, sound_generators::*, term::*, types::*};
+use crate::{
+    AnnStep, CallBy, ast::*, music::notes::G, select::Selector, sound_generators::*, term::*,
+    types::*,
+};
 
 /// Translates [ITerm]s into [SoundTree]s according to their type structure.
 /// Subterms have their types checked or inferred and have their melodies combined with their types' melodies.
@@ -324,15 +327,31 @@ impl ITerm {
         let meta = meta.imerge(self);
         match self {
             ITerm::Ann(ct, cty) => {
-                // should we modify something in this to present an annotation better? term-translate the type, maybe?
+                // // enum MayI {Must, May, Maynt};
+                // let (step_ty, step_body) = match ctx.ann_step {
+                //     AnnStep::Neither => match ct {
+                //         CTerm::Inf(_) => (MayI::Must, MayI::Must),
+                //         CTerm::Lam(_) => (MayI::Maynt, MayI::May),
+                //     },
+                //     AnnStep::Type => todo!(),
+                //     AnnStep::Body => todo!(),
+                //     AnnStep::Both => todo!(),
+                //     AnnStep::Unprincipled => todo!(),
+                // };
+                // TODO will_step is convoluted for annotations
                 let (mut tytree, mut stepped) =
                     cty.check_translate(ctx, &Value::Star, meta.clone(), may_step)?;
                 may_step = may_step && !stepped;
                 let ty = cty.eval(ctx);
-                if may_step && let CTerm::Inf(_) = ct {
+                if may_step
+                    && let AnnStep::Neither = ctx.ann_step // TODO this is simply wrong how do we do it then
+                    && let CTerm::Inf(_) = ct
+                {
                     tytree.pervade_metadata(&|m| m.will_step = Some(Highlight::Two));
                     stepped = true;
-                    may_step = false;
+                    if ctx.ann_step != AnnStep::Unprincipled {
+                        may_step = false;
+                    }
                 };
                 let (termtree, tmstep) = ct.check_translate(ctx, &ty, meta, may_step)?; // should we have the type and term at diff depths?
                 stepped = stepped || tmstep;
@@ -368,11 +387,13 @@ impl ITerm {
                 Ok((ty, false, tree))
             }
             ITerm::App(f, x) => {
+                // TODO will_step with call_by
                 let (fty, stepped, mut ftree) = f.infer_translate(ctx, meta.clone(), may_step)?;
                 let may_step = may_step && !stepped;
                 match fty {
                     Value::Pi(src, trg) => {
-                        let (mut xtree, xstep) = x.check_translate(ctx, &src, meta, may_step)?;
+                        let x_may_step = may_step && ctx.call_by == CallBy::Value;
+                        let (mut xtree, xstep) = x.check_translate(ctx, &src, meta, x_may_step)?;
                         let mut stepped = stepped || xstep;
                         let may_step = may_step && !stepped;
                         if may_step {
@@ -396,6 +417,7 @@ impl ITerm {
                 // but I don't think we have any Succs in the paradox so it's fine for now
                 Ok((Value::Nat, stepped, SoundTree::seq([node_melody, subtree])))
             }
+            // TODO: put will-step into the eliminators
             ITerm::NatElim(motive, base, ind, k) => {
                 let (mtree, _) = motive.check_translate(
                     ctx,

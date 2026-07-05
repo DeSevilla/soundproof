@@ -1,6 +1,6 @@
 use std::any::Any;
 
-use crate::{ast::*, lambdapi::term::quote0};
+use crate::{AnnStep, CallBy, ast::*, lambdapi::term::quote0};
 
 #[derive(Debug, Clone)]
 pub enum Step<T: Stepper> {
@@ -11,6 +11,26 @@ pub enum Step<T: Stepper> {
 impl<T: Stepper> Step<T> {
     pub fn new(val: T) -> Self {
         Self::Cont(val, None)
+    }
+}
+
+pub struct StepWithChange<T: Stepper> {
+    tm: Step<T>,
+    ctx: Context,
+}
+
+impl<T: Stepper> Iterator for StepWithChange<T> {
+    type Item = (T, Option<ITerm>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match &self.tm {
+            Step::Done(_, _) => None,
+            Step::Cont(t, c) => {
+                let res = (t.clone(), c.clone());
+                self.tm = t.clone().step(self.ctx.clone());
+                Some(res)
+            }
+        }
     }
 }
 
@@ -79,28 +99,77 @@ pub trait Stepper: Clone {
             ctx,
         }
     }
+    fn step_with_change(self, ctx: Context) -> StepWithChange<Self>
+    where
+        Self: Sized,
+    {
+        StepWithChange {
+            tm: Step::Cont(self, None),
+            ctx,
+        }
+    }
 }
 
 impl Stepper for ITerm {
     fn step(self, ctx: Context) -> Step<ITerm> {
         use Step::*;
         match self {
-            ITerm::Ann(body, ty) => match body {
-                CTerm::Inf(it) => {
-                    Cont(*it, Some(ITerm::Ann(ty, CTerm::Inf(Box::new(ITerm::Star)))))
-                }
-                CTerm::Lam(_) => ty.step(ctx).apply(|typ| ITerm::Ann(body, typ)), //lam doesn't step
+            ITerm::Ann(body, ty) => match ctx.ann_step {
+                // neither: body inf: drop, body lam: type steps if possible
+                // in other words: both step if possible, body inf: both drop
+                AnnStep::Neither => match body {
+                    CTerm::Inf(it) => {
+                        // println!("annotating {}", );
+                        Cont(*it, Some(ITerm::Ann(ty, CTerm::Inf(Box::new(ITerm::Star)))))
+                    }
+                    CTerm::Lam(_) => ty.step(ctx).apply(|typ| ITerm::Ann(body, typ)), //lam doesn't step
+                },
+                // both: ty steps if possible, otherwise body steps if possible, and if body is inf drop type
+                AnnStep::Unprincipled => match ty.step(ctx.clone()) {
+                    Cont(typ, v) => Cont(ITerm::Ann(body, typ), v),
+                    Done(typ, _) => body.step(ctx).apply(|ct| match ct {
+                        CTerm::Inf(it) => *it,
+                        // CTerm::Inf(it) => {print!("ann dropping {:?} {}; ", typ.tag(), format!("{typ}").len()); *it},
+                        _ => ITerm::Ann(ct, typ),
+                    }),
+                },
+                // ty steps if possible, otherwise body steps if possible, otherwise if body is inf drop
+                AnnStep::Both => match ty.step(ctx.clone()) {
+                    Cont(typ, v) => Cont(ITerm::Ann(body, typ), v),
+                    Done(typ, _) => match body.step(ctx) {
+                        Done(bod, ch) => match bod { 
+                            CTerm::Inf(it) => Cont(*it, ch),
+                            // CTerm::Inf(it) => {print!("ann dropping {:?} {}; ", typ.tag(), format!("{typ}").len()); *it},
+                            _ => Cont(ITerm::Ann(bod, typ), ch)
+                        }
+                        Cont(bod, ch) => Cont(ITerm::Ann(bod, typ), ch), 
+                    }
+                },
+                // type: type steps if possible, otherwise if body is inf drop
+                AnnStep::Type => match ty.step(ctx.clone()) {
+                    Cont(typ, v) => Cont(ITerm::Ann(body, typ), v),
+                    Done(typ, v) => match body {
+                        CTerm::Inf(it) => Cont(
+                            *it,
+                            Some(ITerm::Ann(typ, CTerm::Inf(Box::new(ITerm::Star)))),
+                        ),
+                        _ => Done(ITerm::Ann(body, typ), v),
+                    },
+                },
+                // // body: body steps if possible, otherwise if body is inf both step always, if body is lam type steps if possible
+                // AnnStep::Body => match body.step(ctx.clone()) {
+                //     Cont(bod, v) => Cont(ITerm::Ann(bod, ty), v),
+                //     Done(bod, _) => match bod {
+                //         CTerm::Inf(it) => {
+                //             Cont(*it, Some(ITerm::Ann(ty, CTerm::Inf(Box::new(ITerm::Star)))))
+                //         }
+                //         CTerm::Lam(_) => ty.step(ctx).apply(|typ| ITerm::Ann(bod, typ)),
+                //     },
+                // },
             },
             // note: this alternative way of running Ann-step means False annotations are never removed
             // also breaks will_step somewhat
-            // ITerm::Ann(body, ty) => match ty.step(ctx.clone()) {
-            //     Cont(typ, v) => Cont(ITerm::Ann(body, typ), v),
-            //     Done(typ, _) => body.step(ctx).apply(|ct| match ct {
-            //         CTerm::Inf(it) => *it,
-            //         // CTerm::Inf(it) => {print!("ann dropping {:?} {}; ", typ.tag(), format!("{typ}").len()); *it},
-            //         _ => ITerm::Ann(ct, typ),
-            //     }),
-            // },
+            //
             ITerm::Star => Done(ITerm::Star, None),
             ITerm::Pi(src, trg) => match src.clone().step(ctx) {
                 Cont(c, v) => Cont(ITerm::Pi(c, trg), v),
@@ -121,14 +190,32 @@ impl Stepper for ITerm {
                 match func.step(ctx.clone()) {
                     Cont(f, v) => Cont(ITerm::App(Box::new(f), arg), v),
                     Done(f, _) => {
-                        match arg.step(ctx.clone()) {
-                            Cont(a, v) => Cont(ITerm::App(Box::new(f), a), v),
-                            Done(a, _) => match f {
+                        match ctx.call_by {
+                            CallBy::Value => match arg.step(ctx.clone()) {
+                                Cont(a, v) => Cont(ITerm::App(Box::new(f), a), v),
+                                Done(a, _) => match f {
+                                    ITerm::Ann(CTerm::Lam(body), CTerm::Inf(ty)) => {
+                                        match *ty.clone() {
+                                            ITerm::Pi(src, trg) => {
+                                                // print!("lam @ {:?} | {} <- {} => ", arg.tag(), format!("{body}").len(), format!("{arg}").len());
+                                                let tm = ITerm::Ann(a, src);
+                                                let resbody = body.subst(0, &tm);
+                                                let resty = trg.subst(0, &tm);
+                                                // print!("{}; ", format!("{resbody}").len());
+                                                Cont(ITerm::Ann(resbody, resty), Some(tm))
+                                            }
+                                            _ => panic!("got malformed lambda type"),
+                                        }
+                                    }
+                                    _ => panic!("got malformed lambda value"),
+                                },
+                            },
+                            CallBy::Name => match f {
                                 ITerm::Ann(CTerm::Lam(body), CTerm::Inf(ty)) => {
                                     match *ty.clone() {
                                         ITerm::Pi(src, trg) => {
                                             // print!("lam @ {:?} | {} <- {} => ", arg.tag(), format!("{body}").len(), format!("{arg}").len());
-                                            let tm = ITerm::Ann(a, src);
+                                            let tm = ITerm::Ann(arg, src);
                                             let resbody = body.subst(0, &tm);
                                             let resty = trg.subst(0, &tm);
                                             // print!("{}; ", format!("{resbody}").len());
@@ -189,9 +276,8 @@ fn eval_verify(tm: ITerm, ctx: Context) -> ITerm {
 
 #[cfg(test)]
 fn check_match(tm: ITerm) {
-    use crate::lambdapi::std_env;
     println!("Base term: {tm:?}");
-    let ctx = Context::new(std_env());
+    let ctx = Context::default();
     let u_eval1 = quote0(&tm.eval(&ctx));
     println!("Term 1: {u_eval1:?}");
     let u_eval2 = quote0(&eval_verify(tm, ctx.clone()).eval(&ctx));

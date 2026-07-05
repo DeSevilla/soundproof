@@ -57,7 +57,7 @@ pub fn make_spectrograph(input_wav: &Path, output_png: &Path) {
 }
 
 /// Render an [AudioUnit] (in practice this is a [Sequencer]) to a WAV file and generate a spectrograph for it.
-pub fn save(au: &mut dyn AudioUnit, dur: f64) {
+pub fn save(au: &mut dyn AudioUnit, dur: f64, base_name: String) {
     use std::time::Instant;
     println!("Rendering .wav file ({dur}s)...");
     let now = Instant::now();
@@ -69,12 +69,14 @@ pub fn save(au: &mut dyn AudioUnit, dur: f64) {
         wave1.normalize();
     }
     println!("...done in {:?}", now.elapsed());
-    let filename = Path::new("output/output.wav");
+    let wav_filename = "output/".to_string() + &base_name + ".wav";
+    let png_filename = "output/".to_string() + &base_name + ".png";
+    let filename = Path::new(&wav_filename);
     println!("Saving .wav file ({dur}s)...");
     let now = Instant::now();
     wave1.save_wav16(filename).expect("Could not save wave.");
     println!("...done in {:?}", now.elapsed());
-    let png_file = Path::new("output/output.png");
+    let png_file = Path::new(&png_filename);
     make_spectrograph(filename, png_file);
     println!("Saved spectrograph.");
 }

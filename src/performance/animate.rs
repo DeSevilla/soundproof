@@ -1,6 +1,4 @@
 use std::fs;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::mpsc::sync_channel;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
@@ -16,15 +14,14 @@ use midi_msg::{ChannelVoiceMsg, MidiMsg};
 // use midi_msg::{ChannelVoiceMsg, MidiMsg};
 use midir::{Ignore, MidiInput};
 
-use crate::step::*;
-use crate::lambdapi::ast::*;
-use crate::lambdapi::term::*;
 use crate::draw::LiveDrawContext;
-use crate::soundproof::types::ConfigSequencer;
-use crate::type_translate;
+use crate::lambdapi::ast::*;
 use crate::music::write_data;
 use crate::soundproof::select::Silence;
 use crate::soundproof::sound_generators::{Buckets, SoundGenerator};
+use crate::soundproof::types::ConfigSequencer;
+use crate::step::*;
+use crate::type_translate;
 use crate::{FilterOptions, SoundproofArgs};
 
 // TODO: could we like, pregenerate animation frames for a tree somehow? idk
@@ -117,7 +114,9 @@ pub fn animate_term_midi(mut args: SoundproofArgs) {
                             tx2.send(()).unwrap();
                             // end_note_close.store(true, Ordering::Relaxed);
                         }
-                        _ => {println!("what kind of message is this? {msg:?}")}
+                        _ => {
+                            println!("what kind of message is this? {msg:?}")
+                        }
                     }
                 }
             },
@@ -128,7 +127,7 @@ pub fn animate_term_midi(mut args: SoundproofArgs) {
 
     // Set up loop parameters
     let meta = Silence::new();
-    // let ctx = Context::new(std_env());
+    // let ctx = Context::default();
     // let term = args.term();
     let limit = args.step_count.unwrap_or(100);
     let sequence = match &args.step_file {
@@ -140,7 +139,7 @@ pub fn animate_term_midi(mut args: SoundproofArgs) {
     };
     let (tx, rx) = sync_channel(30.min(limit));
     std::thread::spawn(move || {
-        for (ii, tm) in args.term().step_over(Context::new(std_env())).enumerate() {
+        for (ii, tm) in args.term().step_over(Context::default()).enumerate() {
             if ii >= limit {
                 break;
             }
@@ -253,7 +252,7 @@ pub fn animate_term_steps(mut args: SoundproofArgs) {
 
     // Set up loop parameters
     let meta = Silence::new();
-    let ctx = Context::new(std_env());
+    let ctx = Context::default();
     let term = args.term();
     let limit = args.step_count.unwrap_or(100);
     let sequence = match &args.step_file {

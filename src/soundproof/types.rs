@@ -337,7 +337,11 @@ impl SoundTree {
 
     /// The weight of the tree, considered as a subtree, for duration scaling.
     pub fn subtree_weight(&self, exp: f64) -> f64 {
-        self.weight(exp).powf(exp)
+        if self.metadata().will_step.is_some() {
+            self.weight(exp).powf(exp) * 3.0
+        } else {
+            self.weight(exp).powf(exp)
+        }
     }
 
     /// A general "induction" principle for the "horizontal" positioning and stereo of nodes in the tree.

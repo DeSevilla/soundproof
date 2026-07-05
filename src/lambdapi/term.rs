@@ -585,7 +585,7 @@ fn test_parsetype(ctx: &mut Context, text: &str) {
 #[test]
 fn test_forall() {
     let text = r"let    id = (\ a x -> x) :: forall (a :: *) . (a -> a)";
-    let mut ctx = Context::new(std_env());
+    let mut ctx = Context::default();
     test_parsetype(&mut ctx, text);
     ctx.find_free(&Name::Global("id".to_owned())).unwrap();
 }
@@ -601,7 +601,7 @@ fn test_voidelim() {
                         (\ _ _ _ -> FZero 0)
                         0 )
         :: forall (m :: Fin 0 -> *) (v :: Fin 0) . m v";
-    let mut ctx = Context::new(std_env());
+    let mut ctx = Context::default();
     test_parsetype(&mut ctx, text);
     ctx.find_free(&Name::Global("voidElim".to_owned())).unwrap();
 }
@@ -616,7 +616,7 @@ fn test_leibniz() {
     :: forall (a :: *) (b :: *) (f :: a -> b) (x :: a) (y :: a) .
         Eq a x y -> Eq b (f x) (f y)
     ";
-    let mut ctx = Context::new(std_env());
+    let mut ctx = Context::default();
     test_parsetype(&mut ctx, text);
     ctx.find_free(&Name::Global("leibniz".to_owned())).unwrap();
 }
@@ -629,7 +629,7 @@ fn test_nat1elim() {
         :: forall (m :: Nat -> *) . m 0 -> m 1 ->
             (forall n :: Nat . m (Succ n) -> m (Succ (Succ n))) ->
             forall (n :: Nat) . m n";
-    let mut ctx = Context::new(std_env());
+    let mut ctx = Context::default();
     test_parsetype(&mut ctx, text);
     ctx.find_free(&Name::Global("nat1Elim".to_owned())).unwrap();
 }
@@ -672,7 +672,7 @@ fn test_file(file: &str) -> Context {
     let (rest, stmts) = statements(&text).expect("Should have parsed");
     println!("Remainder {rest}");
     assert!(rest.len() == 0);
-    let mut ctx = Context::new(std_env());
+    let mut ctx = Context::default();
     let mut handled = 0;
     for statement in stmts {
         println!("handling {handled}");

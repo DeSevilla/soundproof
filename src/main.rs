@@ -427,7 +427,7 @@ pub fn main_steps(mut args: SoundproofArgs) {
 
     let seq = Sequencer::new(0, 2, ReplayMode::None);
     let mut cfg_seq = ConfigSequencer::new(seq, args.live);
-    // let mut base_size = SetOnce::new();
+    let mut base_size = SetOnce::new();
     let sequence = match &args.step_file {
         Some(path) => {
             let contents = fs::read_to_string(path).expect("Could not open config file");
@@ -437,7 +437,7 @@ pub fn main_steps(mut args: SoundproofArgs) {
     };
     let max_steps = args.step_count.unwrap_or(100);
     // for (ii, term) in args.term().step_over(Context::new_with(std_env(), args.call_by, args.ann_step)).enumerate() {
-    for (ii, (term, _change)) in args.term().step_with_change(Context::new_with(std_env(), args.call_by, args.ann_step)).enumerate() {
+    for (ii, (term, change)) in args.term().step_with_change(Context::new_with(std_env(), args.call_by, args.ann_step)).enumerate() {
         if ii < sequence.len() {
             println!("Loading from file: {}", sequence[ii]);
             args = SoundproofArgs::parse_from(sequence[ii].split(' '))
@@ -450,14 +450,14 @@ pub fn main_steps(mut args: SoundproofArgs) {
         // base_size.get(tree.size());
         println!("\t{:?}, output size {}", step_start.elapsed(), tree.size());
 
-        let dur = base_dur;
-        // let dur = if let None = args.time && let Some(diff) = change {
-        //     let diff_tree = type_translate(&diff, selector).unwrap();
-        //     diff_tree.size() as f64 / base_size.get(tree.size()) as f64 * 5.0
-        // }
-        // else {
-        //     base_dur
-        // };
+        // let dur = base_dur;
+        let dur = if let None = args.time && let Some(diff) = change {
+            let diff_tree = type_translate(&diff, selector).unwrap();
+            diff_tree.size() as f64 / base_size.get(tree.size()) as f64 * 5.0
+        }
+        else {
+            base_dur
+        };
         tones.duration = dur;
         println!(
             "Sequencing over frequency range {}-{} for duration {dur}...",

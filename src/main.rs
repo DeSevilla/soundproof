@@ -246,7 +246,7 @@ pub struct SoundproofArgs {
     #[arg(short, long, default_value = "single")]
     mode: RunMode,
     /// Whether to render to file or run it live. Single-term live runs are currently unavailable on this branch.
-    #[arg(short('L'), long, action)]
+    #[arg(short, long, action)]
     live: bool,
     /// Predefined terms of the dependently typed lambda calculus.
     #[arg(short, long, default_value = "sigma")]
@@ -273,10 +273,10 @@ pub struct SoundproofArgs {
     #[arg(short, long, default_value = "output")]
     output: String,
     /// Low end of frequency range in step mode.
-    #[arg(long, short('l'), default_value = "60", requires = "mode")]
+    #[arg(long, short('L'), default_value = "60", requires = "mode")]
     freq_low: f32,
     /// High end of frequency range in step mode.
-    #[arg(long, short('h'), default_value = "2500", requires = "mode")]
+    #[arg(long, short('H'), default_value = "2500", requires = "mode")]
     freq_high: f32,
     /// Reverse frequency range in step mode.
     #[arg(long, short, action, requires = "mode")]
@@ -287,12 +287,13 @@ pub struct SoundproofArgs {
     /// A file from which to load multiple configurations in step mode.
     #[arg(long, requires = "mode")]
     step_file: Option<String>,
+    /// Whether to vary step time with the size of the change between steps.
     #[arg(long, short('D'), action, requires = "mode")]
     diff_time: bool,
-    /// Semantics of function application in step mode.
+    /// Evaluation order of function application in step mode.
     #[arg(long, requires = "mode", default_value = "name")]
     call_by: CallBy,
-    /// Semantics of annotation dropping in step mode.
+    /// Evaluation order of annotation dropping in step mode.
     #[arg(long, requires = "mode", default_value = "unprincipled")]
     ann_step: AnnStep,
     /// Whether to take MIDI input for live step mode.

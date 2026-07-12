@@ -138,7 +138,11 @@ impl Context {
         }
     }
 
-    pub fn new_with(free_vars: Vec<(Name, Type, Option<Value>)>, call_by: CallBy, ann_step: AnnStep) -> Self {
+    pub fn new_with(
+        free_vars: Vec<(Name, Type, Option<Value>)>,
+        call_by: CallBy,
+        ann_step: AnnStep,
+    ) -> Self {
         Self {
             bound: vec![],
             free: free_vars,

@@ -119,7 +119,6 @@ impl Stepper for ITerm {
                 // in other words: both step if possible, body inf: both drop
                 AnnStep::Neither => match body {
                     CTerm::Inf(it) => {
-                        // println!("annotating {}", );
                         Cont(*it, Some(ITerm::Ann(ty, CTerm::Inf(Box::new(ITerm::Star)))))
                     }
                     CTerm::Lam(_) => ty.step(ctx).apply(|typ| ITerm::Ann(body, typ)), //lam doesn't step
@@ -127,23 +126,36 @@ impl Stepper for ITerm {
                 // both: ty steps if possible, otherwise body steps if possible, and if body is inf drop type
                 AnnStep::Unprincipled => match ty.step(ctx.clone()) {
                     Cont(typ, v) => Cont(ITerm::Ann(body, typ), v),
-                    Done(typ, _) => body.step(ctx).apply(|ct| match ct {
-                        CTerm::Inf(it) => *it,
-                        // CTerm::Inf(it) => {print!("ann dropping {:?} {}; ", typ.tag(), format!("{typ}").len()); *it},
-                        _ => ITerm::Ann(ct, typ),
-                    }),
+                    Done(typ, _) => match body.step(ctx) {
+                        // TODO this is a little more unprincipled than I'd like, and we're still dropping the body step
+                        Cont(ct, ch) => match ct {
+                            CTerm::Inf(it) => Cont(
+                                *it,
+                                Some(ITerm::Ann(typ, CTerm::Inf(Box::new(ITerm::Star)))),
+                            ),
+                            _ => Cont(ITerm::Ann(ct, typ), ch),
+                        },
+                        Done(ct, ch) => match ct {
+                            CTerm::Inf(it) => Cont(
+                                *it,
+                                Some(ITerm::Ann(typ, CTerm::Inf(Box::new(ITerm::Star)))),
+                            ),
+                            _ => Done(ITerm::Ann(ct, typ), ch),
+                        },
+                    },
                 },
                 // ty steps if possible, otherwise body steps if possible, otherwise if body is inf drop
                 AnnStep::Both => match ty.step(ctx.clone()) {
                     Cont(typ, v) => Cont(ITerm::Ann(body, typ), v),
                     Done(typ, _) => match body.step(ctx) {
-                        Done(bod, ch) => match bod { 
+                        Done(bod, ch) => match bod {
+                            // TODO we should put the change of dropping the annotation in here, too
                             CTerm::Inf(it) => Cont(*it, ch),
                             // CTerm::Inf(it) => {print!("ann dropping {:?} {}; ", typ.tag(), format!("{typ}").len()); *it},
-                            _ => Cont(ITerm::Ann(bod, typ), ch)
-                        }
-                        Cont(bod, ch) => Cont(ITerm::Ann(bod, typ), ch), 
-                    }
+                            _ => Done(ITerm::Ann(bod, typ), ch),
+                        },
+                        Cont(bod, ch) => Cont(ITerm::Ann(bod, typ), ch),
+                    },
                 },
                 // type: type steps if possible, otherwise if body is inf drop
                 AnnStep::Type => match ty.step(ctx.clone()) {

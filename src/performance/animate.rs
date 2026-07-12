@@ -193,7 +193,7 @@ pub fn animate_term_midi(mut args: SoundproofArgs) {
         println!("sequencing tree of size {}", tree.size());
         // let tree = type_translate(&tm, meta).unwrap();
         let buckets: Buckets<64> =
-            Buckets::from_tree(&tree, args.freq_min, args.freq_max, args.division).reverse();
+            Buckets::from_tree(&tree, args.freq_low, args.freq_high, args.division).reverse();
         let sound_duration = f64::INFINITY; //args.time.unwrap_or(1.0); // TODO can we tie duration to keypress length?
         buckets.sequence(&mut cfg_seq, 0.0, sound_duration, 0.0);
         draw_ctx.draw_tree(&tree, args.division);
@@ -284,7 +284,7 @@ pub fn animate_term_steps(mut args: SoundproofArgs) {
         let frame_time = Duration::new(0, (1e9 * frame_secs) as u32);
         let tree = type_translate(&tm, meta).unwrap();
         let buckets: Buckets<64> =
-            Buckets::from_tree(&tree, args.freq_min, args.freq_max, args.division).reverse();
+            Buckets::from_tree(&tree, args.freq_low, args.freq_high, args.division).reverse();
         buckets.sequence(&mut cfg_seq, 0.0, frame_secs, 0.0);
         draw_ctx.draw_tree(&tree, args.division);
 

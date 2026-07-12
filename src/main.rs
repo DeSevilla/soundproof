@@ -1,8 +1,8 @@
 use clap::*;
 use fundsp::prelude32::*;
 
-use std::{fs, thread};
 use std::time::Instant;
+use std::{fs, thread};
 
 use lambdapi::ast::*;
 use lambdapi::*;
@@ -219,9 +219,9 @@ pub enum RunMode {
     /// Generates a file for a single proof term
     Single,
     /// Generates a file for a proof term's evolution as it reduces
-    Steps,
+    Step,
     /// Generates files for step mode in all combinations of call-by, ann-step, and division; overrides these
-    StepVariants
+    StepVariants,
 }
 
 // impl RunMode {
@@ -246,7 +246,7 @@ pub struct SoundproofArgs {
     #[arg(short, long, default_value = "single")]
     mode: RunMode,
     /// Whether to render to file or run it live. Single-term live runs are currently unavailable on this branch.
-    #[arg(short, long, action)]
+    #[arg(short('L'), long, action)]
     live: bool,
     /// Predefined terms of the dependently typed lambda calculus.
     #[arg(short, long, default_value = "sigma")]
@@ -266,37 +266,44 @@ pub struct SoundproofArgs {
     /// How to assign sound-tree structure to a term.
     #[arg(short, long, default_value = "type")]
     structure: Structure,
-    /// Low end of frequency range in step mode. Does nothing unless mode=steps
-    #[arg(long, default_value = "60")]
-    freq_min: f32,
-    /// High end of frequency range in step mode. Does nothing unless mode=steps
-    #[arg(long, default_value = "2500")]
-    freq_max: f32,
-    /// Maximum number of steps before quitting in step mode. Does nothing unless mode=steps
-    #[arg(short('S'), long)]
-    step_count: Option<usize>,
     /// Additional filters added after audio generation.
     #[arg(short, long, default_value = "clip-lowpass")]
     filters: FilterOptions,
-    /// A file from which to load multiple configurations for stepping.
+    /// Name of the output file
+    #[arg(short, long, default_value = "output")]
+    output: String,
+    /// Low end of frequency range in step mode.
+    #[arg(long, short('l'), default_value = "60", requires = "mode")]
+    freq_low: f32,
+    /// High end of frequency range in step mode.
+    #[arg(long, short('h'), default_value = "2500", requires = "mode")]
+    freq_high: f32,
+    /// Reverse frequency range in step mode.
+    #[arg(long, short, action, requires = "mode")]
+    reverse_freq: bool,
+    /// Maximum number of steps before quitting in step mode.
+    #[arg(short('S'), long, requires = "mode")]
+    step_count: Option<usize>,
+    /// A file from which to load multiple configurations in step mode.
     #[arg(long, requires = "mode")]
     step_file: Option<String>,
-    /// Whether to take MIDI input for steps. Only works live.
-    #[arg(long, action, requires = "file", requires = "live")]
-    midi: bool,
+    #[arg(long, short('D'), action, requires = "mode")]
+    diff_time: bool,
+    /// Semantics of function application in step mode.
     #[arg(long, requires = "mode", default_value = "name")]
     call_by: CallBy,
+    /// Semantics of annotation dropping in step mode.
     #[arg(long, requires = "mode", default_value = "unprincipled")]
     ann_step: AnnStep,
+    /// Whether to take MIDI input for live step mode.
+    #[arg(long, action, requires = "mode", requires = "file", requires = "live")]
+    midi: bool,
     // /// When set, only generate visualization (potentially including animation frames), not music.
     // #[arg(short('D'), long, action)]
     // draw_only: bool,
     // /// When set, generate animation frames.
     // #[arg(short, long, action)]
     // animate: bool,
-    /// Name of the output file
-    #[arg(short, long, default_value = "output")]
-    output: String,
 }
 
 impl SoundproofArgs {
@@ -437,40 +444,48 @@ pub fn main_steps(mut args: SoundproofArgs) {
     };
     let max_steps = args.step_count.unwrap_or(100);
     // for (ii, term) in args.term().step_over(Context::new_with(std_env(), args.call_by, args.ann_step)).enumerate() {
-    for (ii, (term, change)) in args.term().step_with_change(Context::new_with(std_env(), args.call_by, args.ann_step)).enumerate() {
+    for (ii, (term, change)) in args
+        .term()
+        .step_with_change(Context::new_with(std_env(), args.call_by, args.ann_step))
+        .enumerate()
+    {
         if ii < sequence.len() {
             println!("Loading from file: {}", sequence[ii]);
             args = SoundproofArgs::parse_from(sequence[ii].split(' '))
         }
         println!("Translating for number {ii}...");
         let step_start = Instant::now();
-        
 
         let tree = type_translate(&term, selector).unwrap();
         // base_size.get(tree.size());
         println!("\t{:?}, output size {}", step_start.elapsed(), tree.size());
 
         // let dur = base_dur;
-        let dur = if let None = args.time && let Some(diff) = change {
+        // TODO this should be its own parameter instead of just keying off args.time = None
+        let dur = if args.diff_time && let Some(diff) = change
+        {
             let diff_tree = type_translate(&diff, selector).unwrap();
-            diff_tree.size() as f64 / base_size.get(tree.size()) as f64 * 5.0
-        }
-        else {
+            let modifier = (diff_tree.size() as f64 / base_size.get(tree.size()) as f64 * 5.0)
+                .powf(0.7)
+                + 0.03;
+            base_dur * modifier
+        } else {
             base_dur
         };
         tones.duration = dur;
         println!(
             "Sequencing over frequency range {}-{} for duration {dur}...",
-            args.freq_min, args.freq_max
+            args.freq_low, args.freq_high
         );
         let seq_start = Instant::now();
-        const NUM_BUCKETS: usize = 1024;
+        const NUM_BUCKETS: usize = 4096;
 
-        let buckets: Buckets<NUM_BUCKETS> =
-            Buckets::from_tree(&tree, args.freq_min, args.freq_max, args.division);
-        buckets
-            .reverse()
-            .sequence(&mut cfg_seq, tones.start_time, tones.duration, 0.0);
+        let mut buckets: Buckets<NUM_BUCKETS> =
+            Buckets::from_tree(&tree, args.freq_low, args.freq_high, args.division);
+        if args.reverse_freq {
+            buckets = buckets.reverse();
+        }
+        buckets.sequence(&mut cfg_seq, tones.start_time, tones.duration, 0.0);
 
         tones.increment();
         println!(
@@ -492,24 +507,38 @@ pub fn main_steps(mut args: SoundproofArgs) {
 
 fn run_variants(args: SoundproofArgs) {
     let mut handles = vec![];
-    // for div in [DivisionMethod::Even, DivisionMethod::Weight, DivisionMethod::Size] {
-    for div in [DivisionMethod::Weight] {
-        for cb in [CallBy::Name, CallBy::Value] {
-            // for an in [AnnStep::Neither, AnnStep::Unprincipled, AnnStep::Type, AnnStep::Both] {
-            for an in [AnnStep::Unprincipled] {
-                let output_name = format!("{cb:?}-{an:?}-{div:?}");
-                println!("Running {output_name}...");
-                let args2 = SoundproofArgs {
-                    call_by: cb,
-                    ann_step: an,
-                    division: div,
-                    output: output_name,
-                    ..args.clone()
-                };
-                let h = thread::spawn(|| {
-                    main_steps(args2);
-                });
-                handles.push(h);
+    for div in [
+        // DivisionMethod::Even,
+        DivisionMethod::Weight,
+        // DivisionMethod::Size,
+    ] {
+        // for cb in [CallBy::Name, CallBy::Value] {
+        for cb in [CallBy::Name] {
+            for an in [
+                // AnnStep::Neither,
+                AnnStep::Unprincipled,
+                // AnnStep::Type,
+                // AnnStep::Both,
+            ] {
+                for freq_min in [60., 100., 200., 300., 400.] {
+                    for freq_max in [440., 600., 800., 1500., 2000., 2500.] {
+                        let output_name = format!("{cb:?}-{an:?}-{div:?}-{freq_min}-{freq_max}");
+                        println!("Running {output_name}...");
+                        let args2 = SoundproofArgs {
+                            call_by: cb,
+                            ann_step: an,
+                            division: div,
+                            freq_low: freq_min,
+                            freq_high: freq_max,
+                            output: output_name,
+                            ..args.clone()
+                        };
+                        let h = thread::spawn(|| {
+                            main_steps(args2);
+                        });
+                        handles.push(h);
+                    }
+                }
             }
         }
     }
@@ -532,10 +561,11 @@ pub fn main() {
             "Cannot run single-term live mode on this branch due to FunDSP incompatibilities. Switch to branch 'bevy'."
         ),
         (RunMode::Single, false) => main_to_file(args),
-        (RunMode::Steps, true) => main_steps_live(args),
-        (RunMode::Steps, false) => main_steps(args),
-        (RunMode::StepVariants, true) => println!("Cannot run multiple variants in live mode. Use --mode=steps instead."),
+        (RunMode::Step, true) => main_steps_live(args),
+        (RunMode::Step, false) => main_steps(args),
+        (RunMode::StepVariants, true) => {
+            println!("Cannot run multiple variants in live mode. Use --mode=steps instead.")
+        }
         (RunMode::StepVariants, false) => run_variants(args),
     }
-    
 }

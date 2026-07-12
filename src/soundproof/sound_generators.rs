@@ -2,6 +2,7 @@ use fundsp::prelude32::*;
 use rand::rng;
 use rand::seq::IndexedRandom;
 use std::array;
+use std::f32::consts::TAU;
 use std::path::Path;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
@@ -744,12 +745,29 @@ pub struct Weights {
     body: [f32; Self::LENGTH],
 }
 
+#[inline(always)]
+fn xorshift(x: f32) -> f32 {
+    let mut y = x.to_bits();
+    y ^= y << 13;
+    y ^= y >> 17;
+    y ^= y << 5;
+    y = y.wrapping_mul(0x2545F491u32);
+    y as f32 % TAU
+}
+
 impl Weights {
     const LENGTH: usize = 10;
 
     pub fn instrument(&self) -> An<impl AudioNode<Inputs = U2, Outputs = U2> + use<>> {
-        let phase: f32 = self.body.into_iter().sum();
-        let phase = phase.powi(5) / 5.;
+        let total: f32 = self.body.into_iter().sum();
+        let phase_seed = total; // (total % 257.7 + 19.8).powi(5) / 5.;
+        // println!("seed {phase_seed}");
+        let phase1 = xorshift(xorshift(xorshift(phase_seed)));
+        // println!("1 {phase1}");
+        let phase2 = xorshift(phase1);
+        let phase3 = xorshift(phase2);
+        let phase4 = xorshift(phase3);
+        // println!("4 {phase4}");
         match self.body {
             [a, b, c, d, e, f, g, h, i, j] => {
                 multisplit::<U2,U4>() >>
@@ -763,10 +781,10 @@ impl Weights {
                     // + h * sinesaw()
                     // + i * sine()
                     // + j * square()
-                    (pass()   + saw().phase(phase % 1.0)           >> (a + e + i) * sine())
-                    + (pass() + square().phase((phase + 0.5) % 1.0) >> (b + f) * saw())
-                    + (pass() + sine()                       >> (d + h) * sinesaw())
-                    + (pass() + sine().phase((1.5 * phase) % 1.0)    >> (c + g + j) * square())
+                    (pass()   + saw().phase(phase1 % TAU)       >> (a + e + i) * sine())
+                    + (pass() + square().phase(phase2 % TAU)    >> (b + f) * saw())
+                    + (pass() + sine().phase(phase4 % TAU)      >> (d + h) * sinesaw())
+                    + (pass() + sine().phase(phase4 % TAU)      >> (c + g + j) * square())
                     >> split()
             }
         }
@@ -867,7 +885,7 @@ impl<const N: usize> Buckets<N> {
             buckets: [Weights {
                 body: [0.0; Weights::LENGTH],
             }; N],
-            freqs: array::from_fn(|i| lerp(freq_min, freq_max, i as f32 / N as f32)), // min_freq: Self::MIN_FREQ,
+            freqs: array::from_fn(|i| 2.0_f32.powf(lerp(freq_min.log2(), freq_max.log2(), i as f32 / N as f32))), // min_freq: Self::MIN_FREQ,
                                                                                       // max_freq: Self::MIN_FREQ + range,
         };
         // need to distribute into buckets somehow
@@ -971,8 +989,7 @@ impl<const N: usize> SoundGenerator for Buckets<N> {
         // let modified_instrument = (constant(freq) >> self.instrument.clone()) >> split::<U2>() * factor;
         for (freq, weights) in self.iter_buckets() {
             let instr = (constant(freq) | constant(0.5)) >> weights.instrument();
-            // let fade_duration = 0.05;
-            let fade_duration = 0.0;
+            let fade_duration = 0.05.min(duration * 0.2);
             seq.push_duration(
                 start_time,
                 duration,

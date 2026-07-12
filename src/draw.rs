@@ -1,4 +1,7 @@
 use crate::DivisionMethod;
+use crate::lambdapi::ast::{Context, ITerm};
+use crate::lambdapi::step::Stepper;
+use crate::soundproof::select::Silence;
 use crate::soundproof::types::{Highlight, SoundTree};
 use minifb::{Window, WindowOptions};
 use piet_common::kurbo::Rect;
@@ -7,16 +10,44 @@ use std::path::Path;
 
 // TODO we should take these as options
 // const WIDTH_PX: usize = 377 * 3;
-const WIDTH_PX: usize = 1920;
+const WIDTH_PX: usize = 2000;
 // const WIDTH_PX: usize = 3000;
 // const HEIGHT_PX: usize = 120 * 3;
-const HEIGHT_PX: usize = 1080;
+const HEIGHT_PX: usize = 2000;
 // const HEIGHT_PX: usize = 1800;
 const DPI: f64 = 96.;
 const WIDTH_IN: f64 = WIDTH_PX as f64 / DPI;
 const HEIGHT_IN: f64 = HEIGHT_PX as f64 / DPI;
 
 // we should restructure a bit here, the live/static split is wonky
+
+pub fn draw_steps(term: ITerm, scaling: DivisionMethod, ctx: Context, path: impl AsRef<Path>) {
+    let mut device = Device::new().unwrap();
+    let mut bitmap = device.bitmap_target(WIDTH_PX, HEIGHT_PX, DPI).unwrap();
+    let mut rc = bitmap.render_context();
+    let rect = Rect::new(0.0, 0.0, WIDTH_IN, HEIGHT_IN);
+    // rc.fill(rect, &Color::rgb8(0xCE, 0xCE, 0xCE));
+    rc.fill(rect, &Color::BLACK);
+    // rc.fill(rect, &Color::WHITE);
+    let meta = Silence::new();
+    const STEP_RATIO: f64 = 2./3.;
+    let mut base = HEIGHT_IN;
+    let mut top = HEIGHT_IN * STEP_RATIO;
+    for thing in term.step_over(ctx.clone()).take(20) {
+        let (_, _, tree) = thing.infer_translate(&ctx, meta, true).expect("Stepping preserves type");
+        let current_height = base - top;
+        let args = FixedDrawArgs::new(current_height, WIDTH_IN, top, tree.metadata().depth, None, scaling);
+        println!("args: {args:?} base {base} top {top}");
+        drawtree(&tree, &mut rc, args);
+        base = top;
+        top *= STEP_RATIO;
+    }
+    rc.finish().unwrap();
+    std::mem::drop(rc);
+    bitmap
+        .save_to_file(path)
+        .expect("should save file successfully");
+}
 
 pub fn draw(tree: &SoundTree, scaling: DivisionMethod, path: impl AsRef<Path>) {
     let mut device = Device::new().unwrap();
@@ -26,8 +57,8 @@ pub fn draw(tree: &SoundTree, scaling: DivisionMethod, path: impl AsRef<Path>) {
     // rc.fill(rect, &Color::rgb8(0xCE, 0xCE, 0xCE));
     rc.fill(rect, &Color::BLACK);
     // rc.fill(rect, &Color::WHITE);
-    let args = FixedDrawArgs::new(tree.metadata().max_depth, None, scaling);
-    drawtree(tree, &mut rc, args);
+    let args = FixedDrawArgs::new(HEIGHT_IN, WIDTH_IN, 0.0, tree.metadata().depth, None, scaling);
+    drawtree(tree,  &mut rc, args);
     rc.finish().unwrap();
     std::mem::drop(rc);
     bitmap
@@ -52,7 +83,7 @@ pub fn draw_tree_canvas(
     let mut rc = bitmap.render_context();
     let rect = Rect::new(0.0, 0.0, WIDTH_IN, HEIGHT_IN);
     rc.fill(rect, &Color::BLACK);
-    let draw_args = FixedDrawArgs::new(tree.metadata().max_depth, None, scaling);
+    let draw_args = FixedDrawArgs::new(HEIGHT_IN, WIDTH_IN, 0.0, tree.metadata().depth, None, scaling);
     drawtree(&tree, &mut rc, draw_args);
     rc.finish().unwrap();
     std::mem::drop(rc);
@@ -88,6 +119,9 @@ impl LiveDrawContext {
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 struct FixedDrawArgs {
+    height: f64,
+    width: f64,
+    offset: f64,
     max_depth: usize,
     depth_height: f64,
     text_bar: f64,
@@ -96,11 +130,14 @@ struct FixedDrawArgs {
 }
 
 impl FixedDrawArgs {
-    pub fn new(max_depth: usize, current: Option<f64>, scaling: DivisionMethod) -> Self {
-        // let depth_height = if max_depth != 0 { HEIGHT_IN * 0.9 / max_depth as f64 } else { 0.05 };
-        let depth_height = HEIGHT_IN / 45.;
+    pub fn new(height: f64, width: f64, offset: f64, max_depth: usize, current: Option<f64>, scaling: DivisionMethod) -> Self {
+        let depth_height = if max_depth != 0 { height * 1.0 / max_depth as f64 } else { 0.05 };
+        // let depth_height = height / 45.;
         let text_bar = depth_height * 4.0;
         Self {
+            height,
+            width,
+            offset,
             max_depth,
             depth_height,
             text_bar,
@@ -126,10 +163,10 @@ fn drawtree(
             //     return;
             // }
 
-            let bottom = HEIGHT_IN - meta.max_depth as f64 * args.depth_height; // height is negative
+            let bottom = args.height + args.offset - meta.depth as f64 * args.depth_height; // height is negative
             let top = bottom - args.depth_height;
 
-            let main_width = WIDTH_IN
+            let main_width = args.width
                 - if args.current.is_some() {
                     args.text_bar
                 } else {
@@ -164,14 +201,7 @@ fn drawtree(
                 ctx.fill(rect, &meta.alt_color);
             } else {
                 ctx.fill(rect, &meta.base_color);
-                // if meta.will_step {
-                //     ctx.fill(rect, &meta.base_color);
-                // }
-                // else {
-                //     ctx.fill(rect, &meta.alt_color);
-                // }
             };
-            // let adjust = border_width * 0.5;
             if let Some(w) = meta.will_step
                 && border_width > 1.0 / DPI
             {

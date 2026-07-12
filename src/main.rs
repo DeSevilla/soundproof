@@ -314,6 +314,10 @@ impl SoundproofArgs {
             self.value.term()
         }
     }
+
+    pub fn ctx(&self) -> Context {
+        Context::new_with(std_env(), self.call_by, self.ann_step)
+    }
 }
 
 pub fn async_tree(content: AsyncStratifier, term: &ITerm, ctx: Context) -> SoundTree {
@@ -424,7 +428,7 @@ pub fn main_steps_live(args: SoundproofArgs) {
 }
 
 pub fn main_steps(mut args: SoundproofArgs) {
-    // run_steps(args.term(), args.step_count.unwrap_or(100), Context::new_with(std_env(), args.call_by, args.ann_step));
+    // run_steps(args.term(), args.step_count.unwrap_or(100), args.ctx());
     // return;
     let all_start = Instant::now();
     println!("Starting tone generation");
@@ -443,10 +447,10 @@ pub fn main_steps(mut args: SoundproofArgs) {
         None => vec![],
     };
     let max_steps = args.step_count.unwrap_or(100);
-    // for (ii, term) in args.term().step_over(Context::new_with(std_env(), args.call_by, args.ann_step)).enumerate() {
+    // for (ii, term) in args.term().step_over(args.ctx()).enumerate() {
     for (ii, (term, change)) in args
         .term()
-        .step_with_change(Context::new_with(std_env(), args.call_by, args.ann_step))
+        .step_with_change(args.ctx())
         .enumerate()
     {
         if ii < sequence.len() {
@@ -553,6 +557,8 @@ fn run_variants(args: SoundproofArgs) {
 pub fn main() {
     let args = SoundproofArgs::parse();
     // println!("{:?}", args);
+    // draw::draw_steps(args.term(), args.division, args.ctx(), "output/drawing.png");
+    // return;
     println!("Running in mode: {:?}", args.mode);
     match (args.mode, args.live) {
         // #[cfg(feature = "bevy")]

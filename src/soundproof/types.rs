@@ -170,7 +170,7 @@ pub struct TreeMetadata {
     // pub parent: String,
     pub base_color: Color,
     pub alt_color: Color,
-    pub max_depth: usize,
+    pub depth: usize,
     pub will_step: Option<Highlight>,
     // pub dspthing: Option<Uuid>,
     // pub lean: f32,
@@ -196,8 +196,8 @@ impl SoundTree {
                 SoundTree::Seq(mut trees, meta) => {
                     // names += &meta.name;
                     // names += ";";
-                    if meta.max_depth > max_depth {
-                        max_depth = meta.max_depth
+                    if meta.depth > max_depth {
+                        max_depth = meta.depth
                     }
                     // will_step = will_step.and(meta.will_step);
                     result.append(&mut trees);
@@ -206,8 +206,8 @@ impl SoundTree {
                     let meta = other.metadata();
                     // names += &other.metadata().name;
                     // names += ";";
-                    if meta.max_depth > max_depth {
-                        max_depth = meta.max_depth
+                    if meta.depth > max_depth {
+                        max_depth = meta.depth
                     }
                     // will_step = will_step.and(meta.will_step);
                     result.push(other);
@@ -225,7 +225,7 @@ impl SoundTree {
                     // parent: "".to_owned(),
                     base_color: Color::MAROON,
                     alt_color: Color::MAROON,
-                    max_depth,
+                    depth: max_depth,
                     will_step: will_step,
                     // dspthing: None,
                 },
@@ -246,8 +246,8 @@ impl SoundTree {
                 SoundTree::Simul(mut trees, meta) => {
                     // names += &meta.name;
                     // names += "||";
-                    if meta.max_depth > max_depth {
-                        max_depth = meta.max_depth
+                    if meta.depth > max_depth {
+                        max_depth = meta.depth
                     }
                     // will_step &= meta.will_step;
                     result.append(&mut trees);
@@ -255,8 +255,8 @@ impl SoundTree {
                 other => {
                     // names += &other.metadata().name;
                     // names += "||";
-                    if other.metadata().max_depth > max_depth {
-                        max_depth = other.metadata().max_depth
+                    if other.metadata().depth > max_depth {
+                        max_depth = other.metadata().depth
                     }
                     // will_step &= other.metadata().will_step;
                     result.push(other)
@@ -275,7 +275,7 @@ impl SoundTree {
                     // parent: "".to_owned(),
                     base_color: Color::MAROON,
                     alt_color: Color::MAROON,
-                    max_depth,
+                    depth: max_depth,
                     will_step: will_step,
                     // dspthing: None,
                 },

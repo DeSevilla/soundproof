@@ -187,7 +187,7 @@ pub fn animate_term_midi(mut args: SoundproofArgs) {
     // let term = args.term();
     let limit = args.step_count.unwrap_or(100);
     let channel_size = 500.min(limit);
-    let sequence = match &args.step_file {
+    let sequence = match &args.reduction_config {
         Some(path) => {
             let contents = fs::read_to_string(path).expect("Could not open config file");
             contents.split("\n").map(|s| s.to_owned()).collect()
@@ -355,7 +355,7 @@ pub fn animate_term_steps(mut args: SoundproofArgs) {
     // Set up loop parameters
     let meta = Silence::new();
     let limit = args.step_count.unwrap_or(100);
-    let sequence = match &args.step_file {
+    let sequence = match &args.reduction_config {
         Some(path) => {
             let contents = fs::read_to_string(path).expect("Could not open config file");
             contents.split("\n").map(|s| s.to_owned()).collect()

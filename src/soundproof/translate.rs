@@ -4,7 +4,7 @@ use std::rc::Rc;
 use fundsp::prelude32::sine;
 
 use crate::{
-    AnnStep, CallBy, ast::*, music::notes::G, select::Selector, sound_generators::*, term::*,
+    AnnEval, CallBy, ast::*, music::notes::G, select::Selector, sound_generators::*, term::*,
     types::*,
 };
 
@@ -344,12 +344,12 @@ impl ITerm {
                 may_step = may_step && !stepped;
                 let ty = cty.eval(ctx);
                 if may_step
-                    && let AnnStep::Neither = ctx.ann_step // TODO this is simply wrong how do we do it then
+                    && let AnnEval::Neither = ctx.ann_step // TODO this is simply wrong how do we do it then
                     && let CTerm::Inf(_) = ct
                 {
                     tytree.pervade_metadata(&|m| m.will_step = Some(Highlight::Two));
                     stepped = true;
-                    if ctx.ann_step != AnnStep::Unprincipled {
+                    if ctx.ann_step != AnnEval::Unprincipled {
                         may_step = false;
                     }
                 };

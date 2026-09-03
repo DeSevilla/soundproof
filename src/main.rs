@@ -148,7 +148,7 @@ pub enum CallBy {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum)]
-pub enum AnnStep {
+pub enum AnnEval {
     Neither,
     Type,
     // Body,
@@ -218,10 +218,10 @@ pub enum FilterOptions {
 pub enum RunMode {
     /// Generates a file for a single proof term
     Single,
-    /// Generates a file for a proof term's evolution as it reduces
-    Step,
-    /// Generates files for step mode in all combinations of call-by, ann-step, and division; overrides these
-    StepVariants,
+    /// Generates a file for a proof term's evolution as it computes/reduces (small-step)
+    Reduce,
+    /// Generates files for reduction mode in all combinations of call-by, ann-step, and division; overrides these
+    ReduceVariants,
 }
 
 // impl RunMode {
@@ -242,8 +242,8 @@ pub enum RunMode {
 #[derive(Parser, Debug, Clone)]
 #[command(version, about, long_about=None)]
 pub struct SoundproofArgs {
-    /// Whether to run the single-term or step-based translation.
-    #[arg(short, long, default_value = "step")]
+    /// Whether to run the single-term or reduction/progression translation.
+    #[arg(short, long, default_value = "reduce")]
     mode: RunMode,
     /// Whether to render to file or run it live. Single-term live runs are currently unavailable on this branch.
     #[arg(short, long, action)]
@@ -254,7 +254,7 @@ pub struct SoundproofArgs {
     /// When set, normalize the term as far as possible before being presented.
     #[arg(short, long, action)]
     reduce: bool,
-    /// In seconds. If unset, scales with size of tree. In step mode, determines time of one frame.
+    /// In seconds. If unset, scales with size of tree. In reduction mode, determines time of one frame.
     #[arg(short, long)]
     time: Option<f64>,
     /// Determines how time is broken down between sequential segments.
@@ -272,31 +272,31 @@ pub struct SoundproofArgs {
     /// Name of the output file
     #[arg(short, long, default_value = "output")]
     output: String,
-    /// Low end of frequency range in step mode.
+    /// Low end of frequency range in reduction mode.
     #[arg(long, short('L'), default_value = "60"/*, requires = "mode"*/)]
     freq_low: f32,
-    /// High end of frequency range in step mode.
+    /// High end of frequency range in reduction mode.
     #[arg(long, short('H'), default_value = "2500"/*, requires = "mode"*/)]
     freq_high: f32,
-    /// Reverse frequency range in step mode.
+    /// Reverse frequency range in reduction mode.
     #[arg(long, short, action/*, requires = "mode"*/)]
     reverse_freq: bool,
-    /// Maximum number of steps before quitting in step mode.
+    /// Maximum number of steps before quitting in reduction mode.
     #[arg(short('S'), long/*, requires = "mode"*/)]
     step_count: Option<usize>,
-    /// A file from which to load multiple configurations in step mode.
+    /// A file from which to load multiple configurations in reduction mode.
     #[arg(long, /*requires = "mode"*/)]
-    step_file: Option<String>,
-    /// Whether to vary step time with the size of the change between steps.
+    reduction_config: Option<String>,
+    /// In reduction mode, whether to vary step time with the size of the change between steps.
     #[arg(long, short('D'), action, /*requires = "mode"*/)]
     diff_time: bool,
-    /// Evaluation order of function application in step mode.
+    /// Evaluation order of function application in reduction mode.
     #[arg(long, /*requires = "mode",*/ default_value = "name")]
     call_by: CallBy,
-    /// Evaluation order of annotation dropping in step mode.
+    /// Evaluation order of annotation dropping in reduction mode: whether the type and/or term should be evaluated before dropping the annotation if unnecessary.
     #[arg(long, /*requires = "mode",*/ default_value = "unprincipled")]
-    ann_step: AnnStep,
-    /// Whether to take MIDI input for live step mode.
+    ann_eval: AnnEval,
+    /// Whether to take MIDI input for live reduction mode.
     #[arg(long, action, /*requires = "mode",*/ requires = "file", requires = "live")]
     midi: bool,
     // /// When set, only generate visualization (potentially including animation frames), not music.
@@ -317,7 +317,7 @@ impl SoundproofArgs {
     }
 
     pub fn ctx(&self) -> Context {
-        Context::new_with(std_env(), self.call_by, self.ann_step)
+        Context::new_with(std_env(), self.call_by, self.ann_eval)
     }
 }
 
@@ -440,7 +440,7 @@ pub fn main_steps(mut args: SoundproofArgs) {
     let seq = Sequencer::new(0, 2, ReplayMode::None);
     let mut cfg_seq = ConfigSequencer::new(seq, args.live);
     let mut base_size = SetOnce::new();
-    let sequence = match &args.step_file {
+    let sequence = match &args.reduction_config {
         Some(path) => {
             let contents = fs::read_to_string(path).expect("Could not open config file");
             contents.split("\n").map(|s| s.to_owned()).collect()
@@ -518,7 +518,7 @@ fn run_variants(args: SoundproofArgs) {
         for cb in [CallBy::Name] {
             for an in [
                 // AnnStep::Neither,
-                AnnStep::Unprincipled,
+                AnnEval::Unprincipled,
                 // AnnStep::Type,
                 // AnnStep::Both,
             ] {
@@ -528,7 +528,7 @@ fn run_variants(args: SoundproofArgs) {
                         println!("Running {output_name}...");
                         let args2 = SoundproofArgs {
                             call_by: cb,
-                            ann_step: an,
+                            ann_eval: an,
                             division: div,
                             freq_low: freq_min,
                             freq_high: freq_max,
@@ -565,11 +565,11 @@ pub fn main() {
             "Cannot run single-term live mode on this branch due to FunDSP incompatibilities. Switch to branch 'bevy'."
         ),
         (RunMode::Single, false) => main_to_file(args),
-        (RunMode::Step, true) => main_steps_live(args),
-        (RunMode::Step, false) => main_steps(args),
-        (RunMode::StepVariants, true) => {
-            println!("Cannot run multiple variants in live mode. Use --mode=steps instead.")
+        (RunMode::Reduce, true) => main_steps_live(args),
+        (RunMode::Reduce, false) => main_steps(args),
+        (RunMode::ReduceVariants, true) => {
+            println!("Cannot run multiple variants in live mode. Use --mode=reduce instead.")
         }
-        (RunMode::StepVariants, false) => run_variants(args),
+        (RunMode::ReduceVariants, false) => run_variants(args),
     }
 }

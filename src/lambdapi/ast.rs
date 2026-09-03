@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::term::{vapp, vlam, vpi};
-use crate::{AnnStep, CallBy};
+use crate::{AnnEval, CallBy};
 
 // LambdaPi was originally written for Haskell and I translated it to rust.
 // Certain design choices (bidirectional typing, a term/value split, higher-order abstract syntax)
@@ -127,7 +127,7 @@ pub struct Context {
     pub free: Vec<(Name, Type, Option<Value>)>,
     pub bindings: usize,
     pub call_by: CallBy,
-    pub ann_step: AnnStep,
+    pub ann_step: AnnEval,
 }
 
 impl Context {
@@ -137,14 +137,14 @@ impl Context {
             free: free_vars,
             bindings: 0,
             call_by: CallBy::Value,
-            ann_step: AnnStep::Neither,
+            ann_step: AnnEval::Neither,
         }
     }
 
     pub fn new_with(
         free_vars: Vec<(Name, Type, Option<Value>)>,
         call_by: CallBy,
-        ann_step: AnnStep,
+        ann_step: AnnEval,
     ) -> Self {
         Self {
             bound: vec![],

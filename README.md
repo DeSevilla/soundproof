@@ -7,27 +7,26 @@ custom Rust implementation of [LambdaPi](https://www.andres-loeh.de/LambdaPi/) (
 Artistic influences include Iannis Xenakis, Catherine Hennix, Henry Flynt, Drexciya, Perturbator, Sun Ra, 
 Karlheinz Stockhausen, and Odz Manouk.
 
-It has two modes: single-term (`--mode=term`) and step-based (`--mode=step`). The single-term mode presents the tree structure of proof terms across time, while the step-based mode presents their reduction behavior.
+It has two modes: single-term (`--mode=term`) and reduction behavior (`--mode=reduce`).
+The single-term mode presents the tree structure of proof terms across time,
+while the reduction mode presents terms as synth tones and their computational behavior as time.
+In the case of the paradox, this behavior is more "progression" than "reduction",
+as it grows larger eternally instead of reducing to a normal form.
 
-## Output
+## Results
 
-The canonical outputs for the [single-term](https://isdra.bandcamp.com/album/girards-paradox)
-and [step-based](https://isdra.bandcamp.com/track/girards-paradox-progression-i-two-loops)
+The canonical pieces for the [single-term](https://isdra.bandcamp.com/album/girards-paradox)
+and [progression](https://isdra.bandcamp.com/track/girards-paradox-progression-i-two-loops)
 modes are available for free on [Bandcamp](https://isdra.bandcamp.com). 
 
 This project has been presented and performed at the [ACM SIGPLAN FARM Workshop](https://functional-art.org/) twice.
-The single-term version was at
-[FARM at ICFP/SPLASH 2025](https://2025.splashcon.org/track/splash-2025-farm). 
-The paper can be found [in the FARM proceedings here](https://dl.acm.org/doi/10.1145/3759162.3759644),
-and a recording of the talk is [on the SIGPLAN YouTube channel here](https://www.youtube.com/live/F_7S90vFEsE?t=2015s).
-The performance recording is [on the FARM YouTube channel here](https://www.youtube.com/watch?v=z8V6c3kIq58&list=PLF5xDewoVNoc&index=8). 
-The step-based version was at [FARM at ICFP 2026](https://icfp26.sigplan.org/home/farm-2026), again both as 
-a demo and a performance. The paper is [in the FARM proceedings here](https://dl.acm.org/doi/10.1145/3830435.3830950)
-and the talk recording is currently [on the SIGPLAN YouTube channel here](https://www.youtube.com/live/tE5u7LR5cro?t=4h20m) (note: if the stream has expired by the time you read this, there should be a separate video).
-The performance recording will be available eventually.
+The single-term version was at FARM 2025 at ICFP/SPLASH ([paper](https://dl.acm.org/doi/10.1145/3759162.3759644), [talk recording](https://www.youtube.com/watch?v=QbgzOVOMMwI&list=PLyrlk8Xaylp57NTlI9xggtVfEQbTikoQO&index=4)),
+while the reduction-based version was at FARM 2026 at ICFP ([paper](https://dl.acm.org/doi/10.1145/3830435.3830950), [talk recording](https://www.youtube.com/live/tE5u7LR5cro?t=4h20m)).
 
-A screen-only recording of the single-term performance version of the piece is on [my channel here](https://www.youtube.com/watch?v=Fu4yqLvZQOI).
-
+Each mode also has a live performance variant, which differs somewhat from the fixed canonical output.
+I performed the single-term version at [FARM 2025](https://www.youtube.com/watch?v=z8V6c3kIq58&list=PLF5xDewoVNoc&index=8) 
+(a screen-only recording of this mode is [here](https://www.youtube.com/watch?v=Fu4yqLvZQOI)).
+I performed the progression-based version at FARM 2026. The recording will be available eventually.
 
 ## How It Works
 
@@ -65,7 +64,7 @@ to play their translations in sequential order (potentially increased in pitch, 
 The canonical output follows the call tree of the typechecker,
 which includes all the structure of a term's abstract syntax tree but additionally includes type structure for variables, which is important for lambdas.
 
-In the step-based mode, a single term is a synth tone/texture. Each sort of term/type has a waveform, 
+In the reduction mode, a single term is a synth tone/texture. Each sort of term/type has a waveform, 
 and we translate the tree by dividing up pitch among the subtrees in the same way we divide duration above.
 The reduction of the term is then the evolution of these tones over time. Step duration can scale with the
 size of the change between one and the next, or can be fixed. The `call-by` and `ann-step` options control
@@ -87,7 +86,8 @@ issues. It takes text input and parses it into terms which are then translated a
 along with the tags of the currently-playing subterms. Its display font is a modified version of JetBrains Mono
 which displays backslash as lambda.
 
-The step-based live performance mode can take a path to a config file with a list of command-line options.
+The reduction/progression live performance mode can take a path to a config file
+with a list of command-line options.
 By default, these will be stepped through sequentially; with the `--midi` option, they are mapped 
 to MIDI notes and can be activated by a MIDI controller. The mapping currently supports notes 48-73.
 
@@ -111,25 +111,46 @@ to MIDI notes and can be activated by a MIDI controller. The mapping currently s
 Usage: soundproof [OPTIONS]
 
 Options:
-  -m, --mode <MODE>              Whether to run the single-term or step-based translation [default: single] [possible values: single, step, step-variants]
-  -l, --live                     Whether to render to file or run it live. Single-term live runs are currently unavailable on this branch
-  -v, --value <VALUE>            Predefined terms of the dependently typed lambda calculus [default: sigma] [possible values: star, sets-of, u, tau, sigma, omega, lem0, lem2, lem3, girard]
-  -r, --reduce                   When set, normalize the term as far as possible before being presented
-  -t, --time <TIME>              In seconds. If unset, scales with size of tree. In step mode, determines time of one frame
-  -d, --division <DIVISION>      Determines how time is broken down between sequential segments [default: weight] [possible values: even, weight, size]
-  -c, --content <CONTENT>        Determines which audio selector to use, determining melodies, rhythm, timbre, and so on [default: full-stratified] [possible values: full-stratified, async-stratified, a, b, c, d, e, f, pure-sine, names-short, names-long, strat-instr, effects, mixed, loop, rhythmized, sine-rhythm, bare, tone-make]
-  -s, --structure <STRUCTURE>    How to assign sound-tree structure to a term [default: type] [possible values: term, type, test]
-  -f, --filters <FILTERS>        Additional filters added after audio generation [default: clip-lowpass] [possible values: clip-lowpass, quiet, none]
-  -o, --output <OUTPUT>          Name of the output file [default: output]
-  -L, --freq-low <FREQ_LOW>      Low end of frequency range in step mode [default: 60]
-  -H, --freq-high <FREQ_HIGH>    High end of frequency range in step mode [default: 2500]
-  -r, --reverse-freq             Reverse frequency range in step mode
-  -S, --step-count <STEP_COUNT>  Maximum number of steps before quitting in step mode
-      --step-file <STEP_FILE>    A file from which to load multiple configurations in step mode
-  -D, --diff-time                Whether to vary step time with the size of the change between steps
-      --call-by <CALL_BY>        Evaluation order of function application in step mode [default: name] [possible values: name, value]
-      --ann-step <ANN_STEP>      Evaluation order of annotation dropping in step mode [default: unprincipled] [possible values: neither, type, both, unprincipled]
-      --midi                     Whether to take MIDI input for live step mode
-  -h, --help                     Print help (see more with '--help')
-  -V, --version                  Print version
+  -m, --mode <MODE>
+          Whether to run the single-term or reduction/progression translation [default: reduce] [possible values: single, reduce, reduce-variants]
+  -l, --live
+          Whether to render to file or run it live. Single-term live runs are currently unavailable on this branch
+  -v, --value <VALUE>
+          Predefined terms of the dependently typed lambda calculus [default: sigma] [possible values: star, sets-of, u, tau, sigma, omega, lem0, lem2, lem3, girard]
+  -r, --reduce
+          When set, normalize the term as far as possible before being presented
+  -t, --time <TIME>
+          In seconds. If unset, scales with size of tree. In reduction mode, determines time of one frame
+  -d, --division <DIVISION>
+          Determines how time is broken down between sequential segments [default: weight] [possible values: even, weight, size]
+  -c, --content <CONTENT>
+          Determines which audio selector to use, determining melodies, rhythm, timbre, and so on [default: full-stratified] [possible values: full-stratified, async-stratified, a, b, c, d, e, f, pure-sine, names-short, names-long, strat-instr, effects, mixed, loop, rhythmized, sine-rhythm, bare, tone-make]
+  -s, --structure <STRUCTURE>
+          How to assign sound-tree structure to a term [default: type] [possible values: term, type, test]
+  -f, --filters <FILTERS>
+          Additional filters added after audio generation [default: clip-lowpass] [possible values: clip-lowpass, quiet, none]
+  -o, --output <OUTPUT>
+          Name of the output file [default: output]
+  -L, --freq-low <FREQ_LOW>
+          Low end of frequency range in reduction mode [default: 60]
+  -H, --freq-high <FREQ_HIGH>
+          High end of frequency range in reduction mode [default: 2500]
+  -r, --reverse-freq
+          Reverse frequency range in reduction mode
+  -S, --step-count <STEP_COUNT>
+          Maximum number of steps before quitting in reduction mode
+      --reduction-config <REDUCTION_CONFIG>
+          A file from which to load multiple configurations in reduction mode
+  -D, --diff-time
+          In reduction mode, whether to vary step time with the size of the change between steps
+      --call-by <CALL_BY>
+          Evaluation order of function application in reduction mode [default: name] [possible values: name, value]
+      --ann-eval <ANN_EVAL>
+          Evaluation order of annotation dropping in reduction mode: whether the type and/or term should be evaluated before dropping the annotation if unnecessary [default: unprincipled] [possible values: neither, type, both, unprincipled]
+      --midi
+          Whether to take MIDI input for live reduction mode
+  -h, --help
+          Print help (see more with '--help')
+  -V, --version
+          Print version
 ```

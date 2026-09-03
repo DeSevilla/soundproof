@@ -1,6 +1,6 @@
 use std::any::Any;
 
-use crate::{AnnStep, CallBy, ast::*, lambdapi::term::quote0};
+use crate::{AnnEval, CallBy, ast::*, lambdapi::term::quote0};
 
 #[derive(Debug, Clone)]
 pub enum Step<T: Stepper> {
@@ -117,14 +117,14 @@ impl Stepper for ITerm {
             ITerm::Ann(body, ty) => match ctx.ann_step {
                 // neither: body inf: drop, body lam: type steps if possible
                 // in other words: both step if possible, body inf: both drop
-                AnnStep::Neither => match body {
+                AnnEval::Neither => match body {
                     CTerm::Inf(it) => {
                         Cont(*it, Some(ITerm::Ann(ty, CTerm::Inf(Box::new(ITerm::Star)))))
                     }
                     CTerm::Lam(_) => ty.step(ctx).apply(|typ| ITerm::Ann(body, typ)), //lam doesn't step
                 },
                 // both: ty steps if possible, otherwise body steps if possible, and if body is inf drop type
-                AnnStep::Unprincipled => match ty.step(ctx.clone()) {
+                AnnEval::Unprincipled => match ty.step(ctx.clone()) {
                     Cont(typ, v) => Cont(ITerm::Ann(body, typ), v),
                     Done(typ, _) => match body.step(ctx) {
                         // TODO this is a little more unprincipled than I'd like, and we're still dropping the body step
@@ -145,7 +145,7 @@ impl Stepper for ITerm {
                     },
                 },
                 // ty steps if possible, otherwise body steps if possible, otherwise if body is inf drop
-                AnnStep::Both => match ty.step(ctx.clone()) {
+                AnnEval::Both => match ty.step(ctx.clone()) {
                     Cont(typ, v) => Cont(ITerm::Ann(body, typ), v),
                     Done(typ, _) => match body.step(ctx) {
                         Done(bod, ch) => match bod {
@@ -158,7 +158,7 @@ impl Stepper for ITerm {
                     },
                 },
                 // type: type steps if possible, otherwise if body is inf drop
-                AnnStep::Type => match ty.step(ctx.clone()) {
+                AnnEval::Type => match ty.step(ctx.clone()) {
                     Cont(typ, v) => Cont(ITerm::Ann(body, typ), v),
                     Done(typ, v) => match body {
                         CTerm::Inf(it) => Cont(

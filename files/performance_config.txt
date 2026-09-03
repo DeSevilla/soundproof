@@ -1,0 +1,25 @@
+soundproof -d even -t 12 -L 30 -H 666 --diff-time
+soundproof -d even -L 30 -H 666
+soundproof -d even -t 12 -L 200 -H 800 --diff-time
+soundproof -d even -L 20 -H 800
+soundproof -d even -t 12 -L 60 -H 1100 --diff-time
+soundproof -d even -t 12 -L 20 -H 1500 --diff-time
+soundproof -d even -L 60 -H 1600
+soundproof -d even -t 8 -L 200 -H 800 --diff-time
+soundproof -d even -L 20 -H 1500
+soundproof -d even -t 8 -L 60 -H 1100 --diff-time
+soundproof -d even -L 20 -H 1000
+soundproof -d even -t 2 -L 20 -H 1500 --diff-time
+soundproof -d weight -t 12 -L 30 -H 666 --diff-time
+soundproof -d weight -L 30 -H 666
+soundproof -d weight -t 12 -L 60 -H 1100 --diff-time
+soundproof -d weight -L 60 -H 1100
+soundproof -d weight -t 12 -L 20 -H 1500 --diff-time
+soundproof -d weight -t 8 -L 60 -H 1100 --diff-time
+soundproof -d weight -L 20 -H 1500
+soundproof -d weight -t 2 -L 30 -H 666 --diff-time
+soundproof -d size -L 200 -H 800
+soundproof -d size -t 12 -L 20 -H 1500 --diff-time
+soundproof -d size -L 60 -H 1100
+soundproof -d size -t 8 -L 60 -H 1100 --diff-time
+soundproof -d size -t 2 -L 20 -H 1500 --diff-time

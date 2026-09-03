@@ -13,6 +13,9 @@ while the reduction mode presents terms as synth tones and their computational b
 In the case of the paradox, this behavior is more "progression" than "reduction",
 as it grows larger eternally instead of reducing to a normal form.
 
+Each mode has a live performance variant. These variants also generate visuals and provide
+opportunities for performers to intervene in the process.
+
 ## Results
 
 The canonical pieces for the [single-term](https://isdra.bandcamp.com/album/girards-paradox)
@@ -23,9 +26,8 @@ This project has been presented and performed at the [ACM SIGPLAN FARM Workshop]
 The single-term version was at FARM 2025 at ICFP/SPLASH ([paper](https://dl.acm.org/doi/10.1145/3759162.3759644), [talk recording](https://www.youtube.com/watch?v=QbgzOVOMMwI&list=PLyrlk8Xaylp57NTlI9xggtVfEQbTikoQO&index=4)),
 while the reduction-based version was at FARM 2026 at ICFP ([paper](https://dl.acm.org/doi/10.1145/3830435.3830950), [talk recording](https://www.youtube.com/live/tE5u7LR5cro?t=4h20m)).
 
-Each mode also has a live performance variant, which differs somewhat from the fixed canonical output.
-I performed the single-term version at [FARM 2025](https://www.youtube.com/watch?v=z8V6c3kIq58&list=PLF5xDewoVNoc&index=8) 
-(a screen-only recording of this mode is [here](https://www.youtube.com/watch?v=Fu4yqLvZQOI)).
+I [performed the single-term version at FARM 2025](https://www.youtube.com/watch?v=z8V6c3kIq58&list=PLF5xDewoVNoc&index=8) 
+(there is also [a screen-only recording of this mode](https://www.youtube.com/watch?v=Fu4yqLvZQOI)).
 I performed the progression-based version at FARM 2026. The recording will be available eventually.
 
 ## How It Works
@@ -83,12 +85,16 @@ to make it easy for FFMPEG to handle this process. -->
 
 The single-term live performance mode is available on the `bevy` branch, and NOT on this one due to version
 issues. It takes text input and parses it into terms which are then translated and displayed as moving trees
-along with the tags of the currently-playing subterms. Its display font is a modified version of JetBrains Mono
+along with the tags of the currently-playing subterms. It also takes commands which set a four-note melody
+for a node type, e.g. `set(Lambda=ADFA)`.
+Its display font is a modified version of JetBrains Mono
 which displays backslash as lambda.
 
-The reduction/progression live performance mode can take a path to a config file
+The reduction/progression live mode can take a path to a config file
 with a list of command-line options.
-By default, these will be stepped through sequentially; with the `--midi` option, they are mapped 
+By default, these will be stepped through sequentially, generating sound and a visual representation
+of each term (highlighting the term's next step). For a performance, use the `--midi` option along with
+the `--live` option. In this mode, configurations are mapped 
 to MIDI notes and can be activated by a MIDI controller. The mapping currently supports notes 48-73.
 
 ## Notes
@@ -142,7 +148,7 @@ Options:
       --reduction-config <REDUCTION_CONFIG>
           A file from which to load multiple configurations in reduction mode
   -D, --diff-time
-          In reduction mode, whether to vary step time with the size of the change between steps
+          In reduction mode, whether to vary step time with the size of the change between steps. If `--midi` is enabled, turning this off means that steps will continue until the next MIDI note
       --call-by <CALL_BY>
           Evaluation order of function application in reduction mode [default: name] [possible values: name, value]
       --ann-eval <ANN_EVAL>

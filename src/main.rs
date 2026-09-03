@@ -288,6 +288,8 @@ pub struct SoundproofArgs {
     #[arg(long, /*requires = "mode"*/)]
     reduction_config: Option<String>,
     /// In reduction mode, whether to vary step time with the size of the change between steps.
+    /// If `--midi` is enabled, turning this off means that steps will continue until the next
+    /// MIDI note.
     #[arg(long, short('D'), action, /*requires = "mode"*/)]
     diff_time: bool,
     /// Evaluation order of function application in reduction mode.

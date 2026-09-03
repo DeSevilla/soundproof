@@ -885,8 +885,10 @@ impl<const N: usize> Buckets<N> {
             buckets: [Weights {
                 body: [0.0; Weights::LENGTH],
             }; N],
-            freqs: array::from_fn(|i| 2.0_f32.powf(lerp(freq_min.log2(), freq_max.log2(), i as f32 / N as f32))), // min_freq: Self::MIN_FREQ,
-                                                                                      // max_freq: Self::MIN_FREQ + range,
+            freqs: array::from_fn(|i| {
+                2.0_f32.powf(lerp(freq_min.log2(), freq_max.log2(), i as f32 / N as f32))
+            }), // min_freq: Self::MIN_FREQ,
+                // max_freq: Self::MIN_FREQ + range,
         };
         // need to distribute into buckets somehow
         // might not be able to be an array anymore but w/e

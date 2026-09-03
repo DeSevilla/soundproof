@@ -243,7 +243,7 @@ pub enum RunMode {
 #[command(version, about, long_about=None)]
 pub struct SoundproofArgs {
     /// Whether to run the single-term or step-based translation.
-    #[arg(short, long, default_value = "single")]
+    #[arg(short, long, default_value = "step")]
     mode: RunMode,
     /// Whether to render to file or run it live. Single-term live runs are currently unavailable on this branch.
     #[arg(short, long, action)]
@@ -273,31 +273,31 @@ pub struct SoundproofArgs {
     #[arg(short, long, default_value = "output")]
     output: String,
     /// Low end of frequency range in step mode.
-    #[arg(long, short('L'), default_value = "60", requires = "mode")]
+    #[arg(long, short('L'), default_value = "60"/*, requires = "mode"*/)]
     freq_low: f32,
     /// High end of frequency range in step mode.
-    #[arg(long, short('H'), default_value = "2500", requires = "mode")]
+    #[arg(long, short('H'), default_value = "2500"/*, requires = "mode"*/)]
     freq_high: f32,
     /// Reverse frequency range in step mode.
-    #[arg(long, short, action, requires = "mode")]
+    #[arg(long, short, action/*, requires = "mode"*/)]
     reverse_freq: bool,
     /// Maximum number of steps before quitting in step mode.
-    #[arg(short('S'), long, requires = "mode")]
+    #[arg(short('S'), long/*, requires = "mode"*/)]
     step_count: Option<usize>,
     /// A file from which to load multiple configurations in step mode.
-    #[arg(long, requires = "mode")]
+    #[arg(long, /*requires = "mode"*/)]
     step_file: Option<String>,
     /// Whether to vary step time with the size of the change between steps.
-    #[arg(long, short('D'), action, requires = "mode")]
+    #[arg(long, short('D'), action, /*requires = "mode"*/)]
     diff_time: bool,
     /// Evaluation order of function application in step mode.
-    #[arg(long, requires = "mode", default_value = "name")]
+    #[arg(long, /*requires = "mode",*/ default_value = "name")]
     call_by: CallBy,
     /// Evaluation order of annotation dropping in step mode.
-    #[arg(long, requires = "mode", default_value = "unprincipled")]
+    #[arg(long, /*requires = "mode",*/ default_value = "unprincipled")]
     ann_step: AnnStep,
     /// Whether to take MIDI input for live step mode.
-    #[arg(long, action, requires = "mode", requires = "file", requires = "live")]
+    #[arg(long, action, /*requires = "mode",*/ requires = "file", requires = "live")]
     midi: bool,
     // /// When set, only generate visualization (potentially including animation frames), not music.
     // #[arg(short('D'), long, action)]
@@ -449,11 +449,7 @@ pub fn main_steps(mut args: SoundproofArgs) {
     };
     let max_steps = args.step_count.unwrap_or(100);
     // for (ii, term) in args.term().step_over(args.ctx()).enumerate() {
-    for (ii, (term, change)) in args
-        .term()
-        .step_with_change(args.ctx())
-        .enumerate()
-    {
+    for (ii, (term, change)) in args.term().step_with_change(args.ctx()).enumerate() {
         if ii < sequence.len() {
             println!("Loading from file: {}", sequence[ii]);
             args = SoundproofArgs::parse_from(sequence[ii].split(' '))
@@ -467,7 +463,8 @@ pub fn main_steps(mut args: SoundproofArgs) {
 
         // let dur = base_dur;
         // TODO this should be its own parameter instead of just keying off args.time = None
-        let dur = if args.diff_time && let Some(diff) = change
+        let dur = if args.diff_time
+            && let Some(diff) = change
         {
             let diff_tree = type_translate(&diff, selector).unwrap();
             let modifier = (diff_tree.size() as f64 / base_size.get(tree.size()) as f64 * 5.0)

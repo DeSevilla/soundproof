@@ -387,7 +387,6 @@ impl ITerm {
                 Ok((ty, false, tree))
             }
             ITerm::App(f, x) => {
-                // TODO will_step with call_by
                 let (fty, stepped, mut ftree) = f.infer_translate(ctx, meta.clone(), may_step)?;
                 let may_step = may_step && !stepped;
                 match fty {

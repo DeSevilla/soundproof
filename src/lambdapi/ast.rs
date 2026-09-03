@@ -29,7 +29,7 @@ pub enum ITerm {
     Zero,
     /// Natural number successor of n. (n)
     Succ(CTerm),
-    /// Natural number eliminator, for induction. (motive, base case, successor case, number to fill into motive)
+    /// Natural number eliminator, for induction. (motive, zero case, successor case, number to fill into motive)
     NatElim(CTerm, CTerm, CTerm, CTerm),
     /// Finite type with n elements. (n)
     Fin(CTerm),
@@ -37,10 +37,13 @@ pub enum ITerm {
     FZero(CTerm),
     /// Successor element of the type with n+1 elements. (n+1, member of Fin(n))
     FSucc(CTerm, CTerm),
-    /// Eliminator for induction on finite types. (motive, base case, successor case, size of type, value to fill into motive)
+    /// Eliminator for induction on finite types. (motive, zero case, successor case, size of type, value to fill into motive)
     FinElim(CTerm, CTerm, CTerm, CTerm, CTerm),
+    /// Type of proofs that two terms are equal. (type, left-hand term, right-hand term)
     Eq(CTerm, CTerm, CTerm),
+    /// Proof that equality is reflexive: anything is equal to itself. (type, term)
     Refl(CTerm, CTerm),
+    /// Eliminator for induction on equality types. (type of terms, motive, refl case, left-hand term, right-hand term, proof of equality)
     EqElim(CTerm, CTerm, CTerm, CTerm, CTerm, CTerm),
 }
 
@@ -291,11 +294,11 @@ impl ITerm {
             ITerm::Free(name) => 1,
             ITerm::App(func, arg) => 1 + func.size() + arg.size(),
             ITerm::Nat => 1,
-            ITerm::Zero => todo!(),
-            ITerm::Succ(cterm) => todo!(),
+            ITerm::Zero => 1,
+            ITerm::Succ(n) => 1 + n.size(),
             ITerm::NatElim(cterm, cterm1, cterm2, cterm3) => todo!(),
-            ITerm::Fin(cterm) => 1 + cterm.size(),
-            ITerm::FZero(cterm) => todo!(),
+            ITerm::Fin(n) => 1 + n.size(),
+            ITerm::FZero(n) => 1 + n.size(),
             ITerm::FSucc(cterm, cterm1) => todo!(),
             ITerm::FinElim(cterm, cterm1, cterm2, cterm3, cterm4) => todo!(),
             ITerm::Eq(cterm, cterm1, cterm2) => todo!(),

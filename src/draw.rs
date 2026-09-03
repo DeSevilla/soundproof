@@ -10,10 +10,12 @@ use std::path::Path;
 
 // TODO we should take these as options
 // const WIDTH_PX: usize = 377 * 3;
-const WIDTH_PX: usize = 2000;
+const LEFT_ADJUST: usize = 80;
+const RIGHT_ADJUST: usize = 50;
+const WIDTH_PX: usize = 1920 - LEFT_ADJUST - RIGHT_ADJUST;
 // const WIDTH_PX: usize = 3000;
 // const HEIGHT_PX: usize = 120 * 3;
-const HEIGHT_PX: usize = 2000;
+const HEIGHT_PX: usize = 1200;
 // const HEIGHT_PX: usize = 1800;
 const DPI: f64 = 96.;
 const WIDTH_IN: f64 = WIDTH_PX as f64 / DPI;
@@ -30,13 +32,22 @@ pub fn draw_steps(term: ITerm, scaling: DivisionMethod, ctx: Context, path: impl
     rc.fill(rect, &Color::BLACK);
     // rc.fill(rect, &Color::WHITE);
     let meta = Silence::new();
-    const STEP_RATIO: f64 = 2./3.;
+    const STEP_RATIO: f64 = 2. / 3.;
     let mut base = HEIGHT_IN;
     let mut top = HEIGHT_IN * STEP_RATIO;
     for thing in term.step_over(ctx.clone()).take(20) {
-        let (_, _, tree) = thing.infer_translate(&ctx, meta, true).expect("Stepping preserves type");
+        let (_, _, tree) = thing
+            .infer_translate(&ctx, meta, true)
+            .expect("Stepping preserves type");
         let current_height = base - top;
-        let args = FixedDrawArgs::new(current_height, WIDTH_IN, top, tree.metadata().depth, None, scaling);
+        let args = FixedDrawArgs::new(
+            current_height,
+            WIDTH_IN,
+            top,
+            tree.metadata().depth,
+            None,
+            scaling,
+        );
         println!("args: {args:?} base {base} top {top}");
         drawtree(&tree, &mut rc, args);
         base = top;
@@ -57,8 +68,15 @@ pub fn draw(tree: &SoundTree, scaling: DivisionMethod, path: impl AsRef<Path>) {
     // rc.fill(rect, &Color::rgb8(0xCE, 0xCE, 0xCE));
     rc.fill(rect, &Color::BLACK);
     // rc.fill(rect, &Color::WHITE);
-    let args = FixedDrawArgs::new(HEIGHT_IN, WIDTH_IN, 0.0, tree.metadata().depth, None, scaling);
-    drawtree(tree,  &mut rc, args);
+    let args = FixedDrawArgs::new(
+        HEIGHT_IN,
+        WIDTH_IN,
+        0.0,
+        tree.metadata().depth,
+        None,
+        scaling,
+    );
+    drawtree(tree, &mut rc, args);
     rc.finish().unwrap();
     std::mem::drop(rc);
     bitmap
@@ -69,9 +87,12 @@ pub fn draw(tree: &SoundTree, scaling: DivisionMethod, path: impl AsRef<Path>) {
 pub fn make_soundproof_window() -> Window {
     let window_options = WindowOptions {
         borderless: true,
+        topmost: true,
         ..Default::default()
     };
-    Window::new("Soundproof Output", WIDTH_PX, HEIGHT_PX, window_options).expect("")
+    let mut result = Window::new("Soundproof Output", WIDTH_PX, HEIGHT_PX, window_options).expect("");
+    result.set_position(LEFT_ADJUST as isize, 0);
+    result
 }
 
 pub fn draw_tree_canvas(
@@ -83,7 +104,14 @@ pub fn draw_tree_canvas(
     let mut rc = bitmap.render_context();
     let rect = Rect::new(0.0, 0.0, WIDTH_IN, HEIGHT_IN);
     rc.fill(rect, &Color::BLACK);
-    let draw_args = FixedDrawArgs::new(HEIGHT_IN, WIDTH_IN, 0.0, tree.metadata().depth, None, scaling);
+    let draw_args = FixedDrawArgs::new(
+        HEIGHT_IN,
+        WIDTH_IN,
+        0.0,
+        tree.metadata().depth,
+        None,
+        scaling,
+    );
     drawtree(&tree, &mut rc, draw_args);
     rc.finish().unwrap();
     std::mem::drop(rc);
@@ -130,8 +158,19 @@ struct FixedDrawArgs {
 }
 
 impl FixedDrawArgs {
-    pub fn new(height: f64, width: f64, offset: f64, max_depth: usize, current: Option<f64>, scaling: DivisionMethod) -> Self {
-        let depth_height = if max_depth != 0 { height * 1.0 / max_depth as f64 } else { 0.05 };
+    pub fn new(
+        height: f64,
+        width: f64,
+        offset: f64,
+        max_depth: usize,
+        current: Option<f64>,
+        scaling: DivisionMethod,
+    ) -> Self {
+        let depth_height = if max_depth != 0 {
+            height * 1.0 / max_depth as f64
+        } else {
+            0.05
+        };
         // let depth_height = height / 45.;
         let text_bar = depth_height * 4.0;
         Self {

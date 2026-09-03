@@ -11,11 +11,23 @@ It has two modes: single-term (`--mode=term`) and step-based (`--mode=step`). Th
 
 ## Output
 
-The canonical output for the single-term mode is available for free on [Bandcamp](https://isdra.bandcamp.com/album/girards-paradox). A screen recording of the live version is on [Youtube](https://www.youtube.com/watch?v=Fu4yqLvZQOI).
+The canonical outputs for the [single-term](https://isdra.bandcamp.com/album/girards-paradox)
+and [step-based](https://isdra.bandcamp.com/track/girards-paradox-progression-i-two-loops)
+modes are available for free on [Bandcamp](https://isdra.bandcamp.com). 
 
-The canonical output for the step-based mode is available for free on [Bandcamp](https://isdra.bandcamp.com/track/girards-paradox-progression-i-two-loops).
+This project has been presented and performed at the [ACM SIGPLAN FARM Workshop](https://functional-art.org/) twice.
+The single-term version was at
+[FARM at ICFP/SPLASH 2025](https://2025.splashcon.org/track/splash-2025-farm). 
+The paper can be found [in the FARM proceedings here](https://dl.acm.org/doi/10.1145/3759162.3759644),
+and a recording of the talk is [on the SIGPLAN YouTube channel here](https://www.youtube.com/live/F_7S90vFEsE?t=2015s).
+The performance recording is [on the FARM YouTube channel here](https://www.youtube.com/watch?v=z8V6c3kIq58&list=PLF5xDewoVNoc&index=8). 
+The step-based version was at [FARM at ICFP 2026](https://icfp26.sigplan.org/home/farm-2026), again both as 
+a demo and a performance. The paper is [in the FARM proceedings here](https://dl.acm.org/doi/10.1145/3830435.3830950)
+and the talk recording is currently [on the SIGPLAN YouTube channel here](https://www.youtube.com/live/tE5u7LR5cro?t=4h20m) (note: if the stream has expired by the time you read this, there should be a separate video).
+The performance recording will be available eventually.
 
-A demo of this project, and a live performance of its output, was presented at [the FARM workshop at ICFP/SPLASH 2025](https://2025.splashcon.org/track/splash-2025-farm). The paper can be found [in the FARM proceedings here](https://dl.acm.org/doi/10.1145/3759162.3759644), and a recording of the talk is available [on the ACM SIGPLAN YouTube channel here](https://www.youtube.com/live/F_7S90vFEsE?t=2015s). Video of the FARM performance should be available eventually.
+A screen-only recording of the single-term performance version of the piece is on [my channel here](https://www.youtube.com/watch?v=Fu4yqLvZQOI).
+
 
 ## How It Works
 

@@ -3,7 +3,7 @@ use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 use minifb::{Window, WindowOptions};
-use piet_common::{Color, Device, DwriteFactory, FontFamily, ImageFormat, PietText, PietTextLayout, RenderContext, Text, TextLayoutBuilder};
+use piet_common::{Color, Device, FontFamily, ImageFormat, PietText, PietTextLayout, RenderContext, Text, TextLayoutBuilder};
 use piet_common::kurbo::{Circle, Line, Rect};
 
 use crate::soundproof::types::SoundTree;
@@ -172,7 +172,8 @@ fn drawtree(
                 top,
             );
             if args.current.is_some_and(|t| start_time <= t && t <= start_time + fraction) {
-                let mut text_manager = PietText::new_with_shared_fonts(DwriteFactory::new().unwrap(), None);
+                // let mut text_manager = PietText::new_with_shared_fonts(DwriteFactory::new().unwrap(), None);
+                let mut text_manager = PietText::new();
                 let text = meta.name.to_owned();
                 let text_layout = text_manager.new_text_layout(text)
                     .max_width(args.text_bar)

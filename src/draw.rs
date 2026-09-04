@@ -172,7 +172,8 @@ fn drawtree(
                 top,
             );
             if args.current.is_some_and(|t| start_time <= t && t <= start_time + fraction) {
-                let mut text_manager = PietText::new_with_shared_fonts(DwriteFactory::new().unwrap(), None);
+                // let mut text_manager = PietText::new_with_shared_fonts(DwriteFactory::new().unwrap(), None);
+                let mut text_manager = PietText::new();
                 let text = meta.name.to_owned();
                 let text_layout = text_manager.new_text_layout(text)
                     .max_width(args.text_bar)
